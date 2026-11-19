@@ -23,6 +23,9 @@ namespace Bastion.Net
     /// blade. A run's Saqueo (the normal node) has no objective: the squad searches the rooms nearest by the walk, never
     /// hunting the dead, and goes for La Lata once RunLeaveTurn comes, once one of it is at half health or less, or once no
     /// room is left (RunLeaving). Hidden, it walks the squad's extra too (Paths with the state).
+    /// La llave (G23.1; Gameplay, 19/11), a Saqueo with the police station's armoury locked: the squad kills and searches
+    /// the dead in uniform (never knowing which holds the key: Mission.KeyHolder isn't looked at), picks the key up where
+    /// it fell, takes it to the door and opens it, searches the armoury's furniture, and goes (KeyLeaving).
     /// </summary>
     public static class MissionBot
     {
@@ -34,6 +37,12 @@ namespace Bastion.Net
 
         /// <summary>A run's Saqueo: the turn the squad goes for La Lata, whatever is left to search (RunLeaving).</summary>
         public const int RunLeaveTurn = 6;
+
+        /// <summary>La llave (G23.1): the turn the squad goes for La Lata with the armoury still locked (KeyLeaving).</summary>
+        public const int KeyLeaveTurn = 14;
+
+        /// <summary>La llave: with the armoury open, the turn the squad goes, its furniture searched or not (KeyLeaving).</summary>
+        public const int KeyArmouryTurn = 20;
 
         /// <summary>A run's Saqueo: rooms farther than this many turns' walk aren't gone for (RoomGoal); with none nearer, the squad goes.</summary>
         public const int RoomTurns = 2;
@@ -121,6 +130,8 @@ namespace Bastion.Net
                 // its box is open; El Toro, once he is dead; either of these given up when the squad is broken (H5, H6).
                 if (m.HoldUntil != null || s.Run.NodeKind == NodeKinds.Crossing) return true;
                 if (m.Lair != null || !string.IsNullOrEmpty(m.Boss)) return m.ObjectiveDone || Routed(s);
+                // La llave (G23.1): once its armoury is searched, or with nothing left to go for.
+                if (KeyFight(s)) return KeyLeaving(s, walksOf);
             }
             if (RunSaqueo(s)) return RunLeaving(s, roomOf);
             if (m.Kind == MissionKinds.Scavenge && m.EvacZone.Count > 0)
@@ -170,6 +181,16 @@ namespace Bastion.Net
             {
                 var pack = PackOrder(s, u, armed, slot, connected);
                 if (pack != null) return pack;
+                // La llave (G23.1): the key picked up where it lies (beside it, if it fell with one of the squad), and the
+                // locked door beside it opened with it.
+                if (KeyFight(s) && RunPack.FloorInReach(s, u).FirstOrDefault((d) => d.Gear.Kind == GearKinds.Key) is DroppedGear key)
+                {
+                    var take = new ItemCommand { Unit = u.Id, Action = ItemActions.Take, Gear = key.Gear.Id };
+                    if (RunPack.Refusal(s, take, slot, connected) == null) return take;
+                }
+                if (KeyFight(s) && Looting.KeyOf(u) != null && Usable(s, u, AbilityIds.OpenDoor)
+                    && Abilities.DoorTiles(s, u, TileKinds.Door).FirstOrDefault((p) => Looting.LockedAt(s, p)) is Pos door)
+                    return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.OpenDoor, Tile = door };
             }
             if (!armed)
             {
@@ -211,6 +232,12 @@ namespace Bastion.Net
             {
                 if (Usable(s, u, AbilityIds.SearchRoom)) return Ability(u, AbilityIds.SearchRoom);
                 var spot = Usable(s, u, AbilityIds.Search) ? Looting.SearchableTiles(s, u).FirstOrDefault() : null;
+                if (spot != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = spot };
+            }
+            // La llave (G23.1), before going: a body in uniform beside it, then the armoury's furniture; nothing else.
+            if (KeyFight(s) && !leaving && Usable(s, u, AbilityIds.Search))
+            {
+                var spot = Looting.SearchableTiles(s, u).Where((p) => UniformBody(s, p) || InArmory(s, p)).OrderBy((p) => UniformBody(s, p) ? 0 : 1).FirstOrDefault();
                 if (spot != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = spot };
             }
             // The blade alone: a step up to one of the dead, keeping an action to strike (not on a run's way out, nor out of
@@ -256,6 +283,7 @@ namespace Bastion.Net
             if ((Vip(s) ?? Alarm(s)) is Unit objective) return objective.Pos;
             if (s.Run != null && m.Lair != null) return m.Lair;
             if (Bull(s) is Unit bull) return bull.Pos;
+            if (KeyFight(s) && !leaving) return KeyGoal(s, u, walksOf(u)) ?? bus;
             if (RunSaqueo(s)) return roomOf(u) ?? bus;
             return NearestEnemy(s, u, walksOf(u)) ?? bus;
         }
@@ -546,7 +574,9 @@ namespace Bastion.Net
             var bull = Bull(s);
             var charging = bull != null && (!bull.Cooldowns.TryGetValue(AbilityIds.Charge, out var wait) || wait <= 1);
             double Danger(Pos p) => reckless ? 0 : enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0) + (caged.Contains(Grid.NodeOf(s, p)) ? 4 : 0) + (charging && InChargeLine(bull!, p) ? 6 : 0);
-            var stops = Paths.Destinations(s, u, reach);
+            // Not going for La Lata, never a stop on a tile of it in a run: a walk that ends there gets in (T24), and with the
+            // street between the start and the police station, two of four got in on their first walk (R9, La llave).
+            var stops = Paths.Destinations(s, u, reach).Where((o) => bus || s.Run == null || !Abilities.InEvacZone(s, o.Pos)).ToList();
             Destination? best = null;
             var end = WayTo(s, walks, goal, bus);
             if (end != null)
@@ -588,9 +618,102 @@ namespace Bastion.Net
             return new MoveCommand { Unit = u.Id, To = best.Pos };
         }
 
+        // ------------------------------------------------------------ La llave (G23.1)
+
+        /// <summary>A run's La llave: the police station's armoury locked, its key on one of the dead in uniform.</summary>
+        private static bool KeyFight(GameState s) => s.Run != null && s.Mission.KeyArmory == true;
+
+        private static bool InUniform(Unit e) => e.Outfit == Outfits.Police || e.Outfit == Outfits.Military;
+
+        /// <summary>A body in uniform on `p` still to search (Looting.BodyAt, IsSearchable): one of those that may hold the key.</summary>
+        private static bool UniformBody(GameState s, Pos p) => Looting.BodyAt(s, p) is Unit b && InUniform(b) && Looting.IsSearchable(s, p);
+
+        /// <summary>The armoury (PoliceUses.Armory) of the police station, its ground floor; null with none.</summary>
+        private static InteriorRoom? Armory(GameState s) => s.Interiors?.FirstOrDefault((i) => i.Kind == InteriorKinds.Police)?.Rooms.FirstOrDefault((r) => r.Use == PoliceUses.Armory && r.Z == 0);
+
+        private static bool InArmory(GameState s, Pos p) => Armory(s) is InteriorRoom a && p.Z == a.Z && p.X >= a.X && p.Y >= a.Y && p.X < a.X + a.W && p.Y < a.Y + a.H;
+
+        /// <summary>The armoury's furniture still to search (Looting.IsSearchable).</summary>
+        private static List<Pos> ArmoryLeft(GameState s)
+        {
+            var left = new List<Pos>();
+            if (Armory(s) is InteriorRoom a)
+                for (var y = a.Y; y < a.Y + a.H; y++)
+                    for (var x = a.X; x < a.X + a.W; x++)
+                    {
+                        var p = new Pos { X = x, Y = y, Z = a.Z };
+                        if (Looting.IsSearchable(s, p)) left.Add(p);
+                    }
+            return left;
+        }
+
+        /// <summary>
+        /// Where `u` goes in La llave, by where its key is (Looting.KeyWhere): the nearest by the walk of the dead in uniform
+        /// and their bodies not searched; the key on the floor; with it, the locked door (the others with the one who has
+        /// it); the door open, the nearest place in the armoury beside its furniture left. Null with nowhere: the squad goes.
+        /// </summary>
+        private static Pos? KeyGoal(GameState s, Unit u, Reach walks)
+        {
+            switch (Looting.KeyWhere(s))
+            {
+                case KeyPlaces.Holder:
+                {
+                    var spots = Enemies(s).Where((e) => e.Caged != true && InUniform(e)).Select((e) => e.Pos)
+                        .Concat(s.Units.Where((b) => !b.Alive && b.Team == Teams.Alien && InUniform(b) && UniformBody(s, b.Pos)).Select((b) => b.Pos));
+                    return spots.Select((p) => (At: p, Walk: WalkTo(s, walks, p))).Where((x) => x.Walk < int.MaxValue).OrderBy((x) => x.Walk).ThenBy((x) => Grid.NodeOf(s, x.At)).Select((x) => (Pos?)x.At).FirstOrDefault();
+                }
+                case KeyPlaces.Floor:
+                    return (s.FloorGear ?? new List<DroppedGear>()).First((d) => d.Gear.Kind == GearKinds.Key).Pos;
+                case KeyPlaces.Pack:
+                    if (Looting.KeyOf(u) != null) return s.Mission.Locked is List<int> locked && locked.Count > 0 ? Grid.PosOf(s, locked[0]) : null;
+                    return s.Units.FirstOrDefault((o) => o.Alive && o.Team == Teams.Xcom && Looting.KeyOf(o) != null)?.Pos;
+                case KeyPlaces.Used:
+                {
+                    // Inside it: from its doorway one reaches a piece too, and standing there kept the others out (R9).
+                    var left = ArmoryLeft(s);
+                    foreach (var kv in walks.Cost.OrderBy((kv) => kv.Value).ThenBy((kv) => kv.Key))
+                    {
+                        var at = Grid.PosOf(s, kv.Key);
+                        if (InArmory(s, at) && left.Any((q) => Grid.Distance(at, q) < 1.5 && Looting.ReachesToSearch(s, at, q))) return at;
+                    }
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>The walk to `p` in `walks`, or to the nearest place beside it (one of the dead, a locked door); int.MaxValue with none.</summary>
+        private static int WalkTo(GameState s, Reach walks, Pos p)
+        {
+            if (walks.Cost.TryGetValue(Grid.NodeOf(s, p), out var w)) return w;
+            var best = int.MaxValue;
+            foreach (var d in Grid.Dirs8)
+            {
+                var q = new Pos { X = p.X + d.X, Y = p.Y + d.Y, Z = p.Z };
+                if (Grid.InBounds(s, q.X, q.Y) && walks.Cost.TryGetValue(Grid.NodeOf(s, q), out var v) && v < best) best = v;
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// La llave: the squad goes broken (Routed, as a Guarida: its prize is to be fought for; gone at the first at half
+        /// health, as a Saqueo, it went home without the key 19 times in 20); with the armoury open, once it is searched or
+        /// at KeyArmouryTurn; before, at KeyLeaveTurn, or with its key still on the dead once none in uniform is left that it
+        /// gets to.
+        /// </summary>
+        private static bool KeyLeaving(GameState s, System.Func<Unit, Reach> walksOf)
+        {
+            if (Routed(s)) return true;
+            var where = Looting.KeyWhere(s);
+            if (where == KeyPlaces.Used) return ArmoryLeft(s).Count == 0 || s.Turn >= KeyArmouryTurn;
+            if (s.Turn >= KeyLeaveTurn) return true;
+            var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
+            return where == KeyPlaces.Holder && !squad.Any((o) => KeyGoal(s, o, walksOf(o)) != null);
+        }
+
         /// <summary>A mission whose objective has to be reached, past whoever sleeps by it: the objectives of before (a Sigilo is a Recuperación).</summary>
         private static bool Bold(MissionState m) => m.Kind == MissionKinds.Elimination || m.Kind == MissionKinds.Hack || m.Kind == MissionKinds.Recovery
-            || m.Kind == MissionKinds.Rescue || m.Kind == MissionKinds.Sabotage;
+            || m.Kind == MissionKinds.Rescue || m.Kind == MissionKinds.Sabotage || m.KeyArmory == true;
 
         /// <summary>One of the dead in a group not woken yet (Pod.active).</summary>
         private static bool Asleep(GameState s, Unit e) => e.PodId != null && s.Pods.Any((p) => p.Id == e.PodId && !p.Active);

@@ -633,6 +633,16 @@ namespace Bastion.Engine
     }
 
     /// <summary>A room searched, by its id (loot.ts roomAt; docs/FASE8.md §B); what it turned up, as `searched`.</summary>
+    /// <summary>G23.1: a locked door opened with the key (MissionState.Locked): unlocked, the key gone from the unit's pack.</summary>
+    public sealed class UnlockedEvent : GameEvent
+    {
+        public override string T => "unlocked";
+        public string Unit { get; set; } = "";
+        public Pos Tile { get; set; } = new Pos();
+        /// <summary>The key's gear id.</summary>
+        public string Gear { get; set; } = "";
+    }
+
     public sealed class RoomSearchedEvent : GameEvent
     {
         public override string T => "roomSearched";

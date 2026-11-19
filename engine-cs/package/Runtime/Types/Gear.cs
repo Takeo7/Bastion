@@ -23,8 +23,10 @@ namespace Bastion.Engine
         public const string Medicine = "medicine";
         /// <summary>The § (the suministros): in a run campaign the only ones there are; no type.</summary>
         public const string Supplies = "supplies";
+        /// <summary>G23.1: a police station's armoury key (MissionState.Key); no type; never home from the fight.</summary>
+        public const string Key = "key";
 
-        public static readonly IReadOnlyList<string> All = new[] { Weapon, Item, Mod, Vest, Mags, Medicine, Supplies };
+        public static readonly IReadOnlyList<string> All = new[] { Weapon, Item, Mod, Vest, Mags, Medicine, Supplies, Key };
     }
 
     /// <summary>The vests (Content.Vests): armour is a thing now, not a level of the Taller.</summary>

@@ -201,6 +201,20 @@ namespace Bastion.Engine
         /// (Looting.BootOf), drawn rusted as a wreck is. Setup's (PlaceLootedCars). Missing (a fight saved before): none.
         /// </summary>
         public List<int>? Rifled { get; set; }
+        /// <summary>G23.1 La llave: this fight's (MissionOptions.KeyArmory), for its objective; missing, none.</summary>
+        public bool? KeyArmory { get; set; }
+        /// <summary>
+        /// G23.1: the doors locked, by node (the armoury's): nobody walks through one (Paths), and only one with the key
+        /// in its pack opens it (OpenDoor; UnlockedEvent). Missing: none.
+        /// </summary>
+        public List<int>? Locked { get; set; }
+        /// <summary>G23.1: the unit the key is on (one of the dead in uniform), its body's to search for it.</summary>
+        public string? KeyHolder { get; set; }
+        /// <summary>
+        /// G23.1: the key while it is still on KeyHolder (alive, or its body not searched yet); null once it is taken
+        /// (SearchedEvent), on the floor (its body risen: FloorGear) or used.
+        /// </summary>
+        public Gear? Key { get; set; }
         public List<Reinforcement> Reinforcements { get; set; } = new List<Reinforcement>();
         /// <summary>1–4, for the loot tables (missing in missions saved before searching: 2).</summary>
         public int? Difficulty { get; set; }

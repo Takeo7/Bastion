@@ -66,6 +66,13 @@
     color: #6f756c;
 }
 
+/* Where the button went (G22, U21): where one goes back from, quiet. */
+.runmap-home {
+    align-self: flex-start;
+    margin: 12px 0 0 0;
+    font-size: 12px;
+}
+
 /* ================================================================ the stages */
 
 .rnode {
@@ -413,6 +420,27 @@
     flex-direction: row;
     align-items: center;
     margin-top: 8px;
+}
+
+/* A Refugio's way home (G22, U21), after «Seguir la expedición»: the map's old button's look, quieter than it. */
+.runstop__home {
+    height: 32px;
+    margin: 0 0 0 8px;
+    padding: 0 14px;
+    font-size: 14px;
+    color: #eef0ea;
+    background-color: #3d4346;
+    border-width: 1px;
+    border-color: #060708;
+    border-radius: 0;
+}
+
+.runstop__home:hover {
+    background-color: #4b5254;
+}
+
+.runstop__home:disabled {
+    color: #6f756c;
 }
 
 /* Asked to go on, the partner awaited: pressed again, taken back. */

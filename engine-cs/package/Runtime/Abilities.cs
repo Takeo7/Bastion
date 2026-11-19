@@ -180,10 +180,16 @@ namespace Bastion.Engine
         /// the doorway), reaching them with the hands as when searching (loot.ts
         /// reachesToSearch): beside it, on its level, not round a wall's corner.
         /// </summary>
+        /// <summary>Whether a locked door is beside `u` (G23.1), reached as a door is.</summary>
+        public static bool LockedBeside(GameState s, Unit u) => Grid.Dirs8.Select((d) => new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z })
+            .Any((p) => Grid.KindAt(s, p) == TileKinds.Door && Looting.LockedAt(s, p) && Looting.ReachesToSearch(s, u.Pos, p));
+
         public static List<Pos> DoorTiles(GameState s, Unit u, string kind)
         {
             return Grid.Dirs8.Select((d) => new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z })
                 .Where((p) => Grid.KindAt(s, p) == kind && Looting.ReachesToSearch(s, u.Pos, p) && !(kind == TileKinds.DoorOpen && Grid.UnitAt(s, p) != null))
+                // A locked one (G23.1) only with the key.
+                .Where((p) => kind != TileKinds.Door || !Looting.LockedAt(s, p) || Looting.KeyOf(u) != null)
                 .ToList();
         }
 
@@ -309,7 +315,7 @@ namespace Bastion.Engine
                     break;
                 }
                 case AbilityIds.OpenDoor:
-                    if (DoorTiles(s, u, TileKinds.Door).Count == 0) return "No hay ninguna puerta cerrada a tu lado.";
+                    if (DoorTiles(s, u, TileKinds.Door).Count == 0) return LockedBeside(s, u) ? "Está cerrada. Hace falta la llave." : "No hay ninguna puerta cerrada a tu lado.";
                     break;
                 case AbilityIds.CloseDoor:
                     if (DoorTiles(s, u, TileKinds.DoorOpen).Count == 0) return "No hay ninguna puerta abierta a tu lado.";

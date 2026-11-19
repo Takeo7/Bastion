@@ -91,10 +91,12 @@ namespace Bastion.UI.Strategy
         public string Start;
         /// <summary>No stage reached yet: the squad at the start.</summary>
         public bool AtStart;
-        /// <summary>«Volver a la base», its help and why not (null, it can).</summary>
+        /// <summary>«Volver a la base», its help and why not (null, it can): an expedition started before G22's only.</summary>
         public string Back;
         public string BackTip;
         public string BackWhy;
+        /// <summary>Where the button went (G22, U21): where one goes back from (Lore.ExpeditionText.ReturnWhere); null, none.</summary>
+        public string HomeNote;
         public string SquadHead;
         public List<KitTabView> Squad = new List<KitTabView>();
         public KitView Kit;
@@ -172,6 +174,10 @@ namespace Bastion.UI.Strategy
         public string Leave;
         public bool LeaveOn;
         public string LeaveWhy;
+        /// <summary>A Refugio's «Volver a la base» (G22, U21), after «Seguir»: asked first (EndAsk); why not; null, none.</summary>
+        public string Home;
+        public string HomeTip;
+        public string HomeWhy;
         public string Waiting;
         /// <summary>With two: the answer goes to a vote (the plate shows it).</summary>
         public string Vote;

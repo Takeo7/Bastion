@@ -3200,7 +3200,16 @@ namespace Bastion.Engine.Tests
             // T8 (Arturo, 18/11): «Salir» looked like quitting the game.
             Assert.Equal("Partir", Lore.ExpeditionText.Start);
             Assert.Equal("Parte la escuadra: empieza una expedición del capítulo 1.", Lore.ExpeditionText.StartHelp(1));
-            Assert.Equal(13, Lore.StageNames.Count);
+            Assert.Equal(14, Lore.StageNames.Count);
+            // G23.1, La llave (cuadros 71, 73 and 79).
+            Assert.Equal("La llave", Lore.StageName(NodeKinds.Key));
+            Assert.Equal("La armería de la comisaría está cerrada, con todos sus muebles llenos. Uno de los muertos de uniforme lleva la llave; también se puede volar la pared con una granada. Salid en La Lata.", Lore.StageLine(NodeKinds.Key));
+            Assert.Equal("Salid en La Lata", Lore.KeyText.Leave);
+            Assert.Equal("Está cerrada. Hace falta la llave de la armería.", Lore.KeyText.Locked);
+            Assert.Equal("Ana abre la armería con la llave.", Lore.KeyText.Unlocked("Ana"));
+            Assert.Equal("Llave de la armería", Lore.GearName(GearKinds.Key, null));
+            Assert.Equal("la llave de la armería", Lore.GearA(GearKinds.Key, null));
+            Assert.Equal("la llave de la armería", Lore.GearThe(GearKinds.Key, null));
             Assert.Equal("El Toro", Lore.StageName(NodeKinds.Boss, 1));
             Assert.Equal("Saqueo", Lore.StageName(NodeKinds.Normal));
             Assert.Equal("Registrad lo que queráis y salid en La Lata.", Lore.StageLine(NodeKinds.Normal));
@@ -3208,6 +3217,7 @@ namespace Bastion.Engine.Tests
             // G22 (cuadro 72): back to the base only from a Refugio or once the chapter is beaten.
             Assert.Equal("Un sitio seguro para descansar: todos se curan del todo. Desde aquí se puede volver a la base.", Lore.StageLine(NodeKinds.Refuge));
             Assert.Equal("Solo se vuelve a la base desde un Refugio o al superar el capítulo.", RunTexts.EndFromRefuge);
+            Assert.Equal("Se vuelve a la base desde un Refugio o al superar el capítulo.", Lore.ExpeditionText.ReturnWhere);
             Assert.Equal("Aguantad hasta que llegue La Lata, en el turno 8. Llegan oleadas, cada vez mayores.", Lore.StageLine(NodeKinds.Hold, holdTurns: 8));
             Assert.Equal("Un Acorazado y su grupo guardan la mejor caja del capítulo.", Lore.StageLine(NodeKinds.Elite, guard: TemplateIds.Mec));
             // The special maps (H9, Arturo 17/11): their line under «Sitio:» on the sheet; nothing for the six places of always.

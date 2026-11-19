@@ -261,6 +261,8 @@ namespace Bastion.Engine
                     break;
                 case AbilityIds.OpenDoor:
                 case AbilityIds.CloseDoor:
+                    // A locked one (G23.1): the key turned and spent.
+                    if (ability == AbilityIds.OpenDoor && Looting.LockedAt(S, tile!) && Looting.KeyOf(u) is Gear key) Emit(new UnlockedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile!), Gear = key.Id });
                     Emit(new TileChangedEvent { Pos = Engine.Events.CopyPos(tile!), Kind = ability == AbilityIds.OpenDoor ? TileKinds.DoorOpen : TileKinds.Door });
                     if (ability == AbilityIds.OpenDoor && Rules.SurvivorSeen(S, u, u.Pos) is Unit found) Emit(new SurvivorFoundEvent { Unit = found.Id, By = u.Id });
                     break;
@@ -741,7 +743,9 @@ namespace Bastion.Engine
                 var vest = box == Looting.PoliceBoot || body?.Outfit == Outfits.Police || body?.Outfit == Outfits.Military ? RunLoot.VestChance : pieceVest;
                 // «Suerte al registrar» (T2): something more, another roll; Ganzúa's more on a box, a boot or a piece.
                 var more = Lucky(u, loot, body == null ? u.Mods.BoxLuck : 0) ? Roll() : null;
-                var (packed, floor, next) = FoundGear(u, loot, vest, more, extra: !piece);
+                // La llave (G23.1): its holder's body gives it too.
+                var key = body != null && body.Id == S.Mission.KeyHolder && S.Mission.Key != null ? new List<Gear> { Gears.CloneGear(S.Mission.Key) } : null;
+                var (packed, floor, next) = FoundGear(u, loot, vest, more, extra: !piece, with: key);
                 Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Packed = packed, Floor = floor, NextGear = next });
                 return;
             }
@@ -779,12 +783,15 @@ namespace Bastion.Engine
 
         /// <summary>
         /// A run's find (H3): today's roll as gear (RunLoot), and `more`'s (T2), where it goes, and the gear counter after it;
-        /// a vest `vest` times in 100; the site's own more on a find, but on a piece's (`extra` false, G19).
+        /// a vest `vest` times in 100; the site's own more on a find, but on a piece's (`extra` false, G19); `with`, gear made
+        /// already (the key, G23.1), first.
         /// </summary>
-        private (List<Placed>? Packed, List<Gear>? Floor, int Next) FoundGear(Unit u, Loot? loot, int vest, Loot? more = null, bool extra = true)
+        private (List<Placed>? Packed, List<Gear>? Floor, int Next) FoundGear(Unit u, Loot? loot, int vest, Loot? more = null, bool extra = true, List<Gear>? with = null)
         {
             var maker = new RunLoot.Maker(S.Run!.NextGear);
             var found = RunLoot.GearOf(loot, S.Run, Rng, maker);
+            // What it was carrying already made (G23.1: the key), first.
+            if (with != null) found.InsertRange(0, with);
             if (more != null) found.AddRange(RunLoot.GearOf(more, S.Run, Rng, maker));
             // The offices' and the shed's own, on a find (H9).
             if (extra && found.Count > 0) found.AddRange(RunLoot.SiteExtra(S.Site, S.Run, Rng, maker));
@@ -2282,7 +2289,7 @@ namespace Bastion.Engine
                     if (tile == null || !Abilities.CanTargetTile(s, unit, command.Ability, tile))
                     {
                         var whyTile = command.Ability == AbilityIds.Search ? "No hay ninguna caja que abrir ahí."
-                            : command.Ability == AbilityIds.OpenDoor ? "Esa casilla no es una puerta cerrada contigua."
+                            : command.Ability == AbilityIds.OpenDoor ? (Looting.LockedAt(s, tile ?? new Pos()) ? "Está cerrada. Hace falta la llave." : "Esa casilla no es una puerta cerrada contigua.")
                             : command.Ability == AbilityIds.CloseDoor ? "Esa casilla no es una puerta abierta, libre y contigua."
                             : "Fuera de alcance o fuera de la vista de la escuadra.";
                         return CommandResult.Failure(whyTile);

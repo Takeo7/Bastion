@@ -187,6 +187,13 @@ namespace Bastion.UI.Strategy
                 case "tablero": control.OnBoardFor(S(1)); return false;
                 // «estado»: what is open now, in the log (U10's test with two).
                 case "estado": Debug.Log($"[base-run] estado: {control.OpenNow()}"); return false;
+                // «ocultar»: every panel of the screen hidden, the clearing and its row as they are (A8: Arte's shots of the
+                // squad's feet and shadows on the halt); «mostrar», back.
+                case "ocultar":
+                case "mostrar":
+                    foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsSortMode.None))
+                        if (doc.rootVisualElement != null) doc.rootVisualElement.style.display = part[0] == "ocultar" ? DisplayStyle.None : DisplayStyle.Flex;
+                    return false;
                 case "unlock": control.OnUnlock(S(1)); return true;
                 case "vote": control.OnVote(S(1) == "yes"); return true;
                 case "withdraw": control.OnWithdraw(); return true;

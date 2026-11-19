@@ -27,9 +27,13 @@ namespace Bastion.UI.Strategy
                 Line = choosing ? (choices.Count > 0 ? StrategyText.Runs.Choose : StrategyText.Runs.NoWay) : null,
                 Start = StrategyText.Runs.Start,
                 AtStart = run.At == null,
-                Back = StrategyText.Runs.Back,
+                // G22 (Arturo, 18/11, cuadro 72; U21): home only from a Refugio, its own plate's button, or after the boss,
+                // by itself; the map's button only on an expedition started before (RunState.HomeFromRefuge missing), and
+                // where it went a line saying where one goes back from (not at the Refugio, whose plate says it).
+                Back = run.HomeFromRefuge == true ? null : StrategyText.Runs.Back,
                 BackTip = StrategyText.Runs.BackTip,
                 BackWhy = Runs.EndRunRefusal(c),
+                HomeNote = run.HomeFromRefuge == true && !Runs.AtRefuge(run) ? Lore.ExpeditionText.ReturnWhere : null,
                 SquadHead = StrategyText.Runs.Squad,
                 Run = $"{run.Chapter}:{run.Seed}",
                 Fresh = run.At == null && run.Path.Count == 0,
@@ -161,6 +165,14 @@ namespace Bastion.UI.Strategy
                 Leave = StrategyText.Runs.Leave,
                 LeaveWhy = Runs.LeaveStopRefusal(c),
             };
+            // A Refugio (G22, U21): the two ways out, «Seguir la expedición» first and «Volver a la base» after it.
+            if (node.Kind == NodeKinds.Refuge && run.HomeFromRefuge == true)
+            {
+                v.Leave = StrategyText.Runs.EndNo;
+                v.Home = StrategyText.Runs.Back;
+                v.HomeTip = StrategyText.Runs.BackTip;
+                v.HomeWhy = Runs.EndRunRefusal(c);
+            }
             switch (node.Kind)
             {
                 case NodeKinds.Trade:

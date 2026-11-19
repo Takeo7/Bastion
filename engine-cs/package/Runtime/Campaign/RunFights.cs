@@ -215,6 +215,9 @@ namespace Bastion.Engine
             // One in RunMap.LooseOdds of the other fights, a survivor loose on the map, unmarked (N2, Arturo 17/11).
             if (RunMap.LooseSurvivor(node)) PlaceLoose(state, SurvivorOf(c, node), new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x10057))));
             state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId };
+            // La llave (G23.1): its armoury locked and full, its key (a gear of the fight's) on one of the dead in uniform the
+            // squad can get to.
+            if (node.Kind == NodeKinds.Key) Setup.KeyArmory(state, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x6e7))));
             return (state, name);
         }
 
@@ -506,8 +509,15 @@ namespace Bastion.Engine
                 Pistol = places.Pistol,
                 Vest = places.Vest,
                 Belt = belt,
-                Pack = Gears.CloneGrid(u.Pack ?? s.Kit?.Pack ?? new GearGrid { W = PackW, H = PackH }),
+                Pack = WithoutKey(Gears.CloneGrid(u.Pack ?? s.Kit?.Pack ?? new GearGrid { W = PackW, H = PackH })),
             };
+        }
+
+        /// <summary>A pack home without the armoury's key (G23.1: the fight's only).</summary>
+        private static GearGrid WithoutKey(GearGrid pack)
+        {
+            pack.Items.RemoveAll((p) => p.Gear.Kind == GearKinds.Key);
+            return pack;
         }
 
         /// <summary>

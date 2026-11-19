@@ -21,6 +21,11 @@ namespace Bastion.Engine
         public const string Crossing = "crossing";
         public const string Stealth = "stealth";
         public const string Elite = "elite";
+        /// <summary>
+        /// G23.1 La llave (Arturo, 18/11, cuadros 71, 73 y 79): a Saqueo at a police station whose armoury is locked; its key on
+        /// one of the dead in uniform; its furniture all full (MissionOptions.KeyArmory).
+        /// </summary>
+        public const string Key = "key";
         // Stops, no fight (H4).
         public const string Refuge = "refuge";
         public const string Trade = "trade";
@@ -29,7 +34,7 @@ namespace Bastion.Engine
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Refuge, Trade, Event, Boss,
+            Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Key, Refuge, Trade, Event, Boss,
         };
 
         /// <summary>The stops: no fight, the squad answers them on the map.</summary>

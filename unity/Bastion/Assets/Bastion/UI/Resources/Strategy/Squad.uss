@@ -740,10 +740,13 @@
     -unity-background-scale-mode: scale-to-fit;
 }
 
-/* The stage's report (U10): a soldier's key to its board, under what it learnt. */
+/* The stage's report (U10): a soldier's key to its board, under what it learnt. On a narrow card (6 or 8 of them; Producto,
+   18/11: «▲ 2 PUNTOS POR GASTAR» went past its edges) its words go on two lines, whole, the key as tall as they need. */
 .lineup-card__learn {
-    height: 24px;
+    min-height: 24px;
     margin-top: 6px;
-    padding: 0 8px;
+    padding: 3px 4px;
     font-size: 11px;
+    white-space: normal;
+    -unity-text-align: middle-center;
 }

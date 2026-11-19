@@ -27,6 +27,8 @@ namespace Bastion.UI.Strategy
         readonly Label head;
         readonly Label line;
         readonly Button back;
+        /// <summary>Where the button went (G22, U21): «Se vuelve a la base desde un Refugio…».</summary>
+        readonly Label homeNote;
         readonly KitPanel squad;
         /// <summary>The squad's tabs and kits on the right (their busts: StrategyRoot).</summary>
         public KitPanel Kits => squad;
@@ -71,6 +73,7 @@ namespace Bastion.UI.Strategy
             back = new Button(() => handlers.OnEndRun());
             Ui.AddClasses(back, "runmap-back font-title");
             plate.Add(back);
+            homeNote = Ui.Text("", "runmap-home muted", plate);
             stop = new StopPlate(plate, tips, icon, handlers);
             squad = new KitPanel(view, "strat-side strat-side--right panel stash-right runmap-squad", tips, handlers, board) { Icon = icon };
             Show(false);
@@ -95,6 +98,8 @@ namespace Bastion.UI.Strategy
             back.text = (v.Back ?? "").ToUpperInvariant();
             back.SetEnabled(v.BackWhy == null);
             tips.Attach(back, v.BackWhy ?? v.BackTip);
+            homeNote.text = v.HomeNote ?? "";
+            Ui.Show(homeNote, !string.IsNullOrEmpty(v.HomeNote));
             squad.Set(v.Squad, v.Kit, v.SquadHead);
             // A stop over the map, the map dimmed under it.
             stop.Set(v.Stop);

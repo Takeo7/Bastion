@@ -153,6 +153,7 @@ namespace Bastion.Engine
                 case GearKinds.Mags:
                 case GearKinds.Medicine:
                 case GearKinds.Supplies:
+                case GearKinds.Key:
                     return type == null;
                 default:
                     return false;

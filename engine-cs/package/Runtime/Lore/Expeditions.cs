@@ -25,6 +25,11 @@ namespace Bastion.Engine
             /// <summary>The button that ends one, back to the base.</summary>
             public const string Return = "Volver a la base";
             public const string ReturnHelp = "Acaba la expedición. Todos se curan, y lo que llevan las mochilas se guarda.";
+            /// <summary>
+            /// On the stage map where «Volver a la base» was (G22, U21; cuadro 72): where one goes back from. The same rule as
+            /// RunTexts.EndFromRefuge, said as a fact.
+            /// </summary>
+            public const string ReturnWhere = "Se vuelve a la base desde un Refugio o al superar el capítulo.";
             /// <summary>Over the stage map: «Expedición · Capítulo 1».</summary>
             public static string Header(int chapter) => $"Expedición · Capítulo {chapter}";
             /// <summary>What a fight with an objective gives on top when it is met (Gameplay's «caja de premio»).</summary>
@@ -43,6 +48,7 @@ namespace Bastion.Engine
             [NodeKinds.Crossing] = "Travesía",
             [NodeKinds.Stealth] = "Sigilo",
             [NodeKinds.Elite] = "Guarida",
+            [NodeKinds.Key] = "La llave",
             [NodeKinds.Refuge] = "Refugio",
             [NodeKinds.Trade] = "Trueque",
             [NodeKinds.Event] = "Suceso",
@@ -83,6 +89,33 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// La llave (G23.1; Gameplay's .dev-snapshots/gameplay/g23/LLAVE.md; Arturo, cuadros 71, 73 and 79): the police
+        /// station's armoury locked, its key on one of the dead in uniform, its wall to be blown as the other way in.
+        /// </summary>
+        public static class KeyText
+        {
+            /// <summary>The objective, a line at a time (UI's strip): the key to find, the armoury to open, La Lata.</summary>
+            public const string FindKey = "Buscad la llave: la lleva un muerto de uniforme";
+            /// <summary>Dropped by the body that got up, or by a soldier who fell: to be picked up.</summary>
+            public const string KeyOnFloor = "La llave está en el suelo: recogedla";
+            public const string OpenArmory = "Abrid la armería, o volad su pared";
+            public const string Leave = "Salid " + Bus.In;
+            /// <summary>The strip's help.</summary>
+            public const string ObjectiveTip = "La armería tiene todos sus muebles llenos. La llave la lleva uno de los muertos de uniforme: matadlos y registrad sus cuerpos. Si uno se levanta antes, la suelta. Una granada contra la pared también abre la armería, con ruido.";
+            /// <summary>The key in the pack: its sheet's help.</summary>
+            public const string Help = "Abre la puerta de la armería. Se gasta al abrirla, y no sale de esta etapa.";
+            /// <summary>«Abrir la puerta» on the armoury's without the key (Abilities, OpenDoor); with it, the action's name.</summary>
+            public const string Locked = "Está cerrada. Hace falta la llave de la armería.";
+            public const string OpenWithKey = "Abrir con la llave";
+            /// <summary>When the body that had it gets up (ReanimatedEvent): the log, and over the tile.</summary>
+            public const string Dropped = "La llave de la armería cae al suelo.";
+            public const string DroppedFloat = "LLAVE AL SUELO";
+            /// <summary>The armoury opened with the key (UnlockedEvent): the log, and over the door.</summary>
+            public static string Unlocked(string who) => $"{who} abre la armería con la llave.";
+            public const string UnlockedFloat = "ARMERÍA ABIERTA";
+        }
+
+        /// <summary>
         /// What is done at a stage, in one line, for its sheet on the map. The figures and names when known: the item to
         /// bring back, the alarm (Alarms), the turn La Lata comes on a Hold, the guard of a Guarida (a template); a Rescate
         /// with Cuervos round the survivor (`crows`; Arturo, 17/11: some are held by them, others hide alone).
@@ -111,6 +144,9 @@ namespace Bastion.Engine
                     return $"Recuperad {item_} y volved {Bus.To} sin que os vean. Sin ser vistos, la recompensa es doble; si os ven, llega una oleada y la recompensa baja a la mitad.";
                 case NodeKinds.Elite:
                     return $"{(guard != null && Content.Templates.TryGetValue(guard, out var t) ? $"Un {t.Name}" : "Un muerto especial")} y su grupo guardan la mejor caja del capítulo.";
+                case NodeKinds.Key:
+                    // G23.1 (Arturo, 18/11 and 19/11, cuadros 71, 73 and 79): won as a Saqueo; the armoury is the prize.
+                    return $"La armería de la comisaría está cerrada, con todos sus muebles llenos. Uno de los muertos de uniforme lleva la llave; también se puede volar la pared con una granada. Salid {Bus.In}.";
                 case NodeKinds.Refuge:
                     // G22 (cuadro 72): the only way back to the base, but beating the boss.
                     return "Un sitio seguro para descansar: todos se curan del todo. Desde aquí se puede volver a la base.";

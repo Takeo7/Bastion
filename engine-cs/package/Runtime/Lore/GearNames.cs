@@ -43,6 +43,8 @@ namespace Bastion.Engine
             [WeaponModIds.Silencer] = new GearWords("silenciador", "silenciadores", "el silenciador"),
             [GearKinds.Mags] = new GearWords("cargador", "cargadores", "el cargador"),
             [GearKinds.Medicine] = new GearWords("medicina", "medicinas", "la medicina"),
+            // G23.1: the one key of La llave.
+            [GearKinds.Key] = new GearWords("llave de la armería", "llaves de la armería", "la llave de la armería"),
         };
 
         /// <summary>
@@ -96,7 +98,7 @@ namespace Bastion.Engine
 
         /// <summary>
         /// A gear brought into a sentence for the first time («Anja encuentra…»), with «un»/«una»: «una granada», «un fusil de
-        /// cerrojo», «unos tapones», «2 granadas». The supplies, with their figure: «117 §».
+        /// cerrojo», «unos tapones», «2 granadas». The supplies, with their figure: «117 §»; La llave's key, the one there is.
         /// </summary>
         public static string GearA(string kind, string? type, int count = 1)
         {
@@ -104,6 +106,8 @@ namespace Bastion.Engine
             var words = WordsOf(kind, type);
             if (count > 1) return $"{count} {words.Many}";
             var the = words.The;
+            // There is only one: «Anja encuentra la llave de la armería.»
+            if (kind == GearKinds.Key) return the;
             if (the.StartsWith("el ")) return "un " + the.Substring(3);
             if (the.StartsWith("la ")) return "una " + the.Substring(3);
             if (the.StartsWith("los ")) return "unos " + the.Substring(4);

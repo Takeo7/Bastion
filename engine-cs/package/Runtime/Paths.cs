@@ -453,6 +453,8 @@ namespace Bastion.Engine
             var slow = s.Slow != null && s.Slow.Count > 0 ? new HashSet<int>(s.Slow) : null;
             // Fire (Arturo, 1/11): the enemies go round it if they can, through it if not (Content.Flames.Avoid).
             var fire = u.Team != Teams.Xcom ? Burning.Nodes(s) : null;
+            // A locked door (G23.1): a wall to everyone till the key opens it.
+            var locked = s.Mission.Locked;
             var taken = new HashSet<int>();
             foreach (var o in s.Units)
             {
@@ -478,7 +480,7 @@ namespace Bastion.Engine
                     {
                         var to = step.To;
                         var ni = Grid.NodeOf(s, to);
-                        if (taken.Contains(ni) || (avoid != null && avoid.Contains(ni)) || (!windows && Grid.IsWindow(Grid.KindAt(s, to))) || (shut && Grid.KindAt(s, to) == TileKinds.Door)) continue;
+                        if (taken.Contains(ni) || (avoid != null && avoid.Contains(ni)) || (!windows && Grid.IsWindow(Grid.KindAt(s, to))) || (shut && Grid.KindAt(s, to) == TileKinds.Door) || (locked != null && locked.Contains(ni))) continue;
                         var nc = c + step.Cost + (slow != null && slow.Contains(ni) ? Content.Traps.Wire : 0) + (fire != null && fire.Contains(ni) ? Content.Flames.Avoid : 0);
                         if (nc > maxCost) continue;
                         if (!cost.TryGetValue(ni, out var old) || nc < old)

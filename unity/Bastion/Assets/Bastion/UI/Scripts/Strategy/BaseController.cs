@@ -101,6 +101,7 @@ namespace Bastion.UI.Strategy
             if (c.Stash != null)
             {
                 Settlement.Instance?.SetVehicle(Runs.VehicleOf(c));
+                Settlement.Halt = HaltNow(c);
                 Settlement.Instance?.ShowFixed();
             }
             else Settlement.Instance?.Show(c);
@@ -212,6 +213,12 @@ namespace Bastion.UI.Strategy
         public void Render()
         {
             if (p.State == null || !root.Ready) return;
+            // The halt goes as the report is read (Continuar): the valley's clearing again under the route (A8).
+            if (p.State.Stash != null && HaltNow(p.State) != Settlement.Halt)
+            {
+                Settlement.Halt = HaltNow(p.State);
+                Settlement.Instance?.ShowFixed();
+            }
             root.SetTop(p.Top());
             root.SetNav(p.Nav(view));
             root.SetScreen(view);
@@ -293,6 +300,25 @@ namespace Bastion.UI.Strategy
         /// mission already chosen (Gameplay, 24/10: the 0.10.1 asked for none, and a siege the engine picks on the way back
         /// hid the debrief for good; docs/UNITY-ESTRATEGIA.md §7).
         /// </summary>
+        /// <summary>BASTION_ALTO (Arte's, for the labs): the halt whatever the campaign.</summary>
+        static readonly string HaltLab = Environment.GetEnvironmentVariable("BASTION_ALTO");
+
+        /// <summary>
+        /// A8 (Arturo, 18/11: «cuando acabas un nodo, al darle a seguir expedición, la vista parece que el soldado está en la
+        /// base»; «Siempre una carretera»): the stage's report between two stages stands on Arte's halt by a road, not on the
+        /// base's clearing; as Settlement.Halt takes it, «site/modifier» of the stage just played (hospital/night). Null, the
+        /// clearing: the route and the stops (the valley's, as before), and the base itself (no expedition under way, back
+        /// after the boss or a Refugio).
+        /// </summary>
+        string HaltNow(CampaignState c)
+        {
+            if (HaltLab != null) return HaltLab;
+            if (c?.Stash == null || c.Run == null || !ReportPending(c)) return null;
+            var node = c.Run.Nodes.FirstOrDefault(n => n.Id == c.LastReport?.Run?.Node);
+            var site = node?.Site ?? "roadside";
+            return string.IsNullOrEmpty(node?.Modifier) ? site : $"{site}/{node.Modifier}";
+        }
+
         bool ReportPending(CampaignState c)
         {
             var r = c.LastReport;

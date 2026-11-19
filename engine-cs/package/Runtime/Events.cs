@@ -472,7 +472,14 @@ namespace Bastion.Engine
                 }
                 case ReanimatedEvent ev:
                 {
-                    UnitOf(s, ev.Corpse).Reanimated = true;
+                    var corpse = UnitOf(s, ev.Corpse);
+                    corpse.Reanimated = true;
+                    // G23.1: the key on a body that rises falls where it lay, to be taken from there.
+                    if (s.Mission.Key != null && s.Mission.KeyHolder == ev.Corpse)
+                    {
+                        (s.FloorGear ??= new List<DroppedGear>()).Add(new DroppedGear { Gear = s.Mission.Key, Pos = CopyPos(corpse.Pos) });
+                        s.Mission.Key = null;
+                    }
                     var z = CloneUnit(ev.Zombie);
                     s.Units.Add(z);
                     if (ev.Pod != null) s.Pods.Add(ClonePod(ev.Pod));
@@ -783,9 +790,19 @@ namespace Bastion.Engine
                     if (ev.Loot != null) Stow(s, UnitOf(s, ev.Unit), ev.Loot);
                     // A run's fight (H3): gear.
                     if (ev.Packed != null || ev.Floor != null || ev.NextGear != null) RunLoot.Receive(s, UnitOf(s, ev.Unit), ev.Packed, ev.Floor, ev.NextGear);
+                    // G23.1: the key off its holder's body, taken.
+                    var key = s.Mission.Key;
+                    if (key != null && ((ev.Packed?.Any((p) => p.Gear.Id == key.Id) ?? false) || (ev.Floor?.Any((g) => g.Id == key.Id) ?? false))) s.Mission.Key = null;
                     // A run's Guarida (H5): its box open.
                     if (s.Mission.Lair != null && Grid.SameTile(s.Mission.Lair, ev.Tile)) CompleteObjective(s);
                     Deed(s, ev.Unit, DeedIds.Search);
+                    break;
+                }
+                case UnlockedEvent ev:
+                {
+                    s.Mission.Locked?.Remove(Grid.NodeOf(s, ev.Tile));
+                    if (s.Mission.Locked?.Count == 0) s.Mission.Locked = null;
+                    UnitOf(s, ev.Unit).Pack?.Items.RemoveAll((p) => p.Gear.Id == ev.Gear);
                     break;
                 }
                 case LootDroppedEvent ev:
@@ -1280,6 +1297,10 @@ namespace Bastion.Engine
                     OutOfReach = CopyInts(m.OutOfReach),
                     Pieces = CopyInts(m.Pieces),
                     Rifled = CopyInts(m.Rifled),
+                    KeyArmory = m.KeyArmory,
+                    Locked = CopyInts(m.Locked),
+                    KeyHolder = m.KeyHolder,
+                    Key = m.Key != null ? Gears.CloneGear(m.Key) : null,
                     Reinforcements = m.Reinforcements.Select(CopyReinforcement).ToList(),
                     Difficulty = m.Difficulty,
                     Noise = m.Noise,

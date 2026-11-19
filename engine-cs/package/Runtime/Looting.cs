@@ -33,6 +33,15 @@ namespace Bastion.Engine
         public bool Pieces { get; set; }
     }
 
+    /// <summary>Looting.KeyWhere: where La llave's key is (G23.1).</summary>
+    public static class KeyPlaces
+    {
+        public const string Holder = "holder";
+        public const string Floor = "floor";
+        public const string Pack = "pack";
+        public const string Used = "used";
+    }
+
     /// <summary>
     /// G19 (Arturo, 18/11, cuadros 65–67; .dev-snapshots/gameplay/muebles/CONTRATO.md): what is searched piece by piece, as a
     /// box: the police station's own (its marks, InteriorSite.Dressing, PoliceDetailKinds) and the medical furniture
@@ -378,6 +387,51 @@ namespace Bastion.Engine
             int nx = car.Anchor % s.Width, ny = car.Anchor / s.Width;
             var boot = car.Tiles.OrderByDescending((j) => Js.Hypot(j % s.Width - nx, j / s.Width - ny)).First();
             return boot == i ? car.Anchor : (int?)null;
+        }
+
+        // ------------------------------------------------------------ the key (G23.1)
+
+        /// <summary>Whether the door on `p` is locked (MissionState.Locked): nobody through it, only the key opens it.</summary>
+        public static bool LockedAt(GameState s, Pos p) => s.Mission.Locked != null && s.Mission.Locked.Contains(Grid.NodeOf(s, Grid.ToPos(p)));
+
+        /// <summary>The armoury's key in `u`'s pack, or null.</summary>
+        public static Gear? KeyOf(Unit u) => u.Pack?.Items.FirstOrDefault((p) => p.Gear.Kind == GearKinds.Key)?.Gear;
+
+        /// <summary>
+        /// Whether La llave's armoury is open (G23.1, its objective's second step; UI, U22): opened with the key (nothing
+        /// locked any more), or a hole in its walls (Arturo, cuadro 79: «también volando la pared»), a tile of them neither
+        /// wall nor door any more. False in another fight.
+        /// </summary>
+        public static bool ArmoryOpen(GameState s)
+        {
+            if (s.Mission.KeyArmory != true) return false;
+            if (s.Mission.Locked == null) return true;
+            var a = (s.Interiors ?? new List<InteriorSite>()).Where((x) => x.Kind == InteriorKinds.Police).SelectMany((x) => x.Rooms).FirstOrDefault((r) => r.Use == PoliceUses.Armory && r.Z == 0);
+            if (a == null) return false;
+            for (var y = a.Y - 1; y <= a.Y + a.H; y++)
+            {
+                for (var x = a.X - 1; x <= a.X + a.W; x++)
+                {
+                    if (x >= a.X && y >= a.Y && x < a.X + a.W && y < a.Y + a.H) continue;
+                    if (!Grid.InBounds(s, x, y)) continue;
+                    var kind = Grid.KindAt(s, new Pos { X = x, Y = y, Z = 0 });
+                    if (kind != TileKinds.Wall && kind != TileKinds.Door && kind != TileKinds.DoorOpen) return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Where La llave's key is (G23.1, for its objective): `holder` (on its holder, alive or a body not searched),
+        /// `floor` (lying: FloorGear), `pack` (in a soldier's), `used` (the armoury open); null in another fight.
+        /// </summary>
+        public static string? KeyWhere(GameState s)
+        {
+            if (s.Mission.KeyArmory != true) return null;
+            if (s.Mission.Key != null) return KeyPlaces.Holder;
+            if ((s.FloorGear ?? new List<DroppedGear>()).Any((d) => d.Gear.Kind == GearKinds.Key)) return KeyPlaces.Floor;
+            if (s.Units.Any((u) => u.Alive && KeyOf(u) != null)) return KeyPlaces.Pack;
+            return s.Mission.Locked == null ? KeyPlaces.Used : KeyPlaces.Pack;
         }
 
         // ------------------------------------------------------------ the pieces

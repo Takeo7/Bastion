@@ -96,6 +96,16 @@ namespace Bastion.UI.Strategy
                     leave.SetEnabled(false);
                     tips.Attach(leave, v.LeaveWhy);
                 }
+                // A Refugio's way home (G22, U21), after «Seguir la expedición»: OnEndRun asks first (EndAsk), never at once.
+                if (!string.IsNullOrEmpty(v.Home))
+                {
+                    var home = new Button(() => handlers.OnEndRun());
+                    Ui.AddClasses(home, "runstop__home font-title");
+                    home.text = v.Home.ToUpperInvariant();
+                    home.SetEnabled(v.HomeWhy == null);
+                    tips.Attach(home, v.HomeWhy ?? v.HomeTip);
+                    foot.Add(home);
+                }
                 if (!string.IsNullOrEmpty(v.Waiting)) Ui.Text(v.Waiting, "runstop__waiting muted", foot);
             }
         }

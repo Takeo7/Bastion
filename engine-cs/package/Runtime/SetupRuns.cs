@@ -333,6 +333,73 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// G23.1 La llave (Arturo, 18/11, cuadros 71, 73 y 79; .dev-snapshots/gameplay/g23/LLAVE.md): the police station's
+        /// armoury locked (MissionState.Locked: its door), all its furniture full (MissionState.Pieces), nobody in it; its key
+        /// (MissionState.Key, a gear of the fight's) on one of the dead in uniform the squad can get to and not caged
+        /// (MissionState.KeyHolder), a common one put in a policeman's uniform where none is. After OnlyWithinReach.
+        /// </summary>
+        public static void KeyArmory(GameState s, Rng rng)
+        {
+            var station = (s.Interiors ?? new List<InteriorSite>()).FirstOrDefault((x) => x.Kind == InteriorKinds.Police);
+            var armory = station?.Rooms.FirstOrDefault((r) => r.Use == PoliceUses.Armory && r.Z == 0);
+            if (station == null || armory == null || s.Run == null) return;
+            s.Mission.KeyArmory = true;
+            bool In(int x, int y) => x >= armory.X && y >= armory.Y && x < armory.X + armory.W && y < armory.Y + armory.H;
+            // Its door (in its walls), shut and locked.
+            var locked = new List<int>();
+            for (var y = armory.Y - 1; y <= armory.Y + armory.H; y++)
+            {
+                for (var x = armory.X - 1; x <= armory.X + armory.W; x++)
+                {
+                    if (In(x, y) || !Grid.InBounds(s, x, y)) continue;
+                    var i = Grid.TileIndex(s, x, y);
+                    if (s.Tiles[i] != TileKinds.Door && s.Tiles[i] != TileKinds.DoorOpen) continue;
+                    s.Tiles[i] = TileKinds.Door;
+                    locked.Add(Grid.NodeOf(s, new Pos { X = x, Y = y, Z = 0 }));
+                }
+            }
+            if (locked.Count == 0) return;
+            s.Mission.Locked = locked;
+            // All its furniture full.
+            var pieces = s.Mission.Pieces ??= new List<int>();
+            foreach (var d in station.Dressing.Where((d) => d.Z == 0 && In(d.X, d.Y) && SearchPieces.Police.Contains(d.Kind)))
+            {
+                var at = new Pos { X = d.X, Y = d.Y, Z = 0 };
+                var node = Grid.NodeOf(s, at);
+                if (SearchPieces.Standing(s, at, d.Kind) && !pieces.Contains(node)) pieces.Add(node);
+            }
+            // Nobody in it: the dead there out to the nearest free tiles of the station.
+            var soldier = s.Units.FirstOrDefault((u) => u.Team == Teams.Xcom && u.Alive);
+            var free = Enumerable.Range(0, s.Width * s.Height).Select((i) => new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 })
+                .Where((p) => !In(p.X, p.Y) && Grid.IsWalkable(Grid.KindAt(s, p)) && Flights.CanStopAt(s, p) && InteriorSite.UseAt(s, p) != null && InteriorSite.UseAt(s, p) != PoliceUses.Cells)
+                .OrderBy((p) => Math.Abs(p.X - (armory.X + armory.W / 2)) + Math.Abs(p.Y - (armory.Y + armory.H / 2))).ThenBy((p) => Grid.NodeOf(s, p)).ToList();
+            foreach (var u in s.Units.Where((u) => u.Alive && u.Team == Teams.Alien && u.Pos.Z == 0 && In(u.Pos.X, u.Pos.Y)).ToList())
+            {
+                var to = free.FirstOrDefault((p) => Grid.UnitAt(s, p) == null);
+                if (to != null) u.Pos = to;
+            }
+            // Its key, on one of the dead in uniform the squad gets to.
+            if (soldier == null) return;
+            var reach = new HashSet<int>(Paths.ComputeReach(s, soldier, 1_000_000, ignore: (_) => true).Cost.Keys);
+            bool Can(Unit u) => u.Alive && u.Team == Teams.Alien && !u.Captive && u.Template == TemplateIds.Zombie && reach.Contains(Grid.NodeOf(s, u.Pos))
+                && InteriorSite.UseAt(s, u.Pos) != PoliceUses.Cells;
+            var uniformed = s.Units.Where((u) => Can(u) && (u.Outfit == Outfits.Police || u.Outfit == Outfits.Military)).ToList();
+            if (uniformed.Count == 0)
+            {
+                var common = s.Units.Where(Can).ToList();
+                if (common.Count == 0) return;
+                var dressed = rng.Pick(common);
+                dressed.Outfit = Outfits.Police;
+                uniformed.Add(dressed);
+            }
+            var holder = rng.Pick(uniformed);
+            s.Mission.KeyHolder = holder.Id;
+            var maker = new RunLoot.Maker(s.Run.NextGear);
+            s.Mission.Key = maker.Make(GearKinds.Key, null)[0];
+            s.Run.NextGear = maker.Next;
+        }
+
+        /// <summary>
         /// A run's fight (Red, R3 17/11): what there is to search that no soldier gets beside on foot from the squad is out of
         /// reach (MissionState.OutOfReach: never a spot to search), and no such car is a police car. A town's outline shuts up
         /// the ground nobody can get to (Mapgen's SealPockets) but not what stands on it, so a lot's cars were left whole in its

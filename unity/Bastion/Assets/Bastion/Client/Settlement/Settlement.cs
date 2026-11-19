@@ -72,7 +72,7 @@ namespace Bastion.Client
         {
             Current = this;
             // The same clearing as shown: nothing to make again (UI shows it on every campaign state).
-            string key = @base == null ? null : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { @base, snow });
+            string key = @base == null ? null : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { @base, snow }) + (ReferenceEquals(@base, haltBase) ? haltModifier : null);
             if (key != null && key == shownKey && Map != null && prefabOf == null && materialOf == null) return;
             shownKey = key;
             this.prefabOf = prefabOf ?? this.prefabOf ?? MapCatalog.Load()?.PrefabOf() ?? (_ => null);
@@ -84,16 +84,20 @@ namespace Bastion.Client
             // The halt's way, a road: asphalt with its line, three tiles wide, the whole map long.
             // (Tarmac in the pines is the roadside's: GroundMap.)
             if (Halted) state.Site = Sites.Roadside;
+            bool haltNight = Halted && haltModifier == "night";
+            if (Halted && haltModifier != null && haltModifier != "night") state.Weather = haltModifier;
             if (Halted && state.Ground != null)
                 for (int i = 0; i < state.Width * state.Height && i < state.Ground.Count; i++)
                 {
                     // (Two lanes of road with their line, La Lata on it; an earth shoulder either side, not the clearing's grass.)
-                    float off = Mathf.Abs(i % state.Width + 0.5f - state.Width / 2f);
-                    if (off <= 1) state.Ground[i] = 1;
-                    else if (off <= HaltHalf) state.Ground[i] = 3;
+                    // (Its middle a tile to the camera's side of La Lata's: the line runs between it and the row, in sight.)
+                    // (Four tiles, La Lata on its far lane, the line between it and the row. No earth shoulder: the ground counts
+                    // earth as street, and paints a centre line only down one four tiles wide or less: GroundMap.)
+                    float off = Mathf.Abs(i % state.Width + 0.5f - (state.Width / 2f - HaltSide));
+                    if (off <= 2) state.Ground[i] = 1;
                 }
             // (Its fill fixed, opposite the sun: clearingArt.ts aim.)
-            Mood.Show(snow ? Mood.SnowDay : Mood.Day).FillOpposite = true;
+            Mood.Show(haltNight ? Mood.Night : Halted && Weather.WeatherMood(state.Weather) is Mood.Values wet ? wet : snow ? Mood.SnowDay : Mood.Day).FillOpposite = true;
             if (Map == null)
             {
                 Map = new GameObject("Mapa").AddComponent<MapView>();
