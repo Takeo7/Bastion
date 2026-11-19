@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Bastion.Engine;
 using Xunit;
@@ -45,6 +46,48 @@ namespace Bastion.Engine.Tests
             return Grid.Dirs4.Select((d) => new Pos { X = p.X + d.X, Y = p.Y + d.Y, Z = 0 })
                 .First((q) => Grid.InBounds(s, q.X, q.Y) && !(q.X >= a.X && q.Y >= a.Y && q.X < a.X + a.W && q.Y < a.Y + a.H) && Grid.IsWalkable(Grid.KindAt(s, q)) && Flights.CanStopAt(s, q)
                     && (Grid.UnitAt(s, q) == null || Grid.UnitAt(s, q) == u) && Looting.ReachesToSearch(s, q, p));
+        }
+
+        [Fact]
+        public void OnTheMapsFromRowThreeAtAPoliceStation()
+        {
+            // Producto, 19/11: a special from row KeyFrom, always at a police station.
+            int maps = 0, with = 0, keys = 0;
+            for (var seed = 1; seed <= 2000; seed++)
+            {
+                var all = RunMap.Generate(1, seed);
+                var here = all.Where((n) => n.Kind == NodeKinds.Key).ToList();
+                Assert.All(here, (n) => Assert.True(n.Row >= RunMap.KeyFrom && n.Row < RunMap.RefugeRow, n.Id));
+                Assert.All(here, (n) => Assert.Equal(Places.Police, n.Site));
+                maps++;
+                if (here.Count > 0) with++;
+                keys += here.Count;
+            }
+            Assert.InRange(with / (double)maps, 0.2, 0.9);
+        }
+
+        [Fact]
+        public void ARunStartedBeforeHasNone()
+        {
+            // Saved by the 0.13.2 between stages (Red's r8, n1-0 played): its map goes with it as it was, read as the room
+            // reads a save; nothing draws it again, so no Key comes into it.
+            var text = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "golden", "g23", "expedicion-0132.json"));
+            var c = new Bastion.Net.EngineCampaignRules().MigrateCampaign(Bastion.Net.Json.Read<CampaignState>(text));
+            var saved = Newtonsoft.Json.Linq.JObject.Parse(text)["run"]!["nodes"]!;
+            Assert.True(Newtonsoft.Json.Linq.JToken.DeepEquals(saved, Newtonsoft.Json.Linq.JToken.Parse(Bastion.Net.Json.Write(c.Run!.Nodes))));
+            Assert.DoesNotContain(c.Run.Nodes, (n) => n.Kind == NodeKinds.Key);
+            // A new one in the same campaign may have it.
+            Assert.Contains(Enumerable.Range(1, 50), (seed) => RunMap.Generate(c.Chapter ?? 1, seed).Any((n) => n.Kind == NodeKinds.Key));
+        }
+
+        [Fact]
+        public void WonItGivesNoRewardItsArmouryIsIt()
+        {
+            // Won as a Saqueo (LLAVE.md): no special's 40–80 §; what it gives is what is searched.
+            var (c, s) = Key();
+            var report = EndFight(c, s, Outcomes.Victory, EndReasons.Objective);
+            Assert.True(report.Victory);
+            Assert.Null(report.Run!.Reward);
         }
 
         [Fact]
@@ -120,6 +163,100 @@ namespace Bastion.Engine.Tests
             Assert.True(r.Ok, r.Error);
             Assert.NotNull(Looting.KeyOf(u));
             Assert.Null(s.Mission.Key);
+            Assert.Equal(KeyPlaces.Pack, Looting.KeyWhere(s));
+        }
+
+        /// <summary>One of the dead other than its holder, dead on `at`, listed before the holder (so the first body there).</summary>
+        private static Unit DeadOn(GameState s, Pos at)
+        {
+            var holder = s.Units.Single((x) => x.Id == s.Mission.KeyHolder);
+            var other = s.Units.First((x) => x.Team == Teams.Alien && x.Alive && x.Id != holder.Id && x.Template == TemplateIds.Zombie);
+            s.Units.Remove(other);
+            s.Units.Insert(s.Units.IndexOf(holder), other);
+            other.Pos = Events.CopyPos(at);
+            Events.ApplyEvent(s, new DiedEvent { Unit = other.Id });
+            return other;
+        }
+
+        [Fact]
+        public void ItsHoldersBodyUnderAnotherGivesIt()
+        {
+            // Red, 19/11: two bodies on a tile, the holder's under the other (Looting.BodyAt took the first): searched, the
+            // other's things and the tile marked, the key lost. Now the holder's comes first.
+            var (_, s) = Key();
+            var u = Soldier(s);
+            var holder = s.Units.Single((x) => x.Id == s.Mission.KeyHolder);
+            Events.ApplyEvent(s, new DiedEvent { Unit = holder.Id });
+            DeadOn(s, holder.Pos);
+            Assert.Same(holder, Looting.BodyAt(s, holder.Pos));
+            u.Pos = Events.CopyPos(holder.Pos);
+            u.Ap = 2;
+            var r = Exec(s, new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = holder.Pos });
+            Assert.True(r.Ok, r.Error);
+            Assert.NotNull(Looting.KeyOf(u));
+            Assert.False(Looting.KeyLost(s));
+        }
+
+        [Fact]
+        public void ItsHoldersBodyWhereAnotherWasSearchedGivesIt()
+        {
+            // The other searched first, the tile marked; then the holder falls on it: searchable again, the key alone.
+            var (_, s) = Key();
+            var u = Soldier(s);
+            var holder = s.Units.Single((x) => x.Id == s.Mission.KeyHolder);
+            var at = Events.CopyPos(holder.Pos);
+            // The holder out of the way, on the soldier's tile; the soldier on the other's body.
+            holder.Pos = Events.CopyPos(u.Pos);
+            DeadOn(s, at);
+            u.Pos = Events.CopyPos(at);
+            u.Ap = 2;
+            Assert.True(Exec(s, new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = at }).Ok);
+            Assert.True(Looting.WasSearched(s, at));
+            Assert.False(Looting.IsSearchable(s, at));
+            Assert.Null(Looting.KeyOf(u));
+            // The holder dies on it.
+            holder.Pos = Events.CopyPos(at);
+            Events.ApplyEvent(s, new DiedEvent { Unit = holder.Id });
+            Assert.True(Looting.IsSearchable(s, at));
+            Assert.False(Looting.KeyLost(s));
+            u.Ap = 2;
+            var before = u.Pack!.Items.Count;
+            var r = Exec(s, new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = at });
+            Assert.True(r.Ok, r.Error);
+            var searched = r.Events!.OfType<SearchedEvent>().Single();
+            Assert.Equal(GearKinds.Key, Assert.Single(searched.Packed!).Gear.Kind);
+            Assert.Null(searched.Floor);
+            Assert.Equal(before + 1, u.Pack.Items.Count);
+            Assert.NotNull(Looting.KeyOf(u));
+            // Searched now, its tile is done.
+            Assert.False(Looting.IsSearchable(s, at));
+            Assert.Single(s.Searched!, (n) => n == Grid.NodeOf(s, at));
+            Assert.False(Looting.KeyLost(s));
+        }
+
+        [Fact]
+        public void TheKeyIsNeverLostWhereverItGoes()
+        {
+            // Looting.KeyLost (the bench's invariant): on its holder alive, its body, the floor, a pack, La Lata, the door.
+            var (_, s) = Key();
+            Assert.False(Looting.KeyLost(s));
+            var holder = s.Units.Single((x) => x.Id == s.Mission.KeyHolder);
+            Events.ApplyEvent(s, new DiedEvent { Unit = holder.Id });
+            Assert.False(Looting.KeyLost(s));
+            // A body whose tile can't be searched (out of reach): lost; KeyLost says so.
+            (s.Mission.OutOfReach ??= new List<int>()).Add(Grid.NodeOf(s, holder.Pos));
+            Assert.True(Looting.KeyLost(s));
+            s.Mission.OutOfReach.Remove(Grid.NodeOf(s, holder.Pos));
+            var u = Soldier(s);
+            var key = s.Mission.Key!;
+            s.Mission.Key = null;
+            Pack(u.Pack!, key);
+            Assert.False(Looting.KeyLost(s));
+            // In La Lata with it: there still.
+            u.Alive = false;
+            u.Evacuated = true;
+            u.Aboard = true;
+            Assert.False(Looting.KeyLost(s));
             Assert.Equal(KeyPlaces.Pack, Looting.KeyWhere(s));
         }
 

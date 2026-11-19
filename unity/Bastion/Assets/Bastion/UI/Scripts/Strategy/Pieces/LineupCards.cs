@@ -122,7 +122,7 @@ namespace Bastion.UI.Strategy
                     Ui.Text($"+{l.Count}", "lineup-learned__hex font-title", tag);
                     tips.Attach(tag, l.Tip ?? StrategyText.Learned.PointsTip);
                 }
-                var text = Ui.Text(l.Kind == "point" ? StrategyText.Learned.Points(l.Count) : l.Text, "lineup-learned__text font-title", tag);
+                var text = Ui.Text(l.Kind == "point" ? StrategyText.Learned.Points(l.Count) : Glued(l.Text), "lineup-learned__text font-title", tag);
                 if (l.Line >= 0)
                 {
                     var color = SkillHex.Colors[Mathf.Clamp(l.Line, 0, SkillHex.Colors.Length - 1)];
@@ -139,13 +139,16 @@ namespace Bastion.UI.Strategy
             if (!string.IsNullOrEmpty(v.Learn))
             {
                 var id = v.Id;
-                var learn = new Button(() => handlers.OnBoardFor(id)) { text = "▲ " + v.Learn.ToUpperInvariant() };
+                var learn = new Button(() => handlers.OnBoardFor(id)) { text = "▲ " + Glued(v.Learn.ToUpperInvariant()) };
                 Ui.AddClasses(learn, "skill-board skill-board--pulse lineup-card__learn font-title");
                 card.Add(learn);
             }
             if (!string.IsNullOrEmpty(v.Tip)) tips.Attach(card, v.Tip);
             return card;
         }
+
+        /// <summary>A card's line on two lines keeps its «%» with the figure («+10 %»): a space that doesn't break.</summary>
+        private static string Glued(string text) => text.Replace(" %", " %");
 
         /// <summary>Each card under its pad, as wide as the spacing allows, above the floor.</summary>
         void Place()

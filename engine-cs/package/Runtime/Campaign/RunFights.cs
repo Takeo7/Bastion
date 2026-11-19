@@ -636,10 +636,11 @@ namespace Bastion.Engine
                 return report;
             }
             // What a stage won gives, into the packs while there is room: a special's reward (a Sigilo's doubled unseen,
-            // halved seen; a Guarida's was in its box), the boss's 150 § and a good weapon (H5, H6).
+            // halved seen; a Guarida's was in its box; La llave's is its armoury, won as a Saqueo: G23.1), the boss's 150 §
+            // and a good weapon (H5, H6).
             int? won = null;
             if (victory && node.Kind == NodeKinds.Boss) won = BossReward;
-            else if (victory && node.Kind != NodeKinds.Elite && RunMap.Specials.Concat(RunMap.NewSpecials).Contains(node.Kind))
+            else if (victory && node.Kind != NodeKinds.Elite && node.Kind != NodeKinds.Key && RunMap.Specials.Concat(RunMap.NewSpecials).Contains(node.Kind))
             {
                 won = rng.Range(RewardMin, RewardMax);
                 if (node.Kind == NodeKinds.Stealth)

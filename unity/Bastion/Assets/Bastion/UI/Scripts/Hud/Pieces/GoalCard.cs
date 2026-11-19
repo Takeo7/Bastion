@@ -64,8 +64,25 @@ namespace Bastion.UI.Hud
             if (m == null) return;
             var kind = Ui.Text(m.Label.ToUpperInvariant(), "mission-kind font-title", host);
             tips.Attach(kind, m.Area);
-            var goal = Ui.Text(m.Objective, "mission-goal", host);
-            tips.Attach(goal, string.IsNullOrEmpty(m.ObjectiveTip) ? m.Objective : m.ObjectiveTip);
+            if (m.Steps != null && m.Steps.Count > 0)
+            {
+                // In steps (La llave, U22): its number before each, «✓» and dimmed once done (not struck out: it reads worse
+                // at this size); the help on the whole list.
+                var steps = Ui.El("mission-steps", host);
+                for (var i = 0; i < m.Steps.Count; i++)
+                {
+                    var step = m.Steps[i];
+                    var row = Ui.El(step.Done ? "mission-step mission-step--done" : "mission-step", steps);
+                    Ui.Text(step.Done ? "✓" : (i + 1).ToString(), "mission-step__mark font-title", row);
+                    Ui.Text(step.Text, "mission-step__text", row);
+                }
+                tips.Attach(steps, string.IsNullOrEmpty(m.ObjectiveTip) ? m.Objective : m.ObjectiveTip);
+            }
+            else
+            {
+                var goal = Ui.Text(m.Objective, "mission-goal", host);
+                tips.Attach(goal, string.IsNullOrEmpty(m.ObjectiveTip) ? m.Objective : m.ObjectiveTip);
+            }
             if (m.TurnsLeft >= 0) Ui.Text(HudText.Mission.Turns(m.TurnsLeft), m.TurnsLeft <= 3 ? "timer timer--urgent" : "timer", host);
             if (!string.IsNullOrEmpty(m.WaveText)) tips.Attach(Ui.Text(m.WaveText, m.WaveUrgent ? "timer timer--urgent" : "timer", host), m.WaveTip);
             // The weather (Arturo, 01/11): its drawing and its name beside the turns, what it changes in its help.

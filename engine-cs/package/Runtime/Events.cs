@@ -786,7 +786,8 @@ namespace Bastion.Engine
                     break;
                 case SearchedEvent ev:
                 {
-                    (s.Searched ??= new List<int>()).Add(Grid.NodeOf(s, ev.Tile));
+                    var searched = s.Searched ??= new List<int>();
+                    if (!searched.Contains(Grid.NodeOf(s, ev.Tile))) searched.Add(Grid.NodeOf(s, ev.Tile));
                     if (ev.Loot != null) Stow(s, UnitOf(s, ev.Unit), ev.Loot);
                     // A run's fight (H3): gear.
                     if (ev.Packed != null || ev.Floor != null || ev.NextGear != null) RunLoot.Receive(s, UnitOf(s, ev.Unit), ev.Packed, ev.Floor, ev.NextGear);

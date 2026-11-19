@@ -154,6 +154,9 @@ namespace Bastion.UI.EditorTools
             ("node:refuge", "ICON_DarkFantasy_Map_Home_01_Clean"), ("node:trade", "ICON_DarkFantasy_Map_Merchant_01_Clean"),
             ("node:event", "ICON_Apocalpyse_Map_Quest_01"),
             ("node:awake", "ICON_ModernMenus_ExclamationMark_01_Clean"),
+            // La llave (U22): the same family's key, its stage on the map, and the key itself in a pack, on the floor (its
+            // mark) and in the log's float.
+            ("node:key", "ICON_DarkFantasy_Map_Key_01_Clean"), ("key", "ICON_DarkFantasy_Map_Key_01_Clean"),
             // The runs' base tabs: Almacén a backpack, Mejoras the workshop's tools (Salir is the Escuadra's La Lata).
             ("tab:stash", Backpack), ("tab:upgrades", "ICON_Apocalpyse_Inventory_Crafting_01"),
         };

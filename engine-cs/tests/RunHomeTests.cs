@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Bastion.Engine;
@@ -98,6 +99,29 @@ namespace Bastion.Engine.Tests
             }
             Assert.InRange(covered / (double)second, 0.95, 1);
             Assert.InRange(reach / (double)starts, 0.96, 1);
+        }
+
+        [Fact]
+        public void NeverAMapOfStops()
+        {
+            // Producto, 19/11 (Arturo «no quería un mapa de paradas»): two Refuges in a row at most, four in rows 2–5; the
+            // reach of ARefugeEveryTwoRows kept by RefugesCovering.
+            int most = 0, four = 0;
+            for (var seed = 1; seed <= 2000; seed++)
+            {
+                var all = RunMap.Generate(1, seed);
+                var refuges = all.Where((n) => n.Kind == NodeKinds.Refuge && n.Row >= RunMap.RefugeFirst && n.Row < RunMap.RefugeRow).ToList();
+                Assert.InRange(refuges.Count, 1, RunMap.RefugesBefore);
+                Assert.All(refuges.GroupBy((n) => n.Row), (g) => Assert.InRange(g.Count(), 1, RunMap.RefugesARow));
+                most = Math.Max(most, refuges.GroupBy((n) => n.Row).Max((g) => g.Count()));
+                if (refuges.Count == RunMap.RefugesBefore) four++;
+            }
+            // The caps are reached, not past.
+            Assert.Equal(RunMap.RefugesARow, most);
+            Assert.InRange(four / 2000.0, 0.01, 0.3);
+            // The UI's capture of 19/11: six then, three side by side in row 4.
+            var was = RunMap.Generate(1, 641244832);
+            Assert.InRange(was.Count((n) => n.Kind == NodeKinds.Refuge && n.Row < RunMap.RefugeRow), 1, RunMap.RefugesBefore);
         }
 
         private static List<RunNode> Ahead(RunNode n, List<RunNode> all)

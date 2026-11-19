@@ -714,6 +714,13 @@ namespace Bastion.Engine
                 Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Packed = inPack.Count > 0 ? inPack : null, Floor = onFloor.Count > 0 ? onFloor : null, NextGear = maker.Next });
                 return;
             }
+            // La llave (G23.1): its holder's body fallen where something was searched already, the key alone.
+            if (S.Run != null && Looting.WasSearched(S, tile) && Looting.KeyBodyAt(S, tile) != null)
+            {
+                var (keyPacked, keyFloor, keyNext) = FoundGear(u, null, 0, extra: false, with: new List<Gear> { Gears.CloneGear(S.Mission.Key!) });
+                Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Packed = keyPacked, Floor = keyFloor, NextGear = keyNext });
+                return;
+            }
             var box = Looting.SearchSpot(S, tile);
             var pistols = S.Mission.Pistols == true;
             // A run scales its supplies its own way (RunLoot.SuppliesScale).

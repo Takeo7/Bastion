@@ -177,7 +177,7 @@ namespace Bastion.UI.Combat
                     Note = reason != null && reason.EndsWith(": recarga.", StringComparison.Ordinal) ? AbilityTexts.ReloadFirst : null,
                     // An attack's card names the weapon it fires: its cost and its noise are that weapon's.
                     // Registrar by what is beside (a body, a boot: Arturo, 02/11 A9, A13), as its title says it (Lore.BoxTitle).
-                    Name = attack ? $"{def.Name} · {AbilityTexts.WeaponLabel(u, id)}" : id == AbilityIds.Hack ? $"{def.Name} · {Abilities.HackChance(State, u)}%" : id == AbilityIds.Search && SearchBeside(u) is string spot ? Lore.BoxTitle(spot) : def.Name,
+                    Name = attack ? $"{def.Name} · {AbilityTexts.WeaponLabel(u, id)}" : id == AbilityIds.Hack ? $"{def.Name} · {Abilities.HackChance(State, u)}%" : id == AbilityIds.Search && SearchBeside(u) is string spot ? Lore.BoxTitle(spot) : id == AbilityIds.OpenDoor && UnlocksBeside(u) ? Lore.KeyText.OpenWithKey : def.Name,
                     Cost = AbilityTexts.CostText(u, id),
                     Limits = AbilityTexts.LimitsText(u, id),
                     Damage = AbilityTexts.DamageText(State, u, id),
@@ -255,7 +255,7 @@ namespace Bastion.UI.Combat
                 foreach (var o in options)
                 {
                     o.Menu = menu.Id;
-                    if (AbilityTexts.MenuLabels.TryGetValue(o.Id, out var label) && several) o.Name = o.Id == AbilityIds.Search && SearchBeside(u) is string spot ? AbilityTexts.SearchWords(spot).label : label;
+                    if (AbilityTexts.MenuLabels.TryGetValue(o.Id, out var label) && several) o.Name = o.Id == AbilityIds.Search && SearchBeside(u) is string spot ? AbilityTexts.SearchWords(spot).label : o.Id == AbilityIds.OpenDoor && UnlocksBeside(u) ? Lore.KeyText.OpenWithKey : label;
                 }
                 keys.Add((key, options));
             }
@@ -305,6 +305,17 @@ namespace Bastion.UI.Combat
 
         /// <summary>A box beside the soldier, opened or not, that its hands reach: a body at its feet too (SearchBeside).</summary>
         bool CrateBeside(Unit u) => SearchBeside(u) != null;
+
+        /// <summary>
+        /// Whether «Abrir la puerta» is La llave's door only, opened with the key `u` carries (U22): its key named so (Lore's
+        /// KeyText.OpenWithKey). Another door beside as well, the name of always.
+        /// </summary>
+        bool UnlocksBeside(Unit u)
+        {
+            if (u == null || State.Mission.Locked == null || Looting.KeyOf(u) == null) return false;
+            var doors = Abilities.DoorTiles(State, u, TileKinds.Door);
+            return doors.Count > 0 && doors.All(p => Looting.LockedAt(State, p));
+        }
 
         /// <summary>
         /// What Registrar would work on beside `u`, by kind (Looting.SearchSpot: a box, a car's boot, a body, a piece, the one

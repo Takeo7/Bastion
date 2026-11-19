@@ -269,6 +269,10 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 3539a6b2f29c5834289c701192890dc9, type: 3}
   - Id: node:awake
     Sprite: {fileID: 21300000, guid: aa8a4a25bd52f88448a9dd47771ce382, type: 3}
+  - Id: node:key
+    Sprite: {fileID: 21300000, guid: e061dfd80c1761e42b082510ec3e435d, type: 3}
+  - Id: key
+    Sprite: {fileID: 21300000, guid: e061dfd80c1761e42b082510ec3e435d, type: 3}
   - Id: tab:stash
     Sprite: {fileID: 21300000, guid: 8a65f66b8fbcf4248a5b819cb71edfeb, type: 3}
   - Id: tab:upgrades

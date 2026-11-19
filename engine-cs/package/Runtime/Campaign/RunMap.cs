@@ -22,13 +22,17 @@ namespace Bastion.Engine
         /// <summary>
         /// The specials drawn on the maps: today's objectives, and since H5 the four new ones (NewSpecials: Asedio,
         /// Travesía, Sigilo, Guarida). Without «Arreglar la radio» since T2 (Arturo, 18/11: «se quita la etapa», and all of
-        /// fixing with it): its share goes to the other eight.
+        /// fixing with it): its share goes to the others. La llave since G23.1, from row KeyFrom only, always at a police
+        /// station.
         /// </summary>
         public static readonly IReadOnlyList<string> Specials = new[]
         {
             NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Rescue,
-            NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite,
+            NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Key,
         };
+
+        /// <summary>G23.1 La llave from this row (Producto, 19/11: its armoury full arms a squad at once; rows 1–2 are knives').</summary>
+        public const int KeyFrom = 3;
         /// <summary>H5's four, on the maps since their rules are there (they are in Specials too).</summary>
         public static readonly IReadOnlyList<string> NewSpecials = new[] { NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite };
 
@@ -53,6 +57,14 @@ namespace Bastion.Engine
         /// </summary>
         public const int RefugeFirst = 2;
         public const int RefugeSecond = 4;
+
+        /// <summary>
+        /// G22's Refuges at most (Producto, 19/11: Arturo «no quería un mapa de paradas»; a map had three side by side in row
+        /// 4 and five before row 6's): in one row, and in rows 2–5 together. Row 6's apart. RefugesCovering keeps them in
+        /// reach as before (.dev-snapshots/gameplay/g23/REFUGIOS.md).
+        /// </summary>
+        public const int RefugesARow = 2;
+        public const int RefugesBefore = 4;
 
         /// <summary>
         /// The rows a Rescate is kept in reach in from every start (RescueInReach; N3, 17/11: recruits come only from a
@@ -159,7 +171,7 @@ namespace Bastion.Engine
                 foreach (var n in rows[r])
                 {
                     var after = all.Where((p) => p.Next.Contains(n.Id)).Any((p) => NodeKinds.IsStop(p.Kind));
-                    n.Kind = Roll(rng, stops: !after && n.Row < NodeRows);
+                    n.Kind = Roll(rng, stops: !after && n.Row < NodeRows, n.Row);
                 }
                 // The rows of a window rolled, the rest not yet: its Refuges (what comes after rolls round them). Row 2's,
                 // one, past the row-1 node with the most ways on; then one in rows 3–4 past every node of row 2.
@@ -169,7 +181,7 @@ namespace Bastion.Engine
                         if (rows[RefugeFirst - 1].Any((x) => x.Kind == NodeKinds.Refuge)) break;
                         RefugesInReach(rng, all, new List<RunNode> { s }, RefugeFirst, RefugeFirst);
                     }
-                if (r == RefugeSecond - 1) RefugesInReach(rng, all, rows[RefugeFirst - 1].ToList(), RefugeFirst + 1, RefugeSecond);
+                if (r == RefugeSecond - 1) RefugesCovering(rng, all, rows[RefugeFirst - 1].ToList(), RefugeFirst + 1, RefugeSecond);
             }
             TradeInReach(rng, rows, all);
             OneTrade(rng, rows, all);
@@ -178,7 +190,7 @@ namespace Bastion.Engine
             {
                 if (n.Row >= 2 && n.Kind != NodeKinds.Boss && rng.Int(100) < ModifierChance) n.Modifier = rng.Pick(Modifiers.All);
                 n.Seed = (int)Math.Floor(rng.Next() * 2147483648.0);
-                n.Site = n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss ? Places.Factory : Weighted(rng, SiteMix);
+                n.Site = n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss ? Places.Factory : n.Kind == NodeKinds.Key ? Places.Police : Weighted(rng, SiteMix);
                 // No service area in rows 1–2 (Red, 16/11: a long walk to La Lata with knives only): the countryside, drawn
                 // as it was so the rest of the map stays the same.
                 if (n.Site == Places.Roadside && n.Row <= EarlyRows) n.Site = Places.Country;
@@ -226,10 +238,10 @@ namespace Bastion.Engine
         }
 
         /// <summary>What a node of rows 2–5 is (Mix); without `stops`, a fight, normal or special as often as the mix has them.</summary>
-        private static string Roll(Rng rng, bool stops)
+        private static string Roll(Rng rng, bool stops, int row)
         {
             var kind = stops ? Weighted(rng, Mix) : Weighted(rng, Mix.Where((m) => !NodeKinds.IsStop(m.Kind)).ToList());
-            return kind == "special" ? rng.Pick(Specials) : kind;
+            return kind == "special" ? rng.Pick(row >= KeyFrom ? Specials : Specials.Where((k) => k != NodeKinds.Key).ToList()) : kind;
         }
 
         private static T Weighted<T>(Rng rng, IReadOnlyList<(T Value, int Weight)> table)
@@ -312,7 +324,7 @@ namespace Bastion.Engine
         /// <summary>
         /// G22: while a node of `from` has no Refuge ahead in rows `lo` to `hi`, one of those ahead of the most of them
         /// becomes one: a normal fight with no stop before or after it, else a special one so (never a Rescate), else an
-        /// event, else a trade (a stop for a stop: never two stops in a row on a way).
+        /// event, else a trade (a stop for a stop: never two stops in a row on a way). Row 2's; within the caps.
         /// </summary>
         private static void RefugesInReach(Rng rng, List<RunNode> all, List<RunNode> from, int lo, int hi)
         {
@@ -325,11 +337,14 @@ namespace Bastion.Engine
                 (x) => x.Kind == NodeKinds.Event,
                 (x) => x.Kind == NodeKinds.Trade,
             };
+            // Within the caps: a row with RefugesARow has no room for more; RefugesBefore in rows 2–5, none more anywhere.
+            bool Room(RunNode x) => all.Count((y) => y.Kind == NodeKinds.Refuge && y.Row == x.Row) < RefugesARow;
             while (true)
             {
                 var missing = from.Where((n) => !ahead[n].Any((x) => x.Kind == NodeKinds.Refuge)).ToList();
                 if (missing.Count == 0) return;
-                var near = missing.SelectMany((n) => ahead[n]).Distinct().ToList();
+                if (all.Count((y) => y.Kind == NodeKinds.Refuge && y.Row >= RefugeFirst && y.Row < RefugeRow) >= RefugesBefore) return;
+                var near = missing.SelectMany((n) => ahead[n]).Distinct().Where(Room).ToList();
                 var reach = new List<(RunNode Node, int From)>();
                 foreach (var tier in tiers)
                 {
@@ -340,6 +355,43 @@ namespace Bastion.Engine
                 var most = reach.Max((x) => x.From);
                 rng.Pick(reach.Where((x) => x.From == most).Select((x) => x.Node).ToList()).Kind = NodeKinds.Refuge;
             }
+        }
+
+        /// <summary>
+        /// G22 within the caps (RefugesARow, RefugesBefore), rows 3–4's: of the nodes in rows `lo` to `hi` ahead of `from`
+        /// that may be one (RefugesInReach's tiers), the set that leaves the most of `from` with a Refuge ahead there, with
+        /// the fewest Refuges and the most common nodes made one; never two of them on one way. Every set is tried (8 nodes
+        /// at most). One by one (RefugesInReach), the caps left 93,9 % of row 2 covered; so, 97,4 % (97,0 % before them).
+        /// </summary>
+        private static void RefugesCovering(Rng rng, List<RunNode> all, List<RunNode> from, int lo, int hi)
+        {
+            var ahead = from.ToDictionary((n) => n, (n) => Ahead(n, all).Where((x) => x.Row >= lo && x.Row <= hi).ToList());
+            bool Clear(RunNode x) => x.Next.All((id) => IsFight(all.First((y) => y.Id == id).Kind)) && all.Where((p) => p.Next.Contains(x.Id)).All((p) => IsFight(p.Kind));
+            int Tier(RunNode x) => x.Kind == NodeKinds.Normal && Clear(x) ? 0
+                : IsFight(x.Kind) && x.Kind != NodeKinds.Normal && x.Kind != NodeKinds.Rescue && x.Kind != NodeKinds.Boss && Clear(x) ? 1
+                : x.Kind == NodeKinds.Event ? 2 : x.Kind == NodeKinds.Trade ? 3 : -1;
+            var can = ahead.Values.SelectMany((x) => x).Distinct().Where((x) => Tier(x) >= 0).OrderBy((x) => x.Row).ThenBy((x) => x.Col).ToList();
+            var before = all.Count((y) => y.Kind == NodeKinds.Refuge && y.Row >= RefugeFirst && y.Row < RefugeRow);
+            var best = new List<List<RunNode>>();
+            (int Covered, int Count, int Tiers) top = (-1, 0, 0);
+            for (var mask = 0; mask < 1 << can.Count; mask++)
+            {
+                var set = can.Where((_, i) => (mask & (1 << i)) != 0).ToList();
+                if (before + set.Count > RefugesBefore) continue;
+                if (set.GroupBy((x) => x.Row).Any((g) => g.Count() + all.Count((y) => y.Kind == NodeKinds.Refuge && y.Row == g.Key) > RefugesARow)) continue;
+                if (set.Any((x) => set.Any((y) => x.Next.Contains(y.Id)))) continue;
+                var key = (Covered: from.Count((n) => ahead[n].Any((x) => x.Kind == NodeKinds.Refuge || set.Contains(x))), Count: set.Count, Tiers: set.Sum(Tier));
+                var better = key.Covered > top.Covered || key.Covered == top.Covered && (key.Count < top.Count || key.Count == top.Count && key.Tiers < top.Tiers);
+                var same = key.Covered == top.Covered && key.Count == top.Count && key.Tiers == top.Tiers;
+                if (better)
+                {
+                    top = key;
+                    best.Clear();
+                }
+                if (better || same) best.Add(set);
+            }
+            if (best.Count == 0) return;
+            foreach (var x in rng.Pick(best)) x.Kind = NodeKinds.Refuge;
         }
 
         /// <summary>Whether G22's Refuges hold still `without` one of them: row RefugeFirst's, and one past every node of it.</summary>

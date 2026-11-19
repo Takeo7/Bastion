@@ -116,6 +116,34 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void ABodyInUniformBesideItIsSearchedBeforeAnyShot()
+        {
+            // The holder fallen beside the soldier, one of the dead in sight a few tiles off: the body first (R10, 19/11:
+            // with the dead coming every turn, the holder's lay by the squad the whole fight, never searched).
+            var s = Key(12);
+            var u = s.Units.First((x) => x.Team == Teams.Xcom && x.CampaignId != null && x.Alive);
+            foreach (var x in s.Units.Where((x) => x.Team == Teams.Xcom && x.CampaignId != null && x.Id != u.Id))
+            {
+                x.Ap = 0;
+                x.Moves = 0;
+            }
+            var holder = s.Units.Single((x) => x.Id == s.Mission.KeyHolder);
+            var spot = Grid.Dirs4.Select((d) => new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = 0 })
+                .First((p) => Grid.InBounds(s, p.X, p.Y) && Grid.IsWalkable(Grid.KindAt(s, p)) && Grid.UnitAt(s, p) == null && Looting.ReachesToSearch(s, u.Pos, p));
+            holder.Pos = spot;
+            holder.Alive = false;
+            holder.Hp = 0;
+            var near = s.Units.First((x) => x.Team == Teams.Alien && x.Alive && x.Id != holder.Id);
+            near.Pos = Grid.Dirs8.Select((d) => new Pos { X = u.Pos.X + d.X * 3, Y = u.Pos.Y + d.Y * 3, Z = 0 })
+                .First((p) => Grid.InBounds(s, p.X, p.Y) && Grid.IsWalkable(Grid.KindAt(s, p)) && Grid.UnitAt(s, p) == null);
+            u.Ap = 2;
+            var cmd = MissionBot.Next(s, 0, Zero);
+            Assert.True(cmd is AbilityCommand { Ability: AbilityIds.Search } search && Grid.SamePos(search.Tile!, spot), Bastion.Net.Json.Write(cmd));
+            Assert.True(Exec(s, cmd!).Ok);
+            Assert.NotNull(Looting.KeyOf(u));
+        }
+
+        [Fact]
         public void WithTheArmouryOpenItGoesInAndSearchesIt()
         {
             var (s, u) = Alone(12, ByTheDoor);

@@ -363,10 +363,26 @@ namespace Bastion.Engine
             return o != null && (anyTile || o.Anchor == i) && SearchPieces.Medical.Contains(o.Kind) ? o.Kind : null;
         }
 
-        /// <summary>The dead enemy lying on `p` that can be searched: not risen again, nor an objective, nor the alarm.</summary>
+        /// <summary>
+        /// The dead enemy lying on `p` that can be searched: not risen again, nor an objective, nor the alarm. La llave's
+        /// holder first, its key on it still (G23.1: under another body its key was lost; Red, 19/11).
+        /// </summary>
         public static Unit? BodyAt(GameState s, Pos p)
         {
-            return s.Units.FirstOrDefault((u) => !u.Alive && !u.Evacuated && u.Team == Teams.Alien && !u.Objective && !u.Reanimated && u.Template != TemplateIds.Relay && Grid.SamePos(u.Pos, p));
+            return KeyBodyAt(s, p) ?? s.Units.FirstOrDefault((u) => IsBody(u) && Grid.SamePos(u.Pos, p));
+        }
+
+        private static bool IsBody(Unit u) => !u.Alive && !u.Evacuated && u.Team == Teams.Alien && !u.Objective && !u.Reanimated && u.Template != TemplateIds.Relay;
+
+        /// <summary>
+        /// G23.1: La llave's holder's body on `p`, the key on it still, or null. Searched it gives the key, its tile searched
+        /// before or not (IsSearchable): a body that fell where another was searched keeps it within reach.
+        /// </summary>
+        public static Unit? KeyBodyAt(GameState s, Pos p)
+        {
+            if (s.Mission.Key == null || s.Mission.KeyHolder == null) return null;
+            var h = s.Units.FirstOrDefault((u) => u.Id == s.Mission.KeyHolder);
+            return h != null && IsBody(h) && Grid.SamePos(h.Pos, p) ? h : null;
         }
 
         /// <summary>
@@ -430,8 +446,27 @@ namespace Bastion.Engine
             if (s.Mission.KeyArmory != true) return null;
             if (s.Mission.Key != null) return KeyPlaces.Holder;
             if ((s.FloorGear ?? new List<DroppedGear>()).Any((d) => d.Gear.Kind == GearKinds.Key)) return KeyPlaces.Floor;
-            if (s.Units.Any((u) => u.Alive && KeyOf(u) != null)) return KeyPlaces.Pack;
+            if (s.Units.Any((u) => (u.Alive || u.Aboard == true) && KeyOf(u) != null)) return KeyPlaces.Pack;
             return s.Mission.Locked == null ? KeyPlaces.Used : KeyPlaces.Pack;
+        }
+
+        /// <summary>
+        /// G23.1's invariant (Producto, 19/11: «que no pueda perderse con el cuerpo»): whether La llave's key is nowhere to be
+        /// had while the fight lasts. Not on its holder alive, nor on its body still to search (KeyBodyAt, IsSearchable), nor
+        /// on the floor, nor in anyone's pack (aboard La Lata too), nor spent on the door. False in another fight.
+        /// </summary>
+        public static bool KeyLost(GameState s)
+        {
+            if (s.Mission.KeyArmory != true) return false;
+            if (s.Mission.Key != null)
+            {
+                var h = s.Units.FirstOrDefault((u) => u.Id == s.Mission.KeyHolder);
+                if (h == null) return true;
+                return !h.Alive && !IsSearchable(s, h.Pos);
+            }
+            if ((s.FloorGear ?? new List<DroppedGear>()).Any((d) => d.Gear.Kind == GearKinds.Key)) return false;
+            if (s.Units.Any((u) => (u.Alive || u.Aboard == true) && KeyOf(u) != null)) return false;
+            return s.Mission.Locked != null;
         }
 
         // ------------------------------------------------------------ the pieces
@@ -659,7 +694,7 @@ namespace Bastion.Engine
         /// <summary>Furniture on `p` that is still there to search (for highlighting it anywhere on the map).</summary>
         public static bool IsSearchable(GameState s, Pos p)
         {
-            return SearchSpot(s, p) != null && !WasSearched(s, p);
+            return SearchSpot(s, p) != null && (!WasSearched(s, p) || KeyBodyAt(s, p) != null);
         }
 
         private static readonly HashSet<string> Solid = new HashSet<string> { TileKinds.Wall, TileKinds.Door, TileKinds.Window, TileKinds.WindowBroken, TileKinds.Bars };

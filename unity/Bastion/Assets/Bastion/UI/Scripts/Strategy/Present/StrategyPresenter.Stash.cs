@@ -130,6 +130,8 @@ namespace Bastion.UI.Strategy
                 case GearKinds.Mags: return "stat:ammo";
                 case GearKinds.Medicine: return "store:medicines";
                 case GearKinds.Supplies: return "§";
+                // La llave's (U22): Synty's map key, as its stage's on the map.
+                case GearKinds.Key: return "key";
                 default: return null;
             }
         }
@@ -169,6 +171,8 @@ namespace Bastion.UI.Strategy
                 case GearKinds.Mags: lines.Add(StrategyText.Stash.MagsLine); break;
                 case GearKinds.Medicine: lines.Add(StrategyText.Stash.MedicineLine); break;
                 case GearKinds.Supplies: lines.Add(StrategyText.Stash.SuppliesLine); break;
+                // La llave's (U22): what it opens, and that it stays in the stage (Lore's).
+                case GearKinds.Key: lines.Add(Lore.KeyText.Help); break;
             }
             return string.Join("\n", lines.Where(l => !string.IsNullOrEmpty(l)));
         }

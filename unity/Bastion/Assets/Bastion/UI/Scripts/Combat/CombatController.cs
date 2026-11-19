@@ -1368,6 +1368,15 @@ namespace Bastion.UI.Combat
                     if (GameInput.Touch) Note(hover, HudText.Touch.Door);
                     return;
                 }
+                // La llave's armoury door, locked, to one without the key (U22): why, wherever the door has been seen (Lore's
+                // words); beside it, outlined and its icon greyed as well. With the key it is a door as any (above).
+                if (LockedSeen(hover) && Looting.KeyOf(u) == null)
+                {
+                    if (hover.Z == u.Pos.Z && Math.Max(Math.Abs(hover.X - u.Pos.X), Math.Abs(hover.Y - u.Pos.Y)) == 1 && Looting.ReachesToSearch(State, u.Pos, hover))
+                        searchNext = new List<(Pos, bool)> { (hover, false) };
+                    Note(hover, Lore.KeyText.Locked);
+                    return;
+                }
                 // A boarded window or door beside one with the crowbar (02/11 A11): a click takes the boards off.
                 if (Abilities.AbilitiesOf(u).Contains(AbilityIds.Pry) && HandTiles(AbilityIds.Pry).Any(t => Same(t, hover)))
                 {

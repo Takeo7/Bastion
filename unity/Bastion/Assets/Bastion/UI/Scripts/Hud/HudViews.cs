@@ -511,6 +511,19 @@ namespace Bastion.UI.Hud
         public string Alert;
         /// <summary>The weather (Weathers' ids; Arturo, 01/11): its name and what it changes on the card; null, clear.</summary>
         public string Weather;
+        /// <summary>
+        /// The objective in steps, under the kind (La llave, U22): each a line, the done ones dimmed with «✓»; null, the
+        /// one line of `Objective`.
+        /// </summary>
+        public List<GoalStepView> Steps;
+    }
+
+    /// <summary>A step of the objective (U22): its words and whether it is done.</summary>
+    [Serializable]
+    public sealed class GoalStepView
+    {
+        public string Text;
+        public bool Done;
     }
 
     /// <summary>A siege's compass (#34): shown, and the sides (DIRS4: 0 N, 1 E, 2 S, 3 O) the next wave comes in by.</summary>

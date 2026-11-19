@@ -45,10 +45,12 @@ namespace Bastion.Engine.Tests
         /// <summary>
         /// Up to `missions` missions of a new campaign with the room's Rng at `seed`; `say`, a line for each step. For the
         /// long benches (RunBench): `watch` sees the host's campaign at each step, `ended` each mission once back on the
-        /// base with it, and `done` stops the run on the base; `steps`, the most steps.
+        /// base with it, and `done` stops the run on the base; `steps`, the most steps. `fought` sees each fight as the host
+        /// heard it once over, before it is folded in; `playing`, each step of a fight as the host heard it.
         /// </summary>
         public static List<Mission> Run(int seed, int missions, Action<string>? say = null, Action<CampaignState>? watch = null,
-            Action<Mission, CampaignState>? ended = null, Func<CampaignState, bool>? done = null, int steps = MaxSteps)
+            Action<Mission, CampaignState>? ended = null, Func<CampaignState, bool>? done = null, int steps = MaxSteps,
+            Action<GameState>? fought = null, Action<GameState>? playing = null)
         {
             var dir = Path.Combine(Path.GetTempPath(), "bastion-autocampana-" + Guid.NewGuid().ToString("N"));
             try
@@ -119,6 +121,7 @@ namespace Bastion.Engine.Tests
                         played.Add(now);
                         say?.Invoke($"misión «{now.Name}»");
                     }
+                    playing?.Invoke(heard.Mission);
                     if (heard.Mission.Outcome != null)
                     {
                         if (now.Outcome == "")
@@ -127,6 +130,7 @@ namespace Bastion.Engine.Tests
                             now.Reason = heard.Mission.OutcomeReason;
                             now.Turns = heard.Mission.Turn;
                             say?.Invoke($"«{now.Name}»: {now.Outcome} ({now.Reason}) en el turno {now.Turns}, {now.Orders} órdenes");
+                            fought?.Invoke(heard.Mission);
                         }
                         Say(room, players[0], new JObject { ["t"] = "returnToBase" });
                         continue;

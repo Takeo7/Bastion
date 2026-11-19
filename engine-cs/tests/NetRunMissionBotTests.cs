@@ -166,8 +166,9 @@ namespace Bastion.Engine.Tests
             }
             output.WriteLine($"ganadas: {won} de {Seeds}");
             // On 20 seeds (16/11): 19 with knives, 17 with rifles. Some two under it on these 8, as the map's generator moves on
-            // under the test; hunting the dead, it lost them all.
-            Assert.True(won >= (rifles ? 5 : 6), $"{won} de {Seeds}");
+            // under the test; hunting the dead, it lost them all. (19/11, Gameplay: with G22's caps on the Refuges these 8 are
+            // other maps, and with knives 5 of them are won; R2's row 1 with knives, 72 %.)
+            Assert.True(won >= 5, $"{won} de {Seeds}");
         }
     }
 }

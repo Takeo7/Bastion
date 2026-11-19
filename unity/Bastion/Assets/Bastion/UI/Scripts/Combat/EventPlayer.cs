@@ -1550,6 +1550,12 @@ namespace Bastion.UI.Combat
             Fresh(r);
         }
 
+        /// <summary>La llave's key on the floor (U22; GameState.FloorGear), or null; in another fight, null.</summary>
+        static DroppedGear KeyLying(GameState s) => s.Mission.KeyArmory == true ? (s.FloorGear ?? new List<DroppedGear>()).FirstOrDefault(d => d.Gear.Kind == GearKinds.Key) : null;
+
+        /// <summary>«LLAVE AL SUELO»'s height over its tile (m): above the heads of whoever stands or crouches there.</summary>
+        const float KeyFloatHeight = 2.3f;
+
         /// <summary>
         /// What one event leaves behind but the map, the sight and the HUD (SettleAll): View has it (unless `applied`), and
         /// what it says, the plans, the backpack. Whether the map has to be drawn again.
@@ -1559,12 +1565,22 @@ namespace Bastion.UI.Combat
             var call = V.EvacCall;
             var floorBefore = new HashSet<string>((V.Dropped ?? new List<DroppedLoot>()).Select(d => d.Id));
             var gearBefore = e is DiedEvent ? new HashSet<string>((V.FloorGear ?? new List<DroppedGear>()).Select(d => d.Gear.Id)) : null;
+            var keyBefore = KeyLying(V) != null;
             if (!applied) Apply(r, e);
             if (e is PodSplitEvent split) splitFrom[split.Into] = split.Pod;
             // A soldier falls and their rucksack stays on the floor (#49), said once; in a run, all they carried, on their
             // body (RunPack.Fallen; U12, Lore's line).
             if (e is DiedEvent died && (V.Dropped ?? new List<DroppedLoot>()).Any(d => d.From == died.Unit && !floorBefore.Contains(d.Id)) && Unit(died.Unit) is Unit fallen) Log(Lore.FallenPackLine(fallen.Name), "#ff8a78");
             else if (e is DiedEvent fell && (V.FloorGear ?? new List<DroppedGear>()).Any(d => d.From == fell.Unit && !gearBefore.Contains(d.Gear.Id)) && Unit(fell.Unit) is Unit kit) Log(Lore.FallenKitLine(kit.Name), "#ff8a78");
+            // La llave's key come down to the floor (U22): with the pack of one of ours who fell (G16, the way it does in a
+            // game), or a body risen. Said here, with the event on View, so the objective's card changes in the same
+            // refresh (Producto, 19/11: not a while after); over it as the important ones are (a weapon found's plate),
+            // above the heads of whoever stands there.
+            if ((e is DiedEvent || e is ReanimatedEvent) && !keyBefore && KeyLying(V) is DroppedGear dropped)
+            {
+                Log(Lore.KeyText.Dropped, "#ffd23a");
+                if (IsVisible(dropped.Pos.X, dropped.Pos.Y)) Float(Board.TileToWorld(V, dropped.Pos, KeyFloatHeight), Lore.KeyText.DroppedFloat, "callout", CombatController.KeyIcon);
+            }
             // A find with the backpack full stays on the floor (docs/FASE8.md §C).
             if ((e is SearchedEvent || e is RoomSearchedEvent) && by == control.MySlot)
             {
@@ -2222,7 +2238,8 @@ namespace Bastion.UI.Combat
                     // No `unit`: an infected soldier rising by itself (docs/FASE3.md), with no Chillón to shriek.
                     var u = Unit(rise.Unit);
                     var corpse = Unit(rise.Corpse);
-                    // Out of sight it costs no time (docs/UX-RITMO.md): the body is just up when it comes into view.
+                    // Out of sight it costs no time (docs/UX-RITMO.md): the body is just up when it comes into view. (La llave's
+                    // key falling from a body risen, U22: Leave, as the pack of one of ours who fell.)
                     if (!IsVisible(corpse.Pos.X, corpse.Pos.Y) && !(u != null && ShownToSquad(u))) return;
                     var place = Board.TileToWorld(v, corpse.Pos, 0.75f);
                     Look(place);
@@ -2733,6 +2750,18 @@ namespace Bastion.UI.Combat
                         searched.Loot?.Weapon != null ? Ui.WeaponIcon(Content.FoundWeapons[searched.Loot.Weapon].Weapon) : null);
                     if (searched.Loot != null) control.Sfx.Found(place);
                     if (decor != null) Log(Lore.SearchLine(u.Name, decor, searched.Loot, searched.Tile.X * 7 + searched.Tile.Y * 13 + v.Turn), searched.Loot?.Weapon != null ? "#ffd23a" : searched.Loot != null ? "#6dff9a" : null);
+                    await Wait(0.5f);
+                    return;
+                }
+                // La llave (U22, G23.1): the key turned in the armoury's door, said over it and in the log (Lore's); the door
+                // opens next (TileChangedEvent) as any.
+                case UnlockedEvent unlocked:
+                {
+                    var u = Unit(unlocked.Unit);
+                    var door = Board.TileToWorld(v, unlocked.Tile, 1.2f * Board.Tile);
+                    if (u != null) Look(Vector3.Lerp(Feet(u.Id), door, 0.5f));
+                    Float(door, Lore.KeyText.UnlockedFloat, "heal", CombatController.KeyIcon);
+                    if (u != null) Log(Lore.KeyText.Unlocked(u.Name), "#6dff9a");
                     await Wait(0.5f);
                     return;
                 }
@@ -3433,7 +3462,8 @@ namespace Bastion.UI.Combat
             var into = inPack.Select(g => Lore.GearA(g.Kind, g.Type, g.Count)).ToList();
             var left = onFloor.Select(g => Lore.GearA(g.Kind, g.Type, g.Count)).ToList();
             var all = inPack.Concat(onFloor).Select(Name).ToList();
-            var weapon = (packed ?? new List<Placed>()).Select(p => p.Gear).Concat(floor ?? new List<Bastion.Engine.Gear>()).Any(g => g.Kind == GearKinds.Weapon);
+            // A weapon, or La llave's key (U22), stands out: yellow over it and in the log.
+            var weapon = (packed ?? new List<Placed>()).Select(p => p.Gear).Concat(floor ?? new List<Bastion.Engine.Gear>()).Any(g => g.Kind == GearKinds.Weapon || g.Kind == GearKinds.Key);
             Float(at, all.Count == 0 ? HudText.Found.Nothing : string.Join(" · ", all.Take(3)) + (all.Count > 3 ? " …" : ""), weapon ? "callout" : all.Count > 0 ? "heal" : "info");
             if (all.Count > 0) control.Sfx.Found(at);
             Log(HudText.Found.Line(who, into, left, onFloor.Count > 1 || onFloor.Any(g => g.Count > 1)), weapon ? "#ffd23a" : all.Count > 0 ? "#6dff9a" : null);

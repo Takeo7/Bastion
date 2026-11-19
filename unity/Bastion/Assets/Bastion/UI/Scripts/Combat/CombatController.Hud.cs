@@ -153,7 +153,8 @@ namespace Bastion.UI.Combat
             if (m.Terminal != null && !m.ObjectiveDone) beacons.Add((m.Terminal, 0x54d1ff));
             var objective = UnitById(v, m.ObjectiveUnit);
             if (objective != null && objective.Alive && !m.ObjectiveDone && !Unfound(objective)) beacons.Add((objective.Pos, objective.Team == Teams.Alien ? 0xff4a6a : 0x4dff9a));
-            var item = m.Item != null && m.Item.Carrier == null && m.Item.Evacuated != true ? m.Item.Pos : null;
+            // La llave's key on the floor the same (U22): seen from afar, picked up from on it.
+            var item = m.Item != null && m.Item.Carrier == null && m.Item.Evacuated != true ? m.Item.Pos : KeyOnFloor(v);
             // A siege's breaches: an orange beam each, and an arrow a side at the screen's edge (CombatController.Siege).
             var breaches = new EdgeMarksView();
             BreachMarks(v, beacons, breaches);
@@ -211,6 +212,9 @@ namespace Bastion.UI.Combat
                     else if (target != null && target.Alive && (m.Kind == MissionKinds.Sabotage || target.Captive)) goal = target.Pos;
                 }
             }
+            // La llave (U22): the key on the floor, then, in a pack, the armoury's door; on its holder still, nowhere to go.
+            if (m.KeyArmory == true && !Looting.ArmoryOpen(s))
+                goal = KeyOnFloor(s) ?? (Looting.KeyWhere(s) == KeyPlaces.Pack && m.Locked is List<int> locked && locked.Count > 0 ? Grid.PosOf(s, locked[0]) : null);
             if (goal != null) return new List<(string, string, Pos)> { ("objective", "Objetivo", goal) };
             var zone = m.EvacZone;
             if (zone.Count == 0) return new List<(string, string, Pos)>();
@@ -955,6 +959,12 @@ namespace Bastion.UI.Combat
                 if (s.Concealed && m.Item?.Evacuated != true) objective += " sin que os vean";
                 tip = Lore.StageLine(NodeKinds.Stealth, RecoveryItem());
             }
+            var steps = KeySteps(s);
+            if (steps != null)
+            {
+                objective = steps.First(x => !x.Done).Text;
+                tip = Lore.KeyText.ObjectiveTip;
+            }
             return new MissionView
             {
                 Label = s.Run != null ? Bastion.UI.Strategy.StrategyText.Runs.NodeName(s.Run.NodeKind) : MissionName(m.Kind),
@@ -967,8 +977,32 @@ namespace Bastion.UI.Combat
                 HordeDb = fill.HasValue ? 40 + (int)Math.Floor(50 * fill.Value + 0.5) : 0,
                 HordeTitle = !fill.HasValue ? null : HudText.Mission.NoiseTip,
                 Weather = s.Weather,
+                Steps = steps,
             };
         }
+
+        /// <summary>
+        /// La llave's objective in three steps (U22, G23.1; Lore's words): the key, the armoury, La Lata. The key's done once
+        /// in a pack or used, the armoury's once open, with the key or by a hole in its walls (Looting.ArmoryOpen, which
+        /// does the first too: the key isn't needed then); the first says the key lies on the floor while it does. Null in
+        /// another fight.
+        /// </summary>
+        static List<GoalStepView> KeySteps(GameState s)
+        {
+            if (s.Mission.KeyArmory != true) return null;
+            var where = Looting.KeyWhere(s);
+            var open = Looting.ArmoryOpen(s);
+            return new List<GoalStepView>
+            {
+                new GoalStepView { Text = where == KeyPlaces.Floor && !open ? Lore.KeyText.KeyOnFloor : Lore.KeyText.FindKey, Done = open || where == KeyPlaces.Pack || where == KeyPlaces.Used },
+                new GoalStepView { Text = Lore.KeyText.OpenArmory, Done = open },
+                new GoalStepView { Text = Lore.KeyText.Leave },
+            };
+        }
+
+        /// <summary>La llave's key lying on the floor (U22: marked as a mission's loose item, its beam and core), or null.</summary>
+        static Pos KeyOnFloor(GameState s) => s.Mission.KeyArmory == true && !Looting.ArmoryOpen(s)
+            ? (s.FloorGear ?? new List<DroppedGear>()).FirstOrDefault(d => d.Gear.Kind == GearKinds.Key)?.Pos : null;
 
         /// <summary>
         /// The chapter's boss (H6; MissionState.Boss) for the bar at the top: once seen, or once it has roared (all the map

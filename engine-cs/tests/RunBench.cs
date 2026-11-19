@@ -49,17 +49,24 @@ namespace Bastion.Engine.Tests
         private static readonly string[] Kinds =
         {
             NodeKinds.Normal, NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Sabotage,
-            NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Rescue,
+            NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Rescue, NodeKinds.Key,
         };
 
-        /// <summary>What a site can be (RunMap.SpecialFor, Generate): a Sabotaje only where an alarm is, a Travesía never in one building.</summary>
+        /// <summary>
+        /// What a site can be (RunMap.SpecialFor, Generate): a Sabotaje only where an alarm is, a Travesía never in one building,
+        /// La llave only at a police station.
+        /// </summary>
         private static bool Drawn(string site, string kind)
         {
             var inside = site == Places.Offices || site == Places.Shed || site == Places.Police || site == Places.Hospital;
             if (kind == NodeKinds.Crossing) return !inside;
             if (kind == NodeKinds.Sabotage) return site == Places.Plaza || site == Places.Camping || site == Places.Factory;
+            if (kind == NodeKinds.Key) return site == Places.Police;
             return true;
         }
+
+        /// <summary>R1's seeds: 1 to BASTION_BANCO_SEMILLAS (default Seeds), and its stages BASTION_BANCO_ETAPAS (NodeKinds ids, «normal,key»).</summary>
+        private static int[] R1Seeds => int.TryParse(Environment.GetEnvironmentVariable("BASTION_BANCO_SEMILLAS"), out var n) ? Enumerable.Range(1, n).ToArray() : Seeds;
 
         private sealed class Fight
         {
@@ -68,6 +75,8 @@ namespace Bastion.Engine.Tests
             public int Seed, Turn, Fallen, Found, Supplies, Reward, Orders, Refused;
             public bool? Unseen;
             public double Seconds;
+            /// <summary>What it found at the G19 probe's prices, and La llave's armoury (RunBench.Seen).</summary>
+            public Leg Leg = new Leg();
         }
 
         /// <summary>
@@ -102,6 +111,7 @@ namespace Bastion.Engine.Tests
             var s = rules.LaunchMission(c, new Rng(seed * 31))!.Value.state;
             var rng = new Rng(seed * 7919 + 13);
             int orders = 0, refused = 0, idle = 0;
+            var lost = false;
             while (s.Outcome == null && orders < 3000 && idle < 3)
             {
                 var any = false;
@@ -112,14 +122,16 @@ namespace Bastion.Engine.Tests
                     orders++;
                     if (Rules.ExecuteCommand(s, cmd, slot, Both, rng).Ok) any = true;
                     else refused++;
+                    if (Looting.KeyLost(s)) lost = true;
                 }
                 idle = any ? 0 : idle + 1;
             }
             var f = new Fight
             {
                 Site = site, Kind = kind, Rifles = rifles, Seed = seed, Map = s.MapName ?? "", Turn = s.Turn,
-                Done = s.Mission.ObjectiveDone, Orders = orders, Refused = refused, Stuck = s.Outcome == null,
+                Done = s.Mission.ObjectiveDone, Orders = orders, Refused = refused, Stuck = s.Outcome == null, Leg = Seen(s),
             };
+            f.Leg.KeyLost = lost;
             if (s.Outcome != null)
             {
                 f.Outcome = s.Outcome;
@@ -131,6 +143,7 @@ namespace Bastion.Engine.Tests
                 f.Supplies = report.Found.Where((g) => g.Kind == GearKinds.Supplies).Sum((g) => g.Count);
                 f.Reward = report.Reward ?? 0;
                 f.Unseen = report.Unseen;
+                f.Leg.Worth = Worth(report.Found);
             }
             f.Seconds = clock.Elapsed.TotalSeconds;
             return f;
@@ -140,7 +153,7 @@ namespace Bastion.Engine.Tests
         {
             [NodeKinds.Normal] = "Saqueo", [NodeKinds.Hold] = "Asedio", [NodeKinds.Crossing] = "Travesía", [NodeKinds.Stealth] = "Sigilo*",
             [NodeKinds.Elite] = "Guarida", [NodeKinds.Sabotage] = "Sabotaje", [NodeKinds.Elimination] = "Limpieza",
-            [NodeKinds.Recovery] = "Recuperación", [NodeKinds.Rescue] = "Rescate",
+            [NodeKinds.Recovery] = "Recuperación", [NodeKinds.Rescue] = "Rescate", [NodeKinds.Key] = "La llave",
         };
 
         private static string SiteName(string site) => site == Places.Town ? "Pueblo o ciudad" : Places.Names[site];
@@ -154,20 +167,23 @@ namespace Bastion.Engine.Tests
         {
             var only = Environment.GetEnvironmentVariable("BASTION_BANCO_SITIOS")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
             var sites = only != null && only.Length > 0 ? Sites.Where((x) => only.Contains(x)).ToArray() : Sites;
-            var jobs = (from site in sites from kind in Kinds where Drawn(site, kind) from rifles in new[] { true, false } from seed in Seeds select (site, kind, rifles, seed)).ToList();
+            var stages = Environment.GetEnvironmentVariable("BASTION_BANCO_ETAPAS")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            var kinds = stages != null && stages.Length > 0 ? Kinds.Where((x) => stages.Contains(x)).ToArray() : Kinds;
+            var seeds = R1Seeds;
+            var jobs = (from site in sites from kind in kinds where Drawn(site, kind) from rifles in new[] { true, false } from seed in seeds select (site, kind, rifles, seed)).ToList();
             var clock = Stopwatch.StartNew();
             var fights = new Fight[jobs.Count];
             Parallel.For(0, jobs.Count, new ParallelOptions { MaxDegreeOfParallelism = 4 }, (i) => fights[i] = Play(jobs[i].site, jobs[i].kind, jobs[i].rifles, jobs[i].seed));
             var lines = new List<string> { $"# R1: {fights.Length} combates en {clock.Elapsed.TotalMinutes:0.0} min ({fights.Sum((f) => f.Seconds) / fights.Length:0.0} s cada uno)", "" };
             foreach (var rifles in new[] { true, false })
             {
-                lines.Add($"## Con {(rifles ? "fusiles (dificultad 2)" : "cuchillos (dificultad 1)")}: ganadas de {Seeds.Length}");
+                lines.Add($"## Con {(rifles ? "fusiles (dificultad 2)" : "cuchillos (dificultad 1)")}: ganadas de {seeds.Length}");
                 lines.Add("");
-                lines.Add("| Sitio | " + string.Join(" | ", Kinds.Select((k) => KindNames[k])) + " |");
-                lines.Add("|---|" + string.Concat(Kinds.Select((_) => "---|")));
+                lines.Add("| Sitio | " + string.Join(" | ", kinds.Select((k) => KindNames[k])) + " |");
+                lines.Add("|---|" + string.Concat(kinds.Select((_) => "---|")));
                 foreach (var site in sites)
                 {
-                    var cells = Kinds.Select((k) =>
+                    var cells = kinds.Select((k) =>
                     {
                         if (!Drawn(site, k)) return "–";
                         var mine = fights.Where((f) => f.Site == site && f.Kind == k && f.Rifles == rifles).ToList();
@@ -182,28 +198,54 @@ namespace Bastion.Engine.Tests
             }
             lines.Add("Guarida: entre paréntesis, la caja abierta. ⚠: combates que el bot no acabó. *Sigilo: el bot lo juega como una Recuperación, sin esconderse: no es una medida del equilibrio del Sigilo.");
             lines.Add("");
-            lines.Add("## Saqueo: lo traído por combate (media de las 6)");
-            lines.Add("");
-            lines.Add("| Sitio | Fusiles: § | objetos | caídos | Cuchillos: § | objetos | caídos |");
-            lines.Add("|---|---|---|---|---|---|---|");
-            foreach (var site in sites)
+            if (kinds.Contains(NodeKinds.Normal))
             {
-                string Of(bool rifles)
+                lines.Add($"## Saqueo: lo traído por combate (media de las {seeds.Length})");
+                lines.Add("");
+                lines.Add("| Sitio | Fusiles: § | objetos | caídos | Cuchillos: § | objetos | caídos |");
+                lines.Add("|---|---|---|---|---|---|---|");
+                foreach (var site in sites)
                 {
-                    var mine = fights.Where((f) => f.Site == site && f.Kind == NodeKinds.Normal && f.Rifles == rifles).ToList();
-                    return $"{mine.Average((f) => f.Supplies):0} | {mine.Average((f) => f.Found):0.0} | {mine.Average((f) => f.Fallen):0.0}";
+                    string Of(bool rifles)
+                    {
+                        var mine = fights.Where((f) => f.Site == site && f.Kind == NodeKinds.Normal && f.Rifles == rifles).ToList();
+                        return $"{mine.Average((f) => f.Supplies):0} | {mine.Average((f) => f.Found):0.0} | {mine.Average((f) => f.Fallen):0.0}";
+                    }
+                    lines.Add($"| {SiteName(site)} | {Of(true)} | {Of(false)} |");
                 }
-                lines.Add($"| {SiteName(site)} | {Of(true)} | {Of(false)} |");
+                lines.Add("");
             }
-            lines.Add("");
+            // G23.1 La llave against a Saqueo at the same police stations: its armoury opened, what each found.
+            if (kinds.Contains(NodeKinds.Key) && sites.Contains(Places.Police))
+            {
+                lines.Add($"## La llave en la comisaría (media de las {seeds.Length})");
+                lines.Add("");
+                lines.Add("| | ganados | caídos (media) | llave en una mochila o usada | armería abierta | muebles de la armería registrados (media) | lo hallado, § (media) | llave perdida |");
+                lines.Add("|---|---|---|---|---|---|---|---|");
+                foreach (var rifles in new[] { true, false })
+                    foreach (var kind in new[] { NodeKinds.Key, NodeKinds.Normal }.Where((k) => kinds.Contains(k)))
+                    {
+                        var mine = fights.Where((f) => f.Site == Places.Police && f.Kind == kind && f.Rifles == rifles).ToList();
+                        if (mine.Count == 0) continue;
+                        var key = kind == NodeKinds.Key;
+                        lines.Add($"| {KindNames[kind]}, {(rifles ? "fusiles" : "cuchillos")} | {mine.Count((f) => f.Outcome == Outcomes.Victory)} de {mine.Count} | {mine.Average((f) => f.Fallen):0.0} | "
+                            + (key ? $"{mine.Count((f) => f.Leg.KeyAt == KeyPlaces.Pack || f.Leg.KeyAt == KeyPlaces.Used)} | {mine.Count((f) => f.Leg.ArmoryOpen)} | {mine.Average((f) => f.Leg.ArmorySearched):0.0} de {mine.Average((f) => f.Leg.ArmoryPieces):0.0} | " : "– | – | – | ")
+                            + $"{mine.Average((f) => f.Leg.Worth):0} | {(key ? $"{mine.Count((f) => f.Leg.KeyLost)}" : "–")} |");
+                    }
+                lines.Add("");
+                lines.Add("Lo hallado, a los precios de la sonda de G19 (un fusil de asalto 90 §, una escopeta 80 §, un cargador 15 §…).");
+                lines.Add("");
+            }
             lines.Add("## Cada combate");
             lines.Add("");
             foreach (var f in fights)
                 lines.Add($"{SiteName(f.Site)} · {KindNames[f.Kind]} · {(f.Rifles ? "fusiles" : "cuchillos")} · {f.Seed} ({f.Map}): {(f.Stuck ? "SIN ACABAR" : $"{f.Outcome}/{f.Reason}")}, turno {f.Turn}, objetivo {(f.Done ? "sí" : "no")}"
-                    + $", {f.Fallen} caídos, {f.Found} objetos, {f.Supplies} §, premio {f.Reward}{(f.Unseen != null ? f.Unseen.Value ? " sin ser vistos" : " vistos" : "")}, {f.Orders} órdenes, {f.Refused} rechazadas, {f.Seconds:0.0} s");
+                    + $", {f.Fallen} caídos, {f.Found} objetos ({f.Leg.Worth} §), {f.Supplies} §, premio {f.Reward}{(f.Unseen != null ? f.Unseen.Value ? " sin ser vistos" : " vistos" : "")}"
+                    + (f.Leg.KeyAt != null ? $", llave {f.Leg.KeyAt}{(f.Leg.KeyLost ? " PERDIDA" : "")}, armería {(f.Leg.ArmoryOpen ? "abierta" : "cerrada")} {f.Leg.ArmorySearched}/{f.Leg.ArmoryPieces}" : "") + $", {f.Orders} órdenes, {f.Refused} rechazadas, {f.Seconds:0.0} s");
             File.WriteAllLines(Path.Combine(BenchFactAttribute.Folder!, "r1.md"), lines);
             foreach (var l in lines.Take(40)) output.WriteLine(l);
             Assert.Equal(0, fights.Sum((f) => f.Refused));
+            Assert.DoesNotContain(fights, (f) => f.Leg.KeyLost);
         }
 
         // ------------------------------------------------------------------ R2
@@ -221,6 +263,15 @@ namespace Bastion.Engine.Tests
             public string? Ended;
             public int Row, Fallen, Supplies, Reward;
             public bool Victory, Matched;
+            /// <summary>What it found, at the G19 probe's prices (.dev-snapshots/gameplay/muebles/ZzProbeLoot.cs.txt).</summary>
+            public int Worth;
+            /// <summary>At a police station; G23.1 La llave's: where its key ended, its armoury open, its pieces searched (of all).</summary>
+            public bool Police;
+            public string? KeyAt;
+            public bool ArmoryOpen;
+            /// <summary>Its key nowhere to be had at some point of the fight (Looting.KeyLost: Producto's invariant, 19/11).</summary>
+            public bool KeyLost;
+            public int ArmorySearched, ArmoryPieces;
         }
 
         private sealed class Expedition
@@ -228,6 +279,8 @@ namespace Bastion.Engine.Tests
             public int Index, Soldiers, Squad, Before, After, Row;
             public string Upgrades = "", Arms = "";
             public string? Ended;
+            /// <summary>La llave's on its map, and in reach from where it went out (all of them: from row 1).</summary>
+            public int Keys;
             public readonly List<Leg> Legs = new List<Leg>();
         }
 
@@ -247,6 +300,38 @@ namespace Bastion.Engine.Tests
         private static int AllSupplies(CampaignState c) => Runs.StashSupplies(c) + c.Soldiers.Where((s) => s.Alive && s.Kit != null).Sum((s) => Gears.Supplies(s.Kit!.Pack));
 
         private static bool Fires(Gear? g) => g != null && Content.GearWeapon(g) is FoundWeaponDef w && w.Slot != FoundWeaponSlots.Melee;
+
+        private static readonly Dictionary<string, int> WeaponPrice = new Dictionary<string, int>
+        {
+            [FoundWeaponIds.Pistol] = 40, [FoundWeaponIds.AssaultRifle] = 90, [FoundWeaponIds.PumpShotgun] = 80, [FoundWeaponIds.PrecisionRifle] = 120,
+            [FoundWeaponIds.Stick] = 20, [FoundWeaponIds.Pan] = 20, [FoundWeaponIds.Bat] = 25, [FoundWeaponIds.Rake] = 25, [FoundWeaponIds.Crowbar] = 30,
+            [FoundWeaponIds.Machete] = 30, [FoundWeaponIds.Longsword] = 35, [FoundWeaponIds.Katana] = 40,
+        };
+
+        /// <summary>What `found` is worth at the G19 probe's prices: a § a supply, a long gun 80–120…</summary>
+        private static int Worth(IEnumerable<Gear> found) => found.Sum((g) =>
+            g.Kind == GearKinds.Weapon ? WeaponPrice.TryGetValue(g.Type!, out var p) ? p : 80
+            : g.Kind == GearKinds.Mags || g.Kind == GearKinds.Medicine ? 15 * g.Count
+            : g.Kind == GearKinds.Vest ? g.Type == VestIds.HeavyVest ? 100 : 60
+            : g.Kind == GearKinds.Supplies ? g.Count
+            : g.Kind == GearKinds.Item ? (g.Type == ItemIds.FirstAid ? 25 : 15) * g.Count
+            : g.Kind == GearKinds.Mod ? 30 * g.Count : 0);
+
+        /// <summary>The fight once over, for its leg: at a police station, and La llave's armoury.</summary>
+        private static Leg Seen(GameState s)
+        {
+            var leg = new Leg { Police = s.Interiors?.Any((x) => x.Kind == InteriorKinds.Police) == true };
+            if (s.Mission.KeyArmory != true) return leg;
+            leg.KeyAt = Looting.KeyWhere(s);
+            leg.ArmoryOpen = Looting.ArmoryOpen(s);
+            var station = s.Interiors!.First((x) => x.Kind == InteriorKinds.Police);
+            var a = station.Rooms.First((r) => r.Use == PoliceUses.Armory && r.Z == 0);
+            var pieces = station.Dressing.Where((d) => d.Z == 0 && d.X >= a.X && d.Y >= a.Y && d.X < a.X + a.W && d.Y < a.Y + a.H && SearchPieces.Police.Contains(d.Kind)).ToList();
+            leg.ArmoryPieces = pieces.Count;
+            // Searched, its tile in GameState.searched (a piece stays in MissionState.pieces; Red, 19/11).
+            leg.ArmorySearched = pieces.Count((d) => Looting.WasSearched(s, new Pos { X = d.X, Y = d.Y, Z = 0 }));
+            return leg;
+        }
 
         /// <summary>The squad going out, by what it fires: «2/1/1», with a long gun / a pistol only / neither.</summary>
         private static string ArmsOf(CampaignState c)
@@ -269,6 +354,8 @@ namespace Bastion.Engine.Tests
             var clock = Stopwatch.StartNew();
             var ch = new Chapter { Seed = seed };
             Expedition? now = null;
+            Leg? seen = null;
+            var lost = false;
             var played = CampaignAutoRun.Run(seed, 1000,
                 watch: (c) =>
                 {
@@ -276,7 +363,7 @@ namespace Bastion.Engine.Tests
                     {
                         if (now == null)
                         {
-                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c) };
+                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c), Keys = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Key) };
                             ch.Expeditions.Add(now);
                         }
                         now.Row = Math.Max(now.Row, RowOf(c.Run.At));
@@ -296,19 +383,32 @@ namespace Bastion.Engine.Tests
                 {
                     var report = c.LastReport;
                     var run = report?.Run;
-                    var leg = new Leg
-                    {
-                        Name = m.Name, Matched = run != null && run.Node == m.Node, Kind = run?.NodeKind ?? "", Row = RowOf(m.Node),
-                        Victory = report?.Victory == true, Reason = report?.Reason ?? "", Ended = run?.Ended,
-                        Fallen = run?.Fallen.Count ?? 0, Supplies = run?.Found.Where((g) => g.Kind == GearKinds.Supplies).Sum((g) => g.Count) ?? 0,
-                        Reward = run?.Reward ?? 0,
-                    };
+                    var leg = seen ?? new Leg();
+                    seen = null;
+                    leg.Name = m.Name;
+                    leg.Matched = run != null && run.Node == m.Node;
+                    leg.Kind = run?.NodeKind ?? "";
+                    leg.Row = RowOf(m.Node);
+                    leg.Victory = report?.Victory == true;
+                    leg.Reason = report?.Reason ?? "";
+                    leg.Ended = run?.Ended;
+                    leg.Fallen = run?.Fallen.Count ?? 0;
+                    leg.Supplies = run?.Found.Where((g) => g.Kind == GearKinds.Supplies).Sum((g) => g.Count) ?? 0;
+                    leg.Reward = run?.Reward ?? 0;
+                    leg.Worth = run != null ? Worth(run.Found) : 0;
                     var e = now ?? ch.Expeditions.LastOrDefault();
                     e?.Legs.Add(leg);
                     if (e != null && leg.Ended != null) e.Ended = leg.Ended;
                 },
                 done: (c) => (c.ChaptersDone ?? 0) >= 1 || c.Run == null && ch.Expeditions.Count >= MostExpeditions,
-                steps: 60_000);
+                steps: 60_000,
+                fought: (s) =>
+                {
+                    seen = Seen(s);
+                    seen.KeyLost = lost;
+                    lost = false;
+                },
+                playing: (s) => lost |= Looting.KeyLost(s));
             ch.Missions = played.Count;
             ch.Stuck = CampaignAutoRun.Stuck;
             if (CampaignAutoRun.StuckMission != null) File.WriteAllText(Path.Combine(BenchFactAttribute.Folder!, $"atasco-{seed}.json"), CampaignAutoRun.StuckMission);
@@ -371,15 +471,45 @@ namespace Bastion.Engine.Tests
             foreach (var g in legs.GroupBy((l) => l.Kind).OrderByDescending((g) => g.Count()))
                 lines.Add($"| {(KindNames.TryGetValue(g.Key, out var k) ? k : g.Key == NodeKinds.Boss ? "El Toro" : g.Key)} | {g.Count()} | {g.Count((l) => l.Victory)} | {g.Sum((l) => l.Fallen)} | {g.Count((l) => l.Ended == RunEnds.Wiped)} | {g.Average((l) => l.Supplies + l.Reward):0} |");
             lines.Add("");
+            // G23.1 La llave (Producto, 19/11): how often it is on the maps and played, its armoury opened, what it gives.
+            var keys = legs.Where((l) => l.Kind == NodeKinds.Key).ToList();
+            var police = legs.Where((l) => l.Kind == NodeKinds.Normal && l.Police).ToList();
+            var expeditions = chapters.SelectMany((c) => c.Expeditions).ToList();
+            lines.Add("## La llave");
+            lines.Add("");
+            lines.Add($"- En los mapas: {expeditions.Sum((e) => e.Keys)} en {expeditions.Count} expediciones ({expeditions.Sum((e) => e.Keys) / (double)Math.Max(1, expeditions.Count):0.00} por mapa; {expeditions.Count((e) => e.Keys > 0) / (double)Math.Max(1, expeditions.Count):P0} de los mapas con alguna); {expeditions.Sum((e) => e.Keys) / (double)count:0.0} por capítulo.");
+            lines.Add($"- Jugadas: {keys.Count} en {count} capítulos ({keys.Count / (double)count:0.00} por capítulo), {keys.Count((l) => l.Victory)} ganadas, {keys.Sum((l) => l.Fallen)} caídos, {keys.Count((l) => l.Ended == RunEnds.Wiped)} sin nadie.");
+            if (keys.Count > 0)
+            {
+                lines.Add($"- La llave al acabar: {string.Join(", ", keys.GroupBy((l) => l.KeyAt ?? "-").OrderByDescending((g) => g.Count()).Select((g) => $"{g.Key} {g.Count()}"))} (holder: en el muerto; floor: en el suelo; pack: en una mochila; used: abrió la puerta).");
+                lines.Add($"- La llave perdida en algún momento (Looting.KeyLost, orden a orden): {keys.Count((l) => l.KeyLost)} de {keys.Count}.");
+                lines.Add($"- Armería abierta: {keys.Count((l) => l.ArmoryOpen)} de {keys.Count}; registrada entera: {keys.Count((l) => l.ArmoryPieces > 0 && l.ArmorySearched == l.ArmoryPieces)}; muebles registrados (media, de los abiertos): {(keys.Any((l) => l.ArmoryOpen) ? keys.Where((l) => l.ArmoryOpen).Average((l) => l.ArmorySearched) : 0):0.0} de {(keys.Count > 0 ? keys.Average((l) => l.ArmoryPieces) : 0):0.0}.");
+                lines.Add("");
+                lines.Add("| | combates | ganados | caídos (media) | lo hallado, § (media) | § sueltos (media) |");
+                lines.Add("|---|---|---|---|---|---|");
+                void Row(string name, List<Leg> ls)
+                {
+                    if (ls.Count > 0) lines.Add($"| {name} | {ls.Count} | {ls.Count((l) => l.Victory)} | {ls.Average((l) => l.Fallen):0.0} | {ls.Average((l) => l.Worth):0} | {ls.Average((l) => l.Supplies + l.Reward):0} |");
+                }
+                Row("La llave, armería abierta", keys.Where((l) => l.ArmoryOpen).ToList());
+                Row("La llave, cerrada", keys.Where((l) => !l.ArmoryOpen).ToList());
+                Row("La llave, todas", keys);
+                Row("Saqueo en la comisaría", police);
+                Row("Saqueo en la comisaría, filas 3–5", police.Where((l) => l.Row >= RunMap.KeyFrom).ToList());
+                lines.Add("");
+                lines.Add("Lo hallado, a los precios de la sonda de G19 (un fusil de asalto 90 §, una escopeta 80 §, un cargador 15 §…).");
+            }
+            lines.Add("");
             lines.Add("## Cada expedición");
             lines.Add("");
             foreach (var ch in chapters)
                 foreach (var e in ch.Expeditions)
                     lines.Add($"{ch.Seed}·{e.Index}: {e.Squad} de {e.Soldiers} vivos, armas {e.Arms}, mejoras «{e.Upgrades}», § {e.Before} → {e.After}, fila {e.Row}, acaba {e.Ended ?? "-"}: "
-                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.Matched ? "" : " ¿?")}")));
+                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.KeyAt != null ? $" llave {l.KeyAt}{(l.KeyLost ? " PERDIDA" : "")}, armería {(l.ArmoryOpen ? "abierta" : "cerrada")} {l.ArmorySearched}/{l.ArmoryPieces}" : "")}{(l.Matched ? "" : " ¿?")}")));
             File.WriteAllLines(Path.Combine(BenchFactAttribute.Folder!, "r2.md"), lines);
             foreach (var l in lines.Take(30)) output.WriteLine(l);
             Assert.All(chapters, (c) => Assert.Null(c.Stuck));
+            Assert.DoesNotContain(keys, (l) => l.KeyLost);
         }
     }
 }

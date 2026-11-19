@@ -55,11 +55,11 @@ namespace Bastion.Engine.Tests
             return null;
         }
 
-        /// <summary>`u` a step from La Lata's zone tile `i`, walked onto it.</summary>
+        /// <summary>`u` a step from La Lata's zone tile `i` (one it walks onto it from, if there is: Walked), walked onto it.</summary>
         private static CommandResult WalkIn(GameState s, Unit u, int i, int slot = 0)
         {
             var z = s.Mission.EvacZone[i];
-            u.Pos = Beside(s, z);
+            u.Pos = Walked(s, u, z) ?? Beside(s, z);
             u.Ap = 2;
             u.Moves = null;
             return Exec(s, Move(u.Id, z.X, z.Y), slot: slot);
@@ -228,8 +228,11 @@ namespace Bastion.Engine.Tests
             var (_, s) = Fight();
             var u = Squaddies(s)[0];
             Assert.True(WalkIn(s, u, 0).Ok);
-            var dead = s.Units.First((x) => x.Team == Teams.Alien);
-            Assert.False(Los.CanSee(s, dead, u));
+            Assert.True(u.Aboard);
+            // Off the field (Alive false): none of the dead sees it (Los.VisibleEnemies, Ai.Foes), wherever they look from.
+            // (Los.CanSee alone is the line of sight to its tile: it was false here only as the first of the dead looked away.)
+            Assert.False(u.Alive);
+            Assert.DoesNotContain(u, Los.VisibleEnemies(s, Teams.Alien));
             Assert.DoesNotContain(u, Grid.Combatants(s, Teams.Xcom));
         }
 
