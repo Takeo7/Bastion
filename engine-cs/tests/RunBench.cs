@@ -391,8 +391,8 @@ namespace Bastion.Engine.Tests
             public string? Ended;
             /// <summary>La llave's on its map, and in reach from where it went out (all of them: from row 1).</summary>
             public int Keys;
-            /// <summary>G23.2 Mordido's on its map, likewise.</summary>
-            public int Bitten;
+            /// <summary>G23.2 Mordido's on its map, likewise; G23.3 El herido's.</summary>
+            public int Bitten, Wounded;
             public readonly List<Leg> Legs = new List<Leg>();
         }
 
@@ -484,6 +484,7 @@ namespace Bastion.Engine.Tests
             Leg? seen = null;
             var lost = false;
             var bite = new Leg();
+            string? back = null;
             var played = CampaignAutoRun.Run(seed, 1000,
                 watch: (c) =>
                 {
@@ -491,7 +492,7 @@ namespace Bastion.Engine.Tests
                     {
                         if (now == null)
                         {
-                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c), Keys = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Key), Bitten = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Bitten) };
+                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c), Keys = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Key), Bitten = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Bitten), Wounded = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Wounded) };
                             ch.Expeditions.Add(now);
                         }
                         now.Row = Math.Max(now.Row, RowOf(c.Run.At));
@@ -540,11 +541,33 @@ namespace Bastion.Engine.Tests
                     seen.CuredTurn = bite.CuredTurn;
                     seen.AntiviralLost = bite.AntiviralLost;
                     (seen.Turned, seen.Killed, seen.Left) = HowItEnded(s);
+                    if (Rules.WoundedOf(s) is Unit hw)
+                    {
+                        seen.CarriedTurn = bite.CarriedTurn;
+                        seen.AboardTurn = bite.AboardTurn;
+                        seen.Relays = bite.Relays;
+                        seen.DeadTurn = bite.DeadTurn;
+                        seen.WoundedDead = !hw.Alive && hw.CarriedBy == null && !hw.Evacuated;
+                    }
                     bite = new Leg();
+                    back = null;
                 },
                 playing: (s) =>
                 {
                     lost |= Looting.KeyLost(s);
+                    if (Rules.WoundedOf(s) is Unit hurt)
+                    {
+                        if (bite.FoundTurn == null && s.Mission.SurvivorFound == true) bite.FoundTurn = s.Turn;
+                        if (hurt.CarriedBy != null)
+                        {
+                            bite.CarriedTurn ??= s.Turn;
+                            if (back != null && back != hurt.CarriedBy) bite.Relays++;
+                            back = hurt.CarriedBy;
+                        }
+                        if (bite.AboardTurn == null && hurt.Aboard == true) bite.AboardTurn = s.Turn;
+                        if (bite.DeadTurn == null && !hurt.Alive && hurt.CarriedBy == null && !hurt.Evacuated) bite.DeadTurn = s.Turn;
+                        return;
+                    }
                     if (s.Mission.Bitten != true) return;
                     if (bite.FoundTurn == null && s.Mission.BiteTurns != null) bite.FoundTurn = s.Turn;
                     if (bite.AntiviralTurn == null && s.Mission.Antiviral == null) bite.AntiviralTurn = s.Turn;
@@ -670,13 +693,47 @@ namespace Bastion.Engine.Tests
                 var rescue = legs.Where((l) => l.Kind == NodeKinds.Rescue).ToList();
                 if (rescue.Count > 0) lines.Add($"| Rescate (para comparar) | {rescue.Count} | {rescue.Count((l) => l.Victory)} | {rescue.Average((l) => l.Fallen):0.0} | {rescue.Average((l) => l.Supplies + l.Reward):0} |");
             }
+            // G23.3 El herido (Producto, 19/11: the 0.13.5; by distribution, against the Rescate in the same bench).
+            var hurtLegs = legs.Where((l) => l.Kind == NodeKinds.Wounded).ToList();
+            lines.Add("");
+            lines.Add("## El herido");
+            lines.Add("");
+            lines.Add($"- En los mapas: {expeditions.Sum((e) => e.Wounded)} en {expeditions.Count} expediciones ({expeditions.Sum((e) => e.Wounded) / (double)Math.Max(1, expeditions.Count):0.00} por mapa; {expeditions.Count((e) => e.Wounded > 0) / (double)Math.Max(1, expeditions.Count):P0} de los mapas con alguno); {expeditions.Sum((e) => e.Wounded) / (double)count:0.0} por capítulo.");
+            lines.Add($"- Jugados: {hurtLegs.Count} en {count} capítulos ({hurtLegs.Count / (double)count:0.00} por capítulo; filas {string.Join(", ", hurtLegs.GroupBy((l) => l.Row).OrderBy((g) => g.Key).Select((g) => $"{g.Key}: {g.Count()}"))}).");
+            if (hurtLegs.Count > 0)
+            {
+                string Spread2(IEnumerable<int> xs)
+                {
+                    var v = xs.OrderBy((x) => x).ToList();
+                    return v.Count == 0 ? "ninguno" : $"{v.Count}: mín {v[0]}, mediana {v[v.Count / 2]}, máx {v[^1]} ({string.Join(" ", v)})";
+                }
+                lines.Add($"- El herido: dentro de La Lata (ganada) {hurtLegs.Count((l) => l.Victory)}; sin encontrarlo {hurtLegs.Count((l) => l.FoundTurn == null)}; encontrado y sin cargarlo nunca {hurtLegs.Count((l) => l.FoundTurn != null && l.CarriedTurn == null)}; muere {hurtLegs.Count((l) => l.WoundedDead)} ({hurtLegs.Count((l) => l.WoundedDead && l.CarriedTurn == null)} sin haberlo cargado nadie).");
+                lines.Add($"- La escuadra: cae entera {hurtLegs.Count((l) => l.Ended == RunEnds.Wiped)}; sale sin él (muerto) {hurtLegs.Count((l) => !l.Victory && l.Ended != RunEnds.Wiped)}; caídos {hurtLegs.Sum((l) => l.Fallen)} ({hurtLegs.Average((l) => l.Fallen):0.0} por combate).");
+                lines.Add($"- Turno en que lo encuentran: {Spread2(hurtLegs.Where((l) => l.FoundTurn != null).Select((l) => l.FoundTurn!.Value))}.");
+                lines.Add($"- De encontrarlo a cargarlo: {Spread2(hurtLegs.Where((l) => l.FoundTurn != null && l.CarriedTurn != null).Select((l) => l.CarriedTurn!.Value - l.FoundTurn!.Value))} turnos.");
+                lines.Add($"- De cargarlo a tenerlo dentro: {Spread2(hurtLegs.Where((l) => l.CarriedTurn != null && l.AboardTurn != null).Select((l) => l.AboardTurn!.Value - l.CarriedTurn!.Value))} turnos.");
+                lines.Add($"- Relevos: {Spread2(hurtLegs.Select((l) => l.Relays))}.");
+                lines.Add("");
+                lines.Add("| | combates | ganados | caídos (media) | cae la escuadra entera | § sueltos (media) |");
+                lines.Add("|---|---|---|---|---|---|");
+                void Row2(string name, List<Leg> ls)
+                {
+                    if (ls.Count > 0) lines.Add($"| {name} | {ls.Count} | {ls.Count((l) => l.Victory)} | {ls.Average((l) => l.Fallen):0.0} | {ls.Count((l) => l.Ended == RunEnds.Wiped)} | {ls.Average((l) => l.Supplies + l.Reward):0} |");
+                }
+                foreach (var g in hurtLegs.GroupBy((l) => l.Row <= 2 ? "fila 2" : l.Row <= 4 ? "filas 3–4" : "fila 5").OrderBy((g) => g.Key)) Row2($"El herido, {g.Key}", g.ToList());
+                Row2("El herido, todos", hurtLegs);
+                Row2("Mordido (para comparar)", legs.Where((l) => l.Kind == NodeKinds.Bitten).ToList());
+                var rescueLegs = legs.Where((l) => l.Kind == NodeKinds.Rescue).ToList();
+                foreach (var g in rescueLegs.GroupBy((l) => l.Row <= 2 ? "fila 2" : l.Row <= 4 ? "filas 3–4" : "fila 5").Where((g) => g.Key != "fila 1").OrderBy((g) => g.Key)) Row2($"Rescate, {g.Key}", g.Where((l) => l.Row >= 2).ToList());
+                Row2("Rescate, todos (filas 1–5)", rescueLegs);
+            }
             lines.Add("");
             lines.Add("## Cada expedición");
             lines.Add("");
             foreach (var ch in chapters)
                 foreach (var e in ch.Expeditions)
                     lines.Add($"{ch.Seed}·{e.Index}: {e.Squad} de {e.Soldiers} vivos, armas {e.Arms}, mejoras «{e.Upgrades}», § {e.Before} → {e.After}, fila {e.Row}, acaba {e.Ended ?? "-"}: "
-                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.KeyAt != null ? $" llave {l.KeyAt}{(l.KeyLost ? " PERDIDA" : "")}, armería {(l.ArmoryOpen ? "abierta" : "cerrada")} {l.ArmorySearched}/{l.ArmoryPieces}" : "")}{(l.Kind == NodeKinds.Bitten ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, antiviral t{l.AntiviralTurn?.ToString() ?? "-"}, curado t{l.CuredTurn?.ToString() ?? "-"}{(l.Turned ? ", CONVERTIDO" : "")}{(l.Killed ? ", MUERTO" : "")}{(l.Left ? ", EN TIERRA" : "")}{(l.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "")}{(l.Matched ? "" : " ¿?")}")));
+                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.KeyAt != null ? $" llave {l.KeyAt}{(l.KeyLost ? " PERDIDA" : "")}, armería {(l.ArmoryOpen ? "abierta" : "cerrada")} {l.ArmorySearched}/{l.ArmoryPieces}" : "")}{(l.Kind == NodeKinds.Wounded ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, cargado t{l.CarriedTurn?.ToString() ?? "-"}, dentro t{l.AboardTurn?.ToString() ?? "-"}, {l.Relays} relevos{(l.WoundedDead ? ", MUERE" : "")}" : "")}{(l.Kind == NodeKinds.Bitten ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, antiviral t{l.AntiviralTurn?.ToString() ?? "-"}, curado t{l.CuredTurn?.ToString() ?? "-"}{(l.Turned ? ", CONVERTIDO" : "")}{(l.Killed ? ", MUERTO" : "")}{(l.Left ? ", EN TIERRA" : "")}{(l.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "")}{(l.Matched ? "" : " ¿?")}")));
             File.WriteAllLines(Path.Combine(BenchFactAttribute.Folder!, "r2.md"), lines);
             foreach (var l in lines.Take(30)) output.WriteLine(l);
             Assert.All(chapters, (c) => Assert.Null(c.Stuck));

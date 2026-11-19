@@ -24,11 +24,13 @@ namespace Bastion.Engine
         /// Travesía, Sigilo, Guarida). Without «Arreglar la radio» since T2 (Arturo, 18/11: «se quita la etapa», and all of
         /// fixing with it): its share goes to the others. La llave since G23.1, from row KeyFrom only, always at a police
         /// station. Mordido since G23.2 (Arturo, cuadro 90: «Como está, y lo pruebo yo»), rows 2–5, always at the hospital.
+        /// El herido since G23.3 (Arturo, cuadro 92; Producto, 19/11: the 0.13.5), rows 2–5, on a Rescate's maps.
         /// </summary>
         public static readonly IReadOnlyList<string> Specials = new[]
         {
             NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Rescue,
             NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Key, NodeKinds.Bitten,
+            NodeKinds.Wounded,
         };
 
         /// <summary>G23.1 La llave from this row (Producto, 19/11: its armoury full arms a squad at once; rows 1–2 are knives').</summary>

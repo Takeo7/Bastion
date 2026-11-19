@@ -62,10 +62,26 @@ namespace Bastion.Engine.Tests
         // ------------------------------------------------------------------ the stage
 
         [Fact]
-        public void NotOnTheMapsYetARescateWithItsOwnSurvivor()
+        public void OnTheMapsRowsTwoToFiveARescatesMaps()
         {
-            Assert.DoesNotContain(NodeKinds.Wounded, RunMap.Specials);
-            Assert.DoesNotContain(Enumerable.Range(1, 300).SelectMany((seed) => RunMap.Generate(1, seed)), (n) => n.Kind == NodeKinds.Wounded);
+            // Producto, 19/11 (the 0.13.5): as the other specials, on a Rescate's maps.
+            Assert.Contains(NodeKinds.Wounded, RunMap.Specials);
+            var nodes = Enumerable.Range(1, 500).SelectMany((seed) => RunMap.Generate(1, seed)).ToList();
+            var hurt = nodes.Where((n) => n.Kind == NodeKinds.Wounded).ToList();
+            Assert.All(hurt, (n) => Assert.InRange(n.Row, 2, RunMap.NodeRows));
+            double share = hurt.Count / (double)nodes.Count((n) => n.Row >= 2 && n.Row <= RunMap.NodeRows);
+            Assert.InRange(share, 0.015, 0.04);
+            // Where a Rescate is: the six places and the special maps for them, never the Key's or Mordido's own only.
+            var rescue = nodes.Where((n) => n.Kind == NodeKinds.Rescue).Select((n) => n.Site).Distinct().ToList();
+            Assert.All(hurt, (n) => Assert.Contains(n.Site, rescue));
+            Assert.True(hurt.Select((n) => n.Site).Distinct().Count() >= 6);
+            Assert.All(hurt, (n) => Assert.False(RunMap.LooseSurvivor(n)));
+            Assert.Equal(MissionKinds.Rescue, Runs.MissionKindOf(NodeKinds.Wounded));
+        }
+
+        [Fact]
+        public void ARescateWithItsOwnSurvivor()
+        {
             Assert.Equal(MissionKinds.Rescue, Runs.MissionKindOf(NodeKinds.Wounded));
             Assert.False(RunMap.LooseSurvivor(new RunNode { Id = "n3-0", Row = 3, Kind = NodeKinds.Wounded, Seed = 4242 }));
             var (_, s) = Wounded();
@@ -484,6 +500,11 @@ namespace Bastion.Engine.Tests
             Assert.True(v.Aboard);
             Assert.Equal(Outcomes.Victory, s.Outcome);
             Assert.True(Rules.WoundedSafe(s));
+            // On the maps (the 0.13.5): a special's reward, and they join.
+            var report = EndFight(c, s, s.Outcome!, s.OutcomeReason!);
+            Assert.InRange(report.Run!.Reward ?? 0, Runs.RewardMin, Runs.RewardMax);
+            Assert.NotNull(report.Run.Joined);
+            Assert.Contains(c.Soldiers, (x) => x.Id == report.Run.Joined && x.Name == w.Name);
         }
 
         [Fact]
