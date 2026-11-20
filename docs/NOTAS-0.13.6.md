@@ -103,5 +103,5 @@ Versión 0.13.6 (commit [commit]). Sale en los mapas una misión nueva, Separado
   - Windows: sin firmar. «Más información» → «Ejecutar de todas formas».
 - **Cortafuegos del Mac:** con cada versión, el Mac vuelve a preguntar si la app puede aceptar conexiones entrantes y si puede buscar en la red local: «Permitir» en los dos.
 - **Por internet:** con algunas compañías, aunque salga la dirección de internet, desde fuera no se llega, y quien se une ve «No responde nadie…». Entonces, Tailscale.
-- [**Windows:** construida desde el Mac; aún no se ha probado en un PC.]
+- **Windows:** construida desde el Mac; aún no se ha probado en un PC.
 - **Para jugar,** mejor enchufado y sin modo de bajo consumo.
