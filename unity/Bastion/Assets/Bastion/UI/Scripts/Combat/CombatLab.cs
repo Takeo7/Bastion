@@ -211,8 +211,10 @@ namespace Bastion.UI.Combat
             var marks = new GameObject("Marcas");
             control = gameObject.AddComponent<CombatController>();
             control.State = mine;
-            control.MySlot = 0;
-            control.Players = new List<PlayerInfo> { new PlayerInfo { Slot = 0, Name = "Arturo", Color = Content.PlayerColors[0], Connected = true } };
+            control.MySlot = Seat;
+            control.Players = Room
+                ? new List<PlayerInfo> { new PlayerInfo { Slot = 0, Name = "Ana", Color = Content.PlayerColors[0], Connected = true }, new PlayerInfo { Slot = 1, Name = "Pepe", Color = Content.PlayerColors[1], Connected = true } }
+                : new List<PlayerInfo> { new PlayerInfo { Slot = 0, Name = "Arturo", Color = Content.PlayerColors[0], Connected = true } };
             control.Rig = rig;
             control.Overlay = marks.AddComponent<MoveOverlay>();
             control.AimMarks = marks.AddComponent<AimOverlay>();
@@ -854,6 +856,28 @@ namespace Bastion.UI.Combat
                                 Debug.Log($"[lab] cosas cerca de {cWho?.Id}: {string.Join(" ", cFound)}");
                                 break;
                             }
+                            // «cae=s3» (U27): that one falls, as the host's event would come (Separados' group all fallen: its line).
+                            if (what.StartsWith("cae="))
+                            {
+                                var died = new List<GameEvent> { new DiedEvent { Unit = what.Substring(4) } };
+                                foreach (var e in died)
+                                {
+                                    Events.ApplyEvent(host, e);
+                                    Events.ApplyEvent(control.State, e);
+                                }
+                                if (player != null) player.Push(died, null);
+                                control.Refresh();
+                                break;
+                            }
+                            // «evac-otro» (U27): the partner asks La Lata to go, from one of theirs aboard, as their order would come.
+                            if (what == "evac-otro")
+                            {
+                                var partner = 1 - control.MySlot;
+                                var theirs = host.Units.FirstOrDefault(u => u.Owner == partner && (u.Aboard == true || (u.Alive && Abilities.InEvacZone(host, u.Pos))));
+                                if (theirs != null) Answer(new EvacCommand { Unit = theirs.Id }, partner);
+                                else Debug.Log("[lab] evac-otro: nadie del otro a bordo");
+                                break;
+                            }
                             // «respuesta=si» / «respuesta=no»: the call's card answered (its two buttons: 0.12.4, ending a soldier's turn).
                             if (what.StartsWith("respuesta="))
                             {
@@ -1222,14 +1246,20 @@ namespace Bastion.UI.Combat
         /// </summary>
         /// <summary>BASTION_LAB_DOS=1: the partner (slot 1) connected for the rules too, so the turn waits for them (0.12.4, the turns).</summary>
         static readonly bool Two = System.Environment.GetEnvironmentVariable("BASTION_LAB_DOS") == "1";
+        /// <summary>BASTION_LAB_SALA=1 (U27): the room with Ana (slot 0) and Pepe (slot 1), both here, as the HUD sees them.</summary>
+        static readonly bool Room = System.Environment.GetEnvironmentVariable("BASTION_LAB_SALA") == "1";
+        /// <summary>BASTION_LAB_ASIENTO=1 (U27): this player is Pepe, slot 1, and its orders go as theirs.</summary>
+        static readonly int Seat = System.Environment.GetEnvironmentVariable("BASTION_LAB_ASIENTO") == "1" ? 1 : 0;
 
         /// <summary>The rules' time in the lab (the host's, not this player's: the enemy's turn is worked out in it), apart in RendimientoLab.Parones.</summary>
         static readonly Unity.Profiling.ProfilerMarker MRules = new Unity.Profiling.ProfilerMarker("Bastion.Lab.Rules");
 
-        void Answer(Command cmd)
+        void Answer(Command cmd) => Answer(cmd, Seat);
+
+        void Answer(Command cmd, int slot)
         {
             CommandResult result;
-            using (MRules.Auto()) result = Rules.ExecuteCommand(host, cmd, 0, Two ? new[] { 0, 1 } : new[] { 0 }, rng);
+            using (MRules.Auto()) result = Rules.ExecuteCommand(host, cmd, slot, Two ? new[] { 0, 1 } : new[] { 0 }, rng);
             if (!result.Ok)
             {
                 Debug.Log($"[lab] orden rechazada ({cmd.Type}): {result.Error}");
@@ -1237,7 +1267,7 @@ namespace Bastion.UI.Combat
                 return;
             }
             foreach (var e in result.Events) Events.ApplyEvent(control.State, e);
-            if (player != null) player.Push(result.Events, 0);
+            if (player != null) player.Push(result.Events, slot);
             else Bodies(control.State);
             control.Refresh();
         }

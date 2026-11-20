@@ -190,7 +190,7 @@ namespace Bastion.Engine.Tests
             [NodeKinds.Normal] = "Saqueo", [NodeKinds.Hold] = "Asedio", [NodeKinds.Crossing] = "Travesía", [NodeKinds.Stealth] = "Sigilo*",
             [NodeKinds.Elite] = "Guarida", [NodeKinds.Sabotage] = "Sabotaje", [NodeKinds.Elimination] = "Limpieza",
             [NodeKinds.Recovery] = "Recuperación", [NodeKinds.Rescue] = "Rescate", [NodeKinds.Key] = "La llave", [NodeKinds.Bitten] = "Mordido",
-            [NodeKinds.Wounded] = "El herido",
+            [NodeKinds.Wounded] = "El herido", [NodeKinds.Split] = "Separados",
         };
 
         private static string SiteName(string site) => site == Places.Town ? "Pueblo o ciudad" : Places.Names[site];
@@ -382,6 +382,13 @@ namespace Bastion.Engine.Tests
             /// alive on the ground when La Lata went (LeftBehindEvent: Unit.Lost).
             /// </summary>
             public bool Turned, Killed, Left, AntiviralLost;
+            /// <summary>
+            /// G23.4 Separados' (Producto, 20/11): its two groups' sizes (none: a Saqueo of the stage), and per group the turn its
+            /// first got into La Lata and the turn it was all fallen (null: never).
+            /// </summary>
+            public int[] SplitSizes = new int[0];
+            public int?[] SplitArrived = new int?[2], SplitFell = new int?[2];
+            public bool SplitFellBefore(int g) => SplitFell[g] != null && SplitArrived[g] == null;
         }
 
         private sealed class Expedition
@@ -391,8 +398,8 @@ namespace Bastion.Engine.Tests
             public string? Ended;
             /// <summary>La llave's on its map, and in reach from where it went out (all of them: from row 1).</summary>
             public int Keys;
-            /// <summary>G23.2 Mordido's on its map, likewise; G23.3 El herido's.</summary>
-            public int Bitten, Wounded;
+            /// <summary>G23.2 Mordido's on its map, likewise; G23.3 El herido's; G23.4 Separados'.</summary>
+            public int Bitten, Wounded, Split;
             public readonly List<Leg> Legs = new List<Leg>();
         }
 
@@ -485,6 +492,7 @@ namespace Bastion.Engine.Tests
             var lost = false;
             var bite = new Leg();
             string? back = null;
+            var split = new Leg();
             var played = CampaignAutoRun.Run(seed, 1000,
                 watch: (c) =>
                 {
@@ -492,7 +500,7 @@ namespace Bastion.Engine.Tests
                     {
                         if (now == null)
                         {
-                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c), Keys = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Key), Bitten = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Bitten), Wounded = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Wounded) };
+                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c), Keys = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Key), Bitten = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Bitten), Wounded = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Wounded), Split = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Split) };
                             ch.Expeditions.Add(now);
                         }
                         now.Row = Math.Max(now.Row, RowOf(c.Run.At));
@@ -549,12 +557,26 @@ namespace Bastion.Engine.Tests
                         seen.DeadTurn = bite.DeadTurn;
                         seen.WoundedDead = !hw.Alive && hw.CarriedBy == null && !hw.Evacuated;
                     }
+                    if (s.Mission.Split != null)
+                    {
+                        seen.SplitSizes = s.Mission.Split.Select((g) => g.Count).ToArray();
+                        seen.SplitArrived = split.SplitArrived;
+                        seen.SplitFell = split.SplitFell;
+                    }
                     bite = new Leg();
                     back = null;
+                    split = new Leg();
                 },
                 playing: (s) =>
                 {
                     lost |= Looting.KeyLost(s);
+                    if (s.Mission.Split != null)
+                        for (var g = 0; g < s.Mission.Split.Count; g++)
+                        {
+                            var group = s.Mission.Split[g].Select((id) => Grid.GetUnit(s, id)).Where((u) => u != null).Select((u) => u!).ToList();
+                            if (split.SplitArrived[g] == null && group.Any((u) => u.Evacuated)) split.SplitArrived[g] = s.Turn;
+                            if (split.SplitFell[g] == null && !group.Any((u) => u.Alive || u.Evacuated)) split.SplitFell[g] = s.Turn;
+                        }
                     if (Rules.WoundedOf(s) is Unit hurt)
                     {
                         if (bite.FoundTurn == null && s.Mission.SurvivorFound == true) bite.FoundTurn = s.Turn;
@@ -727,13 +749,39 @@ namespace Bastion.Engine.Tests
                 foreach (var g in rescueLegs.GroupBy((l) => l.Row <= 2 ? "fila 2" : l.Row <= 4 ? "filas 3–4" : "fila 5").Where((g) => g.Key != "fila 1").OrderBy((g) => g.Key)) Row2($"Rescate, {g.Key}", g.Where((l) => l.Row >= 2).ToList());
                 Row2("Rescate, todos (filas 1–5)", rescueLegs);
             }
+            // G23.4 Separados (Producto, 20/11: on the maps with R2), against the Saqueo in the same bench, by row.
+            var splitLegs = legs.Where((l) => l.Kind == NodeKinds.Split).ToList();
+            lines.Add("");
+            lines.Add("## Separados");
+            lines.Add("");
+            lines.Add($"- En los mapas: {expeditions.Sum((e) => e.Split)} en {expeditions.Count} expediciones ({expeditions.Sum((e) => e.Split) / (double)Math.Max(1, expeditions.Count):0.00} por mapa; {expeditions.Count((e) => e.Split > 0) / (double)Math.Max(1, expeditions.Count):P0} de los mapas con alguno); {expeditions.Sum((e) => e.Split) / (double)count:0.0} por capítulo.");
+            lines.Add($"- Jugados: {splitLegs.Count} en {count} capítulos ({splitLegs.Count / (double)count:0.00} por capítulo; filas {string.Join(", ", splitLegs.GroupBy((l) => l.Row).OrderBy((g) => g.Key).Select((g) => $"{g.Key}: {g.Count()}"))}).");
+            if (splitLegs.Count > 0)
+            {
+                var paired = splitLegs.Where((l) => l.SplitSizes.Length == 2).ToList();
+                lines.Add($"- Con dos grupos: {paired.Count} (grupos {string.Join(", ", paired.GroupBy((l) => $"{l.SplitSizes[0]}+{l.SplitSizes[1]}").OrderBy((g) => g.Key).Select((g) => $"{g.Key}: {g.Count()}"))}); sin ellos (un soldado), {splitLegs.Count - paired.Count}.");
+                lines.Add($"- Cae un grupo entero antes de llegar: {paired.Count((l) => l.SplitFellBefore(0) || l.SplitFellBefore(1))} de {paired.Count}.");
+                lines.Add("");
+                lines.Add("| | combates | premio (ganados) | sin premio | cae la escuadra entera | caídos (media) | § sueltos (media) |");
+                lines.Add("|---|---|---|---|---|---|---|");
+                void Row3(string name, List<Leg> ls)
+                {
+                    if (ls.Count > 0) lines.Add($"| {name} | {ls.Count} | {ls.Count((l) => l.Victory)} | {ls.Count((l) => !l.Victory && l.Ended != RunEnds.Wiped)} | {ls.Count((l) => l.Ended == RunEnds.Wiped)} | {ls.Average((l) => l.Fallen):0.0} | {ls.Average((l) => l.Supplies + l.Reward):0} |");
+                }
+                string RowsOf(Leg l) => l.Row <= 2 ? "fila 2" : l.Row <= 4 ? "filas 3–4" : "fila 5";
+                foreach (var g in splitLegs.GroupBy(RowsOf).OrderBy((g) => g.Key)) Row3($"Separados, {g.Key}", g.ToList());
+                Row3("Separados, todos", splitLegs);
+                var saqueo = legs.Where((l) => l.Kind == NodeKinds.Normal && l.Row >= 2).ToList();
+                foreach (var g in saqueo.GroupBy(RowsOf).OrderBy((g) => g.Key)) Row3($"Saqueo, {g.Key}", g.ToList());
+                Row3("Saqueo, todos (filas 2–5)", saqueo);
+            }
             lines.Add("");
             lines.Add("## Cada expedición");
             lines.Add("");
             foreach (var ch in chapters)
                 foreach (var e in ch.Expeditions)
                     lines.Add($"{ch.Seed}·{e.Index}: {e.Squad} de {e.Soldiers} vivos, armas {e.Arms}, mejoras «{e.Upgrades}», § {e.Before} → {e.After}, fila {e.Row}, acaba {e.Ended ?? "-"}: "
-                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.KeyAt != null ? $" llave {l.KeyAt}{(l.KeyLost ? " PERDIDA" : "")}, armería {(l.ArmoryOpen ? "abierta" : "cerrada")} {l.ArmorySearched}/{l.ArmoryPieces}" : "")}{(l.Kind == NodeKinds.Wounded ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, cargado t{l.CarriedTurn?.ToString() ?? "-"}, dentro t{l.AboardTurn?.ToString() ?? "-"}, {l.Relays} relevos{(l.WoundedDead ? ", MUERE" : "")}" : "")}{(l.Kind == NodeKinds.Bitten ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, antiviral t{l.AntiviralTurn?.ToString() ?? "-"}, curado t{l.CuredTurn?.ToString() ?? "-"}{(l.Turned ? ", CONVERTIDO" : "")}{(l.Killed ? ", MUERTO" : "")}{(l.Left ? ", EN TIERRA" : "")}{(l.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "")}{(l.Matched ? "" : " ¿?")}")));
+                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.KeyAt != null ? $" llave {l.KeyAt}{(l.KeyLost ? " PERDIDA" : "")}, armería {(l.ArmoryOpen ? "abierta" : "cerrada")} {l.ArmorySearched}/{l.ArmoryPieces}" : "")}{(l.Kind == NodeKinds.Wounded ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, cargado t{l.CarriedTurn?.ToString() ?? "-"}, dentro t{l.AboardTurn?.ToString() ?? "-"}, {l.Relays} relevos{(l.WoundedDead ? ", MUERE" : "")}" : "")}{(l.Kind == NodeKinds.Bitten ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, antiviral t{l.AntiviralTurn?.ToString() ?? "-"}, curado t{l.CuredTurn?.ToString() ?? "-"}{(l.Turned ? ", CONVERTIDO" : "")}{(l.Killed ? ", MUERTO" : "")}{(l.Left ? ", EN TIERRA" : "")}{(l.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "")}{(l.SplitSizes.Length == 2 ? $" grupos {l.SplitSizes[0]}+{l.SplitSizes[1]}, llegan t{l.SplitArrived[0]?.ToString() ?? "-"}/t{l.SplitArrived[1]?.ToString() ?? "-"}, caen t{l.SplitFell[0]?.ToString() ?? "-"}/t{l.SplitFell[1]?.ToString() ?? "-"}" : "")}{(l.Matched ? "" : " ¿?")}")));
             File.WriteAllLines(Path.Combine(BenchFactAttribute.Folder!, "r2.md"), lines);
             foreach (var l in lines.Take(30)) output.WriteLine(l);
             Assert.All(chapters, (c) => Assert.Null(c.Stuck));

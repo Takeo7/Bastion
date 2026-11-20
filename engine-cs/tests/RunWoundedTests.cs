@@ -70,7 +70,8 @@ namespace Bastion.Engine.Tests
             var hurt = nodes.Where((n) => n.Kind == NodeKinds.Wounded).ToList();
             Assert.All(hurt, (n) => Assert.InRange(n.Row, 2, RunMap.NodeRows));
             double share = hurt.Count / (double)nodes.Count((n) => n.Row >= 2 && n.Row <= RunMap.NodeRows);
-            Assert.InRange(share, 0.015, 0.04);
+            // One special in twelve since Separados (G23.4, 20/11: 0.0147 on these 500 maps, 0.016 before).
+            Assert.InRange(share, 0.012, 0.04);
             // Where a Rescate is: the six places and the special maps for them, never the Key's or Mordido's own only.
             var rescue = nodes.Where((n) => n.Kind == NodeKinds.Rescue).Select((n) => n.Site).Distinct().ToList();
             Assert.All(hurt, (n) => Assert.Contains(n.Site, rescue));

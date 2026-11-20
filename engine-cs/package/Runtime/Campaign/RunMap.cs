@@ -24,14 +24,33 @@ namespace Bastion.Engine
         /// Travesía, Sigilo, Guarida). Without «Arreglar la radio» since T2 (Arturo, 18/11: «se quita la etapa», and all of
         /// fixing with it): its share goes to the others. La llave since G23.1, from row KeyFrom only, always at a police
         /// station. Mordido since G23.2 (Arturo, cuadro 90: «Como está, y lo pruebo yo»), rows 2–5, always at the hospital.
-        /// El herido since G23.3 (Arturo, cuadro 92; Producto, 19/11: the 0.13.5), rows 2–5, on a Rescate's maps.
+        /// El herido since G23.3 (Arturo, cuadro 92; Producto, 19/11: the 0.13.5), rows 2–5, on a Rescate's maps. Separados
+        /// since G23.4 (Arturo, cuadros 94 and 95; Producto, 20/11), rows 2–5, on the open maps only (SplitSites), never
+        /// «Despiertos» from the map (ModifiersFor).
         /// </summary>
         public static readonly IReadOnlyList<string> Specials = new[]
         {
             NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Rescue,
             NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Key, NodeKinds.Bitten,
-            NodeKinds.Wounded,
+            NodeKinds.Wounded, NodeKinds.Split,
         };
+
+        /// <summary>
+        /// G23.4 Separados' sites (Arturo, cuadro 94): the open ones, where La Lata stands between two starts (SEPARADOS.md:
+        /// not the camping nor the plaza, nor a map of one building). All SiteMix draws: never a special map (SpecialFor).
+        /// </summary>
+        public static readonly IReadOnlyList<string> SplitSites = new[] { Places.City, Places.Town, Places.Estate, Places.Factory, Places.Roadside, Places.Country };
+
+        /// <summary>
+        /// A node's modifiers to draw from: Separados never with the horde awake (Producto, 20/11: till the bots measure it);
+        /// an event's for the next fight (RunState.Pending), though, it takes (the player chose it).
+        /// </summary>
+        public static IReadOnlyList<string> ModifiersFor(string kind) => kind == NodeKinds.Split ? SplitModifiers : Modifiers.All;
+
+        private static readonly IReadOnlyList<string> SplitModifiers = Modifiers.All.Where((m) => m != Modifiers.Awake).ToList();
+
+        /// <summary>Whether a fight won pays a special's reward (RunFights.ApplyFight): the specials on the maps.</summary>
+        public static bool Rewarded(string kind) => Specials.Contains(kind) || NewSpecials.Contains(kind);
 
         /// <summary>G23.1 La llave from this row (Producto, 19/11: its armoury full arms a squad at once; rows 1–2 are knives').</summary>
         public const int KeyFrom = 3;
@@ -132,7 +151,8 @@ namespace Bastion.Engine
         /// </summary>
         public static string? SpecialFor(RunNode n)
         {
-            if (n.Seed == null || n.Kind == NodeKinds.Boss) return null;
+            // Separados (G23.4), only out of doors and with La Lata between its two starts: as drawn (SplitSites).
+            if (n.Seed == null || n.Kind == NodeKinds.Boss || n.Kind == NodeKinds.Split) return null;
             // Mordido's, always (G23.2: the one map with medicine cabinets and shelves enough).
             if (n.Kind == NodeKinds.Bitten) return Places.Hospital;
             var seed = Math.Abs(n.Seed.Value);
@@ -209,7 +229,7 @@ namespace Bastion.Engine
             RescueInReach(rng, rows, all);
             foreach (var n in all.Where((x) => IsFight(x.Kind)))
             {
-                if (n.Row >= 2 && n.Kind != NodeKinds.Boss && rng.Int(100) < ModifierChance) n.Modifier = rng.Pick(Modifiers.All);
+                if (n.Row >= 2 && n.Kind != NodeKinds.Boss && rng.Int(100) < ModifierChance) n.Modifier = rng.Pick(ModifiersFor(n.Kind));
                 n.Seed = (int)Math.Floor(rng.Next() * 2147483648.0);
                 n.Site = n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss ? Places.Factory : n.Kind == NodeKinds.Key ? Places.Police
                     // Mordido (G23.2): a town's or a city's, the hospital (SpecialFor) with its flag.

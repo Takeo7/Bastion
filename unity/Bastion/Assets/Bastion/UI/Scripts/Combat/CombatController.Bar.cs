@@ -436,7 +436,8 @@ namespace Bastion.UI.Combat
             var armed = evacArmed == aboard.Id && Time.time < evacArmedUntil;
             var go = CallKey("evac", armed ? $"Confirmar: {p.Go}" : p.Go, $"{p.Title}. {p.Text}");
             go.Active = armed;
-            go.Cost = EvacPartner() != null ? $"Lo acepta {PartnerHere()?.Name ?? "el otro jugador"}" : "Termina la misión";
+            // In an expedition it is the stage that ends (Lore, 20/11).
+            go.Cost = EvacPartner() != null ? $"Lo acepta {PartnerHere()?.Name ?? "el otro jugador"}" : s.Run != null ? "Termina la etapa" : "Termina la misión";
             // El herido out and alive (U25; the engine refuses it): off, why in Lore's words, named once they've been seen.
             // Its card says only that (Producto, 19/11): La Lata's own words, «si salís ahora…», over a key that doesn't let
             // anyone out, contradicted it.

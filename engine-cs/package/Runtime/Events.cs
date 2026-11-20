@@ -1391,6 +1391,7 @@ namespace Bastion.Engine
                     Sky = m.Sky,
                     Bitten = m.Bitten,
                     Wounded = m.Wounded,
+                    Split = m.Split?.Select((g) => g.ToList()).ToList(),
                     BiteTurns = m.BiteTurns,
                     Cured = m.Cured,
                     Antiviral = m.Antiviral != null ? Gears.CloneGear(m.Antiviral) : null,

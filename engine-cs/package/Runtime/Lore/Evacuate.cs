@@ -13,17 +13,24 @@ namespace Bastion.Engine
         /// `clearing`: a Limpieza, where leaving is a retreat that loses the mission;
         /// `ready`: the objective is done (always so in a Saqueo); `left`: who would
         /// stay outside; `noSeat`: who is in the zone but has no seat, of `seats`
-        /// (Arturo, 17/11: a Rescate's survivor takes one, and whoever doesn't fit is lost).
+        /// (Arturo, 17/11: a Rescate's survivor takes one, and whoever doesn't fit is lost); `splitShort`: a Separados'
+        /// group with nobody aboard, its living by name (Rules.SplitShort; G23.4), the reward lost if it went now.
+        /// In an expedition: `stage`, its node's kind (RunFight.NodeKind); `boss`, the boss's name on its stage; `lost`, the
+        /// reward already out of reach, so nothing is warned of but that (Rules.SplitLost; Mordido turned, El herido dead).
         /// </summary>
         public sealed class EvacSituation
         {
-            public EvacSituation(bool clearing, bool ready, IReadOnlyList<string> left, IReadOnlyList<string>? noSeat = null, int seats = 0)
+            public EvacSituation(bool clearing, bool ready, IReadOnlyList<string> left, IReadOnlyList<string>? noSeat = null, int seats = 0, IReadOnlyList<string>? splitShort = null, string? stage = null, string? boss = null, bool lost = false)
             {
                 Clearing = clearing;
                 Ready = ready;
                 Left = left;
                 NoSeat = noSeat ?? new string[0];
                 Seats = seats;
+                SplitShort = splitShort ?? new string[0];
+                Stage = stage;
+                Boss = boss;
+                Lost = lost;
             }
 
             public bool Clearing { get; }
@@ -31,20 +38,38 @@ namespace Bastion.Engine
             public IReadOnlyList<string> Left { get; }
             public IReadOnlyList<string> NoSeat { get; }
             public int Seats { get; }
+            public IReadOnlyList<string> SplitShort { get; }
+            public string? Stage { get; }
+            public string? Boss { get; }
+            public bool Lost { get; }
         }
 
-        /// <summary>What leaving now costs, in a sentence or two: the mission, and who stays outside.</summary>
+        /// <summary>
+        /// What leaving now costs, in a sentence or two: the mission, and who stays outside. In an expedition (seats counted)
+        /// it is what the run does with a fight lost with someone out (RunFights.ApplyFight; Lore, 20/11): the stage is passed
+        /// without its reward, and without the recruit in Mordido and El herido; the boss's alive, the expedition is over.
+        /// </summary>
         private static string EvacStakes(EvacSituation o)
         {
+            var run = o.Stage != null || o.Seats > 0;
+            var recruit = o.Stage == NodeKinds.Bitten || o.Stage == NodeKinds.Wounded;
+            var split = !o.Clearing && !o.Lost && o.SplitShort.Count > 0;
             var lose = o.Clearing
-                ? "Si os vais ahora, la Limpieza queda a medias y la misión se pierde."
-                : !o.Ready
-                    ? "El objetivo no está cumplido: si salís ahora, la misión se pierde."
-                    : "";
+                ? run ? "Si os vais ahora, la Limpieza queda a medias: la etapa se supera sin la recompensa." : "Si os vais ahora, la Limpieza queda a medias y la misión se pierde."
+                : o.Lost
+                    ? recruit ? "Ya no hay recluta ni recompensa." : "Ya no hay recompensa."
+                    : o.Ready || split
+                        ? ""
+                        : o.Stage == NodeKinds.Boss
+                            ? $"{o.Boss ?? "El jefe"} sigue en pie: si salís ahora, la expedición acaba y volvéis a la base."
+                            : run
+                                ? $"El objetivo no está cumplido: si salís ahora, la etapa se supera {(recruit ? "sin recluta ni recompensa" : "sin la recompensa")}."
+                                : "El objetivo no está cumplido: si salís ahora, la misión se pierde.";
             // In an expedition (seats counted, T24), say why: not got on yet, or no seat left (Red and Producto, 18/11).
             var boarding = o.Seats > 0;
+            // Nobody out: in an expedition those on its tiles get in as it goes (DepartEvac), not yet inside (UI, 20/11).
             var @out = o.Left.Count == 0
-                ? o.NoSeat.Count == 0 ? "Estáis todos dentro." : ""
+                ? o.NoSeat.Count == 0 ? boarding ? "Salís todos." : "Estáis todos dentro." : ""
                 : o.Left.Count == 1
                     ? boarding ? $"{o.Left[0]} no ha subido: se quedaría fuera, y se perdería." : $"{o.Left[0]} se quedaría fuera, y se perdería."
                     : boarding ? $"{JoinAnd(o.Left)} no han subido: se quedarían fuera, y se perderían." : $"{JoinAnd(o.Left)} se quedarían fuera, y se perderían.";
@@ -53,7 +78,14 @@ namespace Bastion.Engine
                 : o.NoSeat.Count == 1
                     ? $"No queda plaza: {o.NoSeat[0]} se quedaría fuera, y se perdería."
                     : $"No queda plaza: {JoinAnd(o.NoSeat)} se quedarían fuera, y se perderían.";
-            return string.Join(" ", new[] { lose, @out, seat }.Where((x) => x.Length > 0));
+            // Separados (G23.4): the group with nobody aboard, after who stays out; «su grupo» when they are just those, and
+            // one left of it by name, «Sin Erik a bordo» (Producto, 20/11: «su grupo» of one is too much).
+            var group = !split
+                ? ""
+                : o.SplitShort.Count > 1 && o.Left.Count == o.SplitShort.Count && o.SplitShort.All(o.Left.Contains)
+                    ? "Sin nadie de su grupo a bordo, la etapa se supera sin la recompensa."
+                    : $"Sin {SplitText.NobodyOf(o.SplitShort)} a bordo, la etapa se supera sin la recompensa.";
+            return string.Join(" ", new[] { lose, @out, group, seat }.Where((x) => x.Length > 0));
         }
 
         /// <summary>The prompt on reaching the bus: its title, its text, and its two buttons.</summary>
@@ -79,7 +111,7 @@ namespace Bastion.Engine
         /// </summary>
         public static EvacPromptText EvacPrompt(EvacSituation o, string? partner)
         {
-            var title = o.Clearing ? "Retirada" : o.Ready ? $"Evacuar {Bus.In}" : "Evacuar sin el objetivo";
+            var title = o.Clearing ? "Retirada" : o.Ready || o.Lost ? $"Evacuar {Bus.In}" : o.SplitShort.Count > 0 ? SplitText.EvacTitle : "Evacuar sin el objetivo";
             var text = !string.IsNullOrEmpty(partner) ? $"{EvacStakes(o)} {partner} tiene que aceptar." : EvacStakes(o);
             return new EvacPromptText(title, text, o.Clearing ? "Retirarse" : !string.IsNullOrEmpty(partner) ? "Pedir evacuar" : "Evacuar", "Esperar");
         }

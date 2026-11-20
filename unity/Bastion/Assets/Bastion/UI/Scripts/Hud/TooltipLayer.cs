@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -150,10 +151,11 @@ namespace Bastion.UI.Hud
         }
 
         /// <summary>
-        /// An element tips stay clear of, going up over it (the picked one's sheet over the cards: Producto, 18/11, a bust's
-        /// help lay on it and both read mixed); not for its own.
+        /// Elements tips stay clear of, going up over them (the picked one's sheet over the cards: Producto, 18/11, a bust's
+        /// help lay on it and both read mixed; U27, the notes and the bar's «Turno de Ana…» plate under a key's help); not
+        /// for their own. Asked for as each tip is placed: some are made again as they change (the bar's plate).
         /// </summary>
-        public VisualElement KeepClear;
+        public readonly List<Func<VisualElement>> KeepClear = new List<Func<VisualElement>>();
 
         void Place()
         {
@@ -165,11 +167,16 @@ namespace Bastion.UI.Hud
             var screen = layer.layout;
             var x = Mathf.Clamp(t.center.x - size.x / 2, Gap, Mathf.Max(Gap, screen.width - size.x - Gap));
             var y = t.yMin - size.y - Gap;
-            if (KeepClear != null && KeepClear.resolvedStyle.display != DisplayStyle.None && KeepClear.panel != null && !KeepClear.Contains(over))
-            {
-                var c = KeepClear.worldBound;
-                if (x < c.xMax && x + size.x > c.xMin && y < c.yMax && y + size.y > c.yMin) y = c.yMin - size.y - Gap;
-            }
+            // Up over each in the way; twice, as going over one may land on another.
+            for (var pass = 0; pass < 2; pass++)
+                foreach (var of in KeepClear)
+                {
+                    var keep = of?.Invoke();
+                    if (keep == null || keep.resolvedStyle.display == DisplayStyle.None || keep.panel == null || keep.Contains(over)) continue;
+                    var c = keep.worldBound;
+                    if (!(c.height > 0)) continue;
+                    if (x < c.xMax && x + size.x > c.xMin && y < c.yMax && y + size.y > c.yMin) y = c.yMin - size.y - Gap;
+                }
             if (y < Gap) y = t.yMax + Gap;
             box.style.left = x;
             box.style.top = y;

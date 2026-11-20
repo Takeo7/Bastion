@@ -149,10 +149,13 @@
 }
 
 /* Over the keys and their slips (the keys stand on the clock: 8 + 14 + 60, a slip 14 over them). */
+/* Over the keys' row, as wide as the room beside the squad's plate (HudRoot.PlaceActions sets the left and the width;
+   U27: the evacuation's long warning ran the whole screen over the busts). */
 .notes {
     position: absolute;
-    left: 0;
-    right: 0;
+    left: 50%;
+    width: 560px;
+    translate: -50% 0;
     bottom: 104px;
     align-items: center;
 }

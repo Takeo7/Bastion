@@ -132,6 +132,8 @@ namespace Bastion.UI.Hud
         public bool Rounds;
         public string Title;
         public List<TagView> Tags = new List<TagView>();
+        /// <summary>The first of Separados' second group (U27): a wider gap before it, with a line down it.</summary>
+        public bool GroupStart;
     }
 
     [Serializable]
@@ -638,6 +640,8 @@ namespace Bastion.UI.Hud
         public Vector3 World;
         /// <summary>An icon of the table before the words, or none (El herido's crutch, U26).</summary>
         public string Icon;
+        /// <summary>Its colour («#rrggbb») over its kind's, for the frame, the arrow and the words; null, its kind's (Separados' other group in its player's, U27).</summary>
+        public string Color;
     }
 
     [Serializable]

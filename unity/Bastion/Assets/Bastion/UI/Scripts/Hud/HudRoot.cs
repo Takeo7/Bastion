@@ -90,7 +90,8 @@ namespace Bastion.UI.Hud
             gear = new Bastion.UI.Gear.GearBoard(root, tips, Icon, gearRelay) { Cell = 40, PictureOf = Bastion.Client.GearPictures.Of, CanThrow = false };
             unit = new UnitPanel(root.Q("unit-panel"), root.Q("pack"), relay, tips, Icon) { Gear = gear };
             // A bust's help over the picked one's sheet, not on it (Producto, 18/11).
-            tips.KeepClear = root.Q("unit-panel");
+            var sheet = root.Q("unit-panel");
+            tips.KeepClear.Add(() => sheet);
             abilitiesHost = root.Q("abilities");
             bar = new ActionBar(abilitiesHost, relay, tips, Icon);
             shot = new ShotPanel(root.Q("shot-panel"), relay, tips);
@@ -110,14 +111,21 @@ namespace Bastion.UI.Hud
             flags = new UnitFlags(root.Q("flags"), Icon);
             flags.TargetPicked += id => TargetPicked?.Invoke(id);
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at), Icon);
+            // The arrows off the panels (U27): the objective's card and what goes under it, the squad's plate and sheet, the bar.
+            foreach (var name in new[] { "goal", "compass", "log", "unit-panel", "squad-plate", "abilities", "end-slot" }) edges.Avoid.Add(root.Q(name));
             goalArrow = new GoalArrow(root.Q("goal-arrow"), tips);
             sight = new SightButton(root.Q("sight"), tips);
             sight.Toggled += () => SightToggled?.Invoke();
             miniMap = new MiniMap(root.Q("mini-map"));
             banner = new Banner(root.Q("banner"), relay, s => Sound?.Invoke(s));
-            notes = new Notes(root.Q("notes"));
+            notesHost = root.Q("notes");
+            notes = new Notes(notesHost);
             // A menu open on the bar (the guns, Lanzar…): the notes go up over it, not on its keys (Ana, Arturo 31/10 #2).
             bar.MenuShown += open => root.Q("notes").EnableInClassList("notes--over-menu", open);
+            // A key's help above a note over the bar, and above the bar's own plate, rather than on them (U27, Producto:
+            // «Aceptar evacuación» on «Turno de Ana: puedes planear los movimientos»).
+            tips.KeepClear.Add(() => notesHost);
+            tips.KeepClear.Add(() => abilitiesHost.Q(className: "abilities__lock"));
             window = new BattleWindow(root, tips, s => Sound?.Invoke(s));
             menu = new GameMenu(root, tips, s => Sound?.Invoke(s));
             menu.Chose += what => MenuChose?.Invoke(what);
@@ -190,7 +198,16 @@ namespace Bastion.UI.Hud
             if (!float.IsNaN(actionsLeft) && Mathf.Abs(left - actionsLeft) < 2) return;
             actionsLeft = left;
             actions.style.left = left;
+            // The notes over the keys' row, and no wider than the room either side of its middle (U27, Producto: the
+            // evacuation's long warning ran the whole width over the busts): broken into lines on their plate.
+            notesHost.style.left = left;
+            notesHost.style.width = Mathf.Max(240, Mathf.Min(NotesMax, 2 * Mathf.Min(left - plate, width - left - 24)));
         }
+
+        /// <summary>The notes' widest (U27): a long warning in three or four lines, not one across the screen.</summary>
+        const float NotesMax = 560;
+
+        VisualElement notesHost;
 
         /// <summary>Where PlaceActions last put the keys' row (panel pixels); NaN, not yet.</summary>
         float actionsLeft = float.NaN;

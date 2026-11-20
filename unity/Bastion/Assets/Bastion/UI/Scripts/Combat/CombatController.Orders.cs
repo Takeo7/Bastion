@@ -735,16 +735,26 @@ namespace Bastion.UI.Combat
         /// <summary>
         /// Lore.EvacSituation of `s` (the event player's too): outside, and the bitten with no Cuarentena to go to (playtest
         /// 15/10 #13), they stay; a run's survivor still waiting to be talked to is nobody's yet, not one who stays (N2).
+        /// In an expedition (U27, Lore and Producto, 20/11), what its stage costs: Separados' group with nobody going, by name
+        /// (Rules.SplitShort); the stage's kind; the boss's name on his; and the reward already out of reach (`lost`: a
+        /// Separados' group all fallen, Mordido's bitten turned, El herido dead), when only that is said.
         /// </summary>
         public static Lore.EvacSituation Situation(GameState s)
         {
             var waiting = Abilities.Waiting(s);
+            var m = s.Mission;
+            var gone = (m.Bitten == true || m.Wounded == true) && UnitById(s, m.ObjectiveUnit) is Unit vip && !vip.Alive && !vip.Evacuated;
             return new Lore.EvacSituation(
-                s.Mission.Kind == MissionKinds.Elimination,
+                m.Kind == MissionKinds.Elimination,
                 Rules.EvacWins(s),
-                s.Units.Where(x => x.Alive && x.Team == Teams.Xcom && x.Id != waiting?.Id && !Abilities.InEvacZone(s, x.Pos)).Select(x => x.Name).ToList(),
+                // Mordido's bitten not cured stays outside even on La Lata's tiles: it never takes them (Lore, 20/11).
+                s.Units.Where(x => x.Alive && x.Team == Teams.Xcom && x.Id != waiting?.Id && (!Abilities.InEvacZone(s, x.Pos) || Rules.BittenUncured(s, x))).Select(x => x.Name).ToList(),
                 Rules.NoSeat(s).Select(x => x.Name).ToList(),
-                s.Mission.Seats ?? 0);
+                m.Seats ?? 0,
+                Rules.SplitShort(s)?.Select(x => x.Name).ToList(),
+                s.Run?.NodeKind,
+                !string.IsNullOrEmpty(m.Boss) ? UnitById(s, m.Boss)?.Name : null,
+                Rules.SplitLost(s) || gone);
         }
 
         /// <summary>

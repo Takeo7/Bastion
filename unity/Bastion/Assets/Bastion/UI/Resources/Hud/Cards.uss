@@ -165,12 +165,16 @@
 
 /* ================================================================= notes */
 
+/* A long one (U27: the evacuation's warning) broken into lines, centred, on its plate, no wider than the notes. */
 .note {
     margin-top: 4px;
     padding: 3px 12px;
     font-size: 18px;
     background-color: var(--t-tag);
     rotate: -1deg;
+    max-width: 100%;
+    white-space: normal;
+    -unity-text-align: middle-center;
 }
 
 /* A key moment of the partner's, with «Ver (F)», in their colour (border set from C#). */

@@ -168,6 +168,9 @@ namespace Bastion.UI.EditorTools
             // El herido (U26): the crutch, its stage on the map and the arrow at the screen's edge to them on the floor (not
             // Rescate's cross nor Mordido's biohazard). Every stage needs its icon: NodeIconsCheck says which lack one.
             ("node:wounded", Crutch),
+            // Separados (U27): two of Military Combat's busts apart (u27/separados.swift; Arturo, cuadro 96, over Dark
+            // Fantasy's flag and two arrows meeting). Also the other group's arrow at the screen's edge.
+            ("node:split", "n-separados-dos"),
             // The runs' base tabs: Almacén a backpack, Mejoras the workshop's tools (Salir is the Escuadra's La Lata).
             ("tab:stash", Backpack), ("tab:upgrades", "ICON_Apocalpyse_Inventory_Crafting_01"),
         };

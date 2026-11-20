@@ -15,6 +15,17 @@
     align-items: flex-start;
 }
 
+/* Separados' two groups apart (U27; SquadList.GroupGap, 14 px in all): a line down the middle of the wider gap. */
+.squad-cards__divider {
+    width: 2px;
+    margin-left: 6px;
+    margin-right: 6px;
+    margin-bottom: 6px;
+    margin-top: 6px;
+    align-self: stretch;
+    background-color: rgba(236, 235, 230, 0.4);
+}
+
 .squad-card {
     padding: 2px;
     background-color: var(--m-steel-lo);

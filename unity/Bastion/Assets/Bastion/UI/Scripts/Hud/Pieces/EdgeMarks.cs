@@ -33,6 +33,15 @@ namespace Bastion.UI.Hud
         readonly List<Shown> shown = new List<Shown>();
         string key;
 
+        /// <summary>
+        /// The panels the arrows keep off (U27: Separados' arrow to the top right went under the objective's card, and one
+        /// to the bottom left onto the busts): the elements, whichever are shown.
+        /// </summary>
+        public IList<VisualElement> Avoid = new List<VisualElement>();
+
+        /// <summary>The room an arrow keeps from a panel it is moved off.</summary>
+        const float Gap = 6;
+
         public EdgeMarks(VisualElement layer, TooltipLayer tips, Action<Vector3> look, Func<string, Sprite> icons = null)
         {
             this.layer = layer;
@@ -63,8 +72,16 @@ namespace Bastion.UI.Hud
                 var el = Ui.El("edge-mark panel edge-mark--" + mark.Kind, layer);
                 var arrow = new Arrow();
                 el.Add(arrow);
-                if (!string.IsNullOrEmpty(mark.Icon)) Ui.Icon(icons, mark.Icon, "edge-mark__icon", el);
-                Ui.Text(mark.Label, "edge-mark__label", el);
+                var icon = !string.IsNullOrEmpty(mark.Icon) ? Ui.Icon(icons, mark.Icon, "edge-mark__icon", el) : null;
+                var label = Ui.Text(mark.Label, "edge-mark__label", el);
+                // A colour of its own (U27): the frame, the arrow, the words and the icon in it.
+                if (!string.IsNullOrEmpty(mark.Color) && ColorUtility.TryParseHtmlString(mark.Color, out var tint))
+                {
+                    el.style.borderLeftColor = el.style.borderRightColor = el.style.borderTopColor = el.style.borderBottomColor = tint;
+                    arrow.style.color = tint;
+                    label.style.color = tint;
+                    if (icon != null) icon.style.unityBackgroundImageTintColor = tint;
+                }
                 var at = mark.World;
                 el.RegisterCallback<ClickEvent>(_ => look?.Invoke(at));
                 tips.Attach(el, HudText.Keyed($"Centrar la cámara en: {mark.Name}", "O"));
@@ -112,6 +129,25 @@ namespace Bastion.UI.Hud
                 var halfH = float.IsNaN(box.y) ? 0 : box.y / 2;
                 var px = Mathf.Clamp(cx + dx * t, left + halfW, right - halfW);
                 var py = Mathf.Clamp(cy + dy * t, top + halfH, bottom - halfH);
+                // Off the panels: past the side of the one it lies on, the nearest way that stays within the edges.
+                foreach (var panel in Avoid)
+                {
+                    if (panel == null || panel.resolvedStyle.display == DisplayStyle.None || panel.resolvedStyle.visibility == Visibility.Hidden) continue;
+                    var r = layer.WorldToLocal(panel.worldBound);
+                    if (float.IsNaN(r.width) || r.width <= 0 || r.height <= 0) continue;
+                    if (!new Rect(px - halfW, py - halfH, 2 * halfW, 2 * halfH).Overlaps(r)) continue;
+                    var best = float.PositiveInfinity;
+                    var (bx, by) = (px, py);
+                    foreach (var (qx, qy) in new[] { (r.xMin - Gap - halfW, py), (r.xMax + Gap + halfW, py), (px, r.yMin - Gap - halfH), (px, r.yMax + Gap + halfH) })
+                    {
+                        if (qx < left + halfW || qx > right - halfW || qy < top + halfH || qy > bottom - halfH) continue;
+                        var d = Mathf.Abs(qx - px) + Mathf.Abs(qy - py);
+                        if (d >= best) continue;
+                        best = d;
+                        (bx, by) = (qx, qy);
+                    }
+                    (px, py) = (bx, by);
+                }
                 s.El.style.translate = new Translate(px - halfW, py - halfH);
                 // The arrow points right: turned as the direction (screen y goes down).
                 s.Arrow.style.rotate = new Rotate(Mathf.Atan2(dy, dx) * Mathf.Rad2Deg);

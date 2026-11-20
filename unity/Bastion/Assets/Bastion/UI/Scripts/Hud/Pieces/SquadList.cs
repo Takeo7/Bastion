@@ -21,6 +21,8 @@ namespace Bastion.UI.Hud
         const float CardW = 78;
         const float PickedMore = 14;
         const float Gap = 4;
+        /// <summary>The room before Separados' second group (U27), its line in the middle (SquadList.uss .squad-cards__divider).</summary>
+        const float GroupGap = 14;
         /// <summary>
         /// The row's widest, with more than four: the room left of the keys at 1440 (Ana, 7/11 #12: the partner's cards too,
         /// six and more in the row); the cards narrow to fit it, no narrower than MinW.
@@ -99,13 +101,19 @@ namespace Bastion.UI.Hud
                 }
                 return;
             }
-            var width = n <= 4 ? CardW : Mathf.Max(MinW, Mathf.Floor((MaxRow - PickedMore - (n - 1) * Gap) / n));
-            var row = n * width + PickedMore + Mathf.Max(0, n - 1) * Gap;
+            var groups = 0;
+            for (var i = 1; i < n; i++)
+                if (cards[i].GroupStart) groups++;
+            var extra = groups * (GroupGap - Gap);
+            var width = n <= 4 ? CardW : Mathf.Max(MinW, Mathf.Floor((MaxRow - PickedMore - (n - 1) * Gap - extra) / n));
+            var row = n * width + PickedMore + Mathf.Max(0, n - 1) * Gap + extra;
             plate.style.width = Mathf.Max(Least, row + 2 * Padding);
             for (var i = 0; i < n; i++)
             {
+                // Separados' groups apart (U27): the wider gap, a line down its middle.
+                if (i > 0 && cards[i].GroupStart) Ui.El("squad-cards__divider", host).pickingMode = PickingMode.Ignore;
                 var card = Card(cards[i], cards[i].Selected ? width + PickedMore : width);
-                if (i > 0) card.style.marginLeft = Gap;
+                if (i > 0 && !cards[i].GroupStart) card.style.marginLeft = Gap;
                 host.Add(card);
             }
         }

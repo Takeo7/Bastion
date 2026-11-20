@@ -26,6 +26,9 @@ namespace Bastion.Net
     /// La llave (G23.1; Gameplay, 19/11), a Saqueo with the police station's armoury locked: the squad kills and searches
     /// the dead in uniform (never knowing which holds the key: Mission.KeyHolder isn't looked at), picks the key up where
     /// it fell, takes it to the door and opens it, searches the armoury's furniture, and goes (KeyLeaving).
+    /// Separados (G23.4; Producto, 20/11), a Saqueo with the squad in two groups on either side of La Lata: each group goes
+    /// for La Lata from the start, searching only what it stands in or beside on the way; nobody asks it to go, nor says yes
+    /// to the partner's call, while the group with nobody going has one that can walk to it (SplitWaits).
     /// </summary>
     public static class MissionBot
     {
@@ -58,8 +61,9 @@ namespace Bastion.Net
         public static Command? Next(GameState s, int slot, IReadOnlyList<int> connected)
         {
             if (s.Outcome != null || s.ActiveTeam != Teams.Xcom) return null;
-            // The partner calls La Lata: yes. One's own call waits for the partner.
-            if (s.EvacCall != null) return s.EvacCall.By != slot ? new EvacAnswerCommand { Accept = true } : null;
+            // The partner calls La Lata: yes; in Separados, no while a group still to come can (G23.4). One's own call waits
+            // for the partner.
+            if (s.EvacCall != null) return s.EvacCall.By != slot ? new EvacAnswerCommand { Accept = !SplitWaits(s) } : null;
             var holds = s.Command == slot || s.Command == null || !connected.Contains(s.Command.Value);
             if (!holds || s.Ready[slot]) return null;
             // Inside La Lata (T24, Gameplay 18/11), with nobody left outside that can get to it: one of them asks it to go
@@ -148,6 +152,8 @@ namespace Bastion.Net
                 if (m.Lair != null || !string.IsNullOrEmpty(m.Boss)) return m.ObjectiveDone || Routed(s);
                 // La llave (G23.1): once its armoury is searched, or with nothing left to go for.
                 if (KeyFight(s)) return KeyLeaving(s, walksOf);
+                // Separados (G23.4): La Lata from the start, each group by its side.
+                if (SplitFight(s)) return true;
             }
             if (RunSaqueo(s)) return RunLeaving(s, roomOf);
             if (m.Kind == MissionKinds.Scavenge && m.EvacZone.Count > 0)
@@ -273,8 +279,9 @@ namespace Bastion.Net
                 && Looting.SearchableTiles(s, u).FirstOrDefault((p) => (UniformBody(s, p) && Looting.KeyWhere(s) == KeyPlaces.Holder) || (!leaving && Looting.KeyWhere(s) == KeyPlaces.Used && InArmory(s, p))) is Pos body)
                 return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = body };
             if (shot != null && !carrier && shot.Value.hit >= 30) return shot.Value.cmd;
-            // A run's Saqueo, before going: the room it stands in, then a box, a boot or a body beside it.
-            if (RunSaqueo(s) && !leaving)
+            // A run's Saqueo, before going: the room it stands in, then a box, a boot or a body beside it. Separados on the way
+            // to La Lata, the same, never a step aside for one (G23.4: the walk is movement, the search an action).
+            if ((RunSaqueo(s) && !leaving) || (SplitFight(s) && !Abilities.InEvacZone(s, u.Pos)))
             {
                 if (Usable(s, u, AbilityIds.SearchRoom)) return Ability(u, AbilityIds.SearchRoom);
                 var spot = Usable(s, u, AbilityIds.Search) ? Looting.SearchableTiles(s, u).FirstOrDefault() : null;
@@ -314,8 +321,11 @@ namespace Bastion.Net
             // and the blade alone waited by it for ever (R3: the offices' radio, 3000 turns).
             if (going && goal != null && !Abilities.InEvacZone(s, u.Pos) && Stride(s, u) >= Paths.CostOrtho && MoveToward(s, u, goal, Stride(s, u), leaving, walks, reckless: true) is Command push) return push;
             if (shot != null && shot.Value.hit >= 15) return shot.Value.cmd;
-            if (Usable(s, u, AbilityIds.Overwatch) && nearest <= Close * 2) return Ability(u, AbilityIds.Overwatch);
-            if (Usable(s, u, AbilityIds.OverwatchMelee) && nearest <= Close) return Ability(u, AbilityIds.OverwatchMelee);
+            // Separados hidden (G23.4): no watch kept. Its shot at one of the dead going by gave the squad away on the first
+            // turn, both groups at once (R13, 20/11: city, 2 seats, seed 1).
+            var watch = !(SplitFight(s) && s.Concealed);
+            if (watch && Usable(s, u, AbilityIds.Overwatch) && nearest <= Close * 2) return Ability(u, AbilityIds.Overwatch);
+            if (watch && Usable(s, u, AbilityIds.OverwatchMelee) && nearest <= Close) return Ability(u, AbilityIds.OverwatchMelee);
             if (Usable(s, u, AbilityIds.Hunker)) return Ability(u, AbilityIds.Hunker);
             return null;
         }
@@ -332,6 +342,8 @@ namespace Bastion.Net
             // out (R1, 19/11, hospital, knives, seed 12: four seats, four soldiers in first, the bitten left on the ground and
             // the stage lost). Not in a Rescate: there the survivor left behind loses nothing but a recruit.
             if (leaving && bus != null && LastSeatIsTheBittens(s, u, walksOf)) return null;
+            // Separados (G23.4): so too the group with nobody going's, not a survivor's nor another of the group already in.
+            if (leaving && bus != null && LastSeatIsTheShorts(s, u, walksOf)) return null;
             if (leaving && bus != null) return bus;
             if (WoundedFight(s) && !leaving) return WoundedGoal(s, u, walksOf(u)) ?? bus;
             if (m.Kind == MissionKinds.Recovery && m.Item != null && m.Item.Pos != null) return m.Item.Pos;
@@ -383,6 +395,8 @@ namespace Bastion.Net
         {
             // El herido alive and out of it: La Lata doesn't go (G23.3).
             if (Rules.WoundedOut(s)) return false;
+            // Separados: not while the group with nobody going has one that can walk to it, past the dead too (G23.4).
+            if (SplitWaits(s)) return false;
             var bus = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
             // (Mordido's bitten not cured never gets in: none to wait for, G23.2.)
             foreach (var o in Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos) && !Rules.BittenUncured(s, o)))
@@ -423,8 +437,12 @@ namespace Bastion.Net
             return left < full ? left : full - Paths.CostOrtho;
         }
 
-        /// <summary>A run's Saqueo: the normal node (Gameplay, 16/11), no objective but to search and go.</summary>
-        private static bool RunSaqueo(GameState s) => s.Run?.NodeKind == NodeKinds.Normal && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
+        /// <summary>
+        /// A run's Saqueo: the normal node (Gameplay, 16/11), no objective but to search and go; and a Separados without its
+        /// two groups (one soldier, or no room on the map: G23.4), which is one.
+        /// </summary>
+        private static bool RunSaqueo(GameState s) => (s.Run?.NodeKind == NodeKinds.Normal || (s.Run?.NodeKind == NodeKinds.Split && s.Mission.Split == null))
+            && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
 
         /// <summary>El Toro alive, in his fight (H6); null in any other.</summary>
         private static Unit? Bull(GameState s) => !string.IsNullOrEmpty(s.Mission.Boss) && Grid.GetUnit(s, s.Mission.Boss!) is Unit b && b.Alive ? b : null;
@@ -847,6 +865,37 @@ namespace Bastion.Net
 
         /// <summary>El herido: the tiles of walk one beside the carrier needs left to be worth passing them to (an action).</summary>
         public const int PassOn = 3;
+
+        // ------------------------------------------------------------ Separados (G23.4)
+
+        /// <summary>
+        /// A run's Separados with its two groups (MissionState.Split): a Saqueo whose reward asks one of each aboard as La
+        /// Lata goes (Rules.SplitSafe). Without them (one soldier, or no room on the map), a Saqueo (RunSaqueo).
+        /// </summary>
+        private static bool SplitFight(GameState s) => s.Run != null && s.Mission.Split != null && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
+
+        /// <summary>
+        /// Separados: La Lata leaving now would lose the reward (Rules.SplitShort: a group with nobody going), and one of that
+        /// group can still walk to it, past the dead too (they move; the reward waits on them). With a group all fallen
+        /// (SplitLost), nothing to wait for: it goes as a Saqueo's (Producto, 20/11).
+        /// </summary>
+        private static bool SplitWaits(GameState s)
+        {
+            if (!SplitFight(s) || Rules.SplitShort(s) is not List<Unit> behind) return false;
+            var bus = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
+            return behind.Any((o) => !o.Captive && Paths.ComputeReach(s, o, double.MaxValue, null, (x) => x.Team != o.Team) is Reach r && bus.Any((n) => r.Cost.TryGetValue(n, out _)));
+        }
+
+        /// <summary>
+        /// Separados: one seat of La Lata left, and the group with nobody going has one that can walk to it: that seat is the
+        /// group's, and `u`, of the other group or a survivor who joined (of neither), doesn't take it.
+        /// </summary>
+        private static bool LastSeatIsTheShorts(GameState s, Unit u, System.Func<Unit, Reach> walksOf)
+        {
+            if (!SplitFight(s) || Rules.SplitShort(s) is not List<Unit> behind || behind.Any((o) => o.Id == u.Id)) return false;
+            var open = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
+            return open.Count == 1 && behind.Any((o) => !o.Captive && walksOf(o).Cost.ContainsKey(open[0]));
+        }
 
         // ------------------------------------------------------------ La llave (G23.1)
 

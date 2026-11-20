@@ -161,12 +161,54 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// Whether getting out on La Lata is all a mission asks (a Saqueo); not a Guarida's (its box to open) nor a boss's
-        /// (him to kill), which are Saqueos with an objective (H5, H6).
+        /// Whether getting out on La Lata is all a mission asks (a Saqueo); not a Guarida's (its box to open), a boss's (him to
+        /// kill) nor a Separados' (one of each group: SplitSafe), which are Saqueos with an objective (H5, H6, G23.4).
         /// </summary>
         public static bool FreeExit(MissionState m)
         {
-            return m.Kind == MissionKinds.Scavenge && m.Lair == null && string.IsNullOrEmpty(m.Boss);
+            return m.Kind == MissionKinds.Scavenge && m.Lair == null && string.IsNullOrEmpty(m.Boss) && m.Split == null;
+        }
+
+        // -------------------------------------------------------------- Separados
+
+        /// <summary>The living of `group` of a Separados (MissionState.Split): on the field, or in La Lata.</summary>
+        private static IEnumerable<Unit> SplitUnits(GameState s, int group)
+        {
+            var ids = s.Mission.Split != null && group < s.Mission.Split.Count ? s.Mission.Split[group] : new List<string>();
+            return ids.Select((id) => Grid.GetUnit(s, id)).Where((u) => u != null).Select((u) => u!);
+        }
+
+        /// <summary>
+        /// G23.4 Separados won (Arturo, cuadro 94: «con alguien de cada grupo a bordo»): one of each group in La Lata, or gone
+        /// in it (Evacuated). As La Lata goes (CheckOutcome, DepartEvac). A survivor who joined counts for neither.
+        /// </summary>
+        public static bool SplitSafe(GameState s)
+        {
+            return s.Mission.Split != null && Enumerable.Range(0, s.Mission.Split.Count).All((g) => SplitUnits(s, g).Any((u) => u.Evacuated));
+        }
+
+        /// <summary>
+        /// Separados: a group all fallen (nobody of it alive nor in La Lata): the reward is lost whatever happens (Lore's
+        /// line; no warning on leaving any more).
+        /// </summary>
+        public static bool SplitLost(GameState s)
+        {
+            return s.Mission.Split != null && Enumerable.Range(0, s.Mission.Split.Count).Any((g) => !SplitUnits(s, g).Any((u) => u.Alive || u.Evacuated));
+        }
+
+        /// <summary>
+        /// Separados, for the warning on leaving (UI, Lore; SEPARADOS.md): the living of the group La Lata would leave
+        /// without if it went now (nobody of it inside nor in its zone with a seat). Null with one of each going, with a group
+        /// all fallen (SplitLost: no reward to lose), or out of a Separados.
+        /// </summary>
+        public static List<Unit>? SplitShort(GameState s)
+        {
+            if (s.Mission.Split == null || SplitLost(s)) return null;
+            var noSeat = NoSeat(s);
+            bool Goes(Unit u) => u.Evacuated || (u.Alive && Abilities.InEvacZone(s, u.Pos) && !noSeat.Contains(u));
+            for (var g = 0; g < s.Mission.Split.Count; g++)
+                if (!SplitUnits(s, g).Any(Goes)) return SplitUnits(s, g).Where((u) => u.Alive).ToList();
+            return null;
         }
 
         /// <summary>

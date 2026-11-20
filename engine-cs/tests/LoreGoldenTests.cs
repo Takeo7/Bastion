@@ -3200,7 +3200,8 @@ namespace Bastion.Engine.Tests
             // T8 (Arturo, 18/11): «Salir» looked like quitting the game.
             Assert.Equal("Partir", Lore.ExpeditionText.Start);
             Assert.Equal("Parte la escuadra: empieza una expedición del capítulo 1.", Lore.ExpeditionText.StartHelp(1));
-            Assert.Equal(16, Lore.StageNames.Count);
+            // G23.4 Separados (Gameplay, 20/11): its name only, Lore's to write the rest.
+            Assert.Equal(17, Lore.StageNames.Count);
             // G23.2, Mordido (cuadros 73 and 87).
             Assert.Equal("Mordido", Lore.StageName(NodeKinds.Bitten));
             Assert.Equal("Alguien mordido se esconde en una zona marcada. Desde que se le encuentra, le quedan 15 turnos: dadle el antiviral, que está en uno de los armarios o estantes de medicinas. Volved todos a La Lata. Si se convierte, se sale sin recluta ni recompensa.", Lore.StageLine(NodeKinds.Bitten));
@@ -3245,6 +3246,64 @@ namespace Bastion.Engine.Tests
             // On the busts, no longer than «A BORDO».
             Assert.True(Lore.WoundedText.CarrierTagShort.Length <= Lore.BoardText.AboardTag.Length);
             Assert.True(Lore.WoundedText.FloorTagShort.Length <= Lore.BoardText.AboardTag.Length);
+            // G23.4, Separados (cuadros 71, 94 and 95): a group by its soldiers' first names.
+            Assert.Equal("Separados", Lore.StageName(NodeKinds.Split));
+            Assert.Equal("La escuadra empieza partida en dos grupos, a los dos lados de La Lata. Hay recompensa si La Lata sale con alguien de cada grupo a bordo; quien no haya subido se queda fuera. La ocultación es de toda la escuadra: se pierde para los dos grupos a la vez.", Lore.StageLine(NodeKinds.Split));
+            Assert.Equal("Erik", Lore.SplitText.Group(new[] { "Erik Lund" }));
+            Assert.Equal("Erik y Marcus", Lore.SplitText.Group(new[] { "Erik Lund", "Marcus Hale" }));
+            Assert.Equal("Erik, Marcus y Lena", Lore.SplitText.Group(new[] { "Erik Lund", "Marcus Hale", "Lena Vos" }));
+            Assert.Equal("Erik, Marcus y 2 más", Lore.SplitText.Group(new[] { "Erik Lund", "Marcus Hale", "Lena Vos", "Ana Ruiz" }));
+            Assert.Equal("Llegad a La Lata con alguien de cada grupo", Lore.SplitText.Reach);
+            Assert.Equal("Falta el grupo de Erik y Marcus", Lore.SplitText.Missing(new[] { "Erik Lund", "Marcus Hale" }));
+            Assert.Equal("Falta Erik", Lore.SplitText.Missing(new[] { "Erik Lund" }));
+            Assert.Equal("Salid en La Lata", Lore.SplitText.Leave);
+            Assert.Equal("Sin recompensa: salid en La Lata", Lore.SplitText.LostObjective);
+            Assert.Equal("Hay recompensa si La Lata sale con alguien de cada grupo a bordo. Quien no haya subido se queda fuera. Si cae un grupo entero, ya no hay recompensa. La ocultación se pierde para los dos grupos a la vez.", Lore.SplitText.ObjectiveTip);
+            Assert.Equal("Sin nadie del grupo de Erik y Marcus, ya no hay recompensa: salid en La Lata.", Lore.SplitText.Lost(new[] { "Erik Lund", "Marcus Hale" }));
+            Assert.Equal("Sin Erik, ya no hay recompensa: salid en La Lata.", Lore.SplitText.Lost(new[] { "Erik Lund" }));
+            Assert.Equal("Salisteis sin nadie del grupo de Erik y Marcus", Lore.SplitText.WithoutGroup(new[] { "Erik Lund", "Marcus Hale" }));
+            Assert.Equal("Salisteis sin Erik", Lore.SplitText.WithoutGroup(new[] { "Erik Lund" }));
+            // Leaving without one of a group: the reward, after who stays out («su grupo» when just they do, two or more; one by name), then the seats.
+            Assert.Equal("Evacuar sin la recompensa", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Erik Lund", "Marcus Hale" }, null, 4, new[] { "Erik Lund", "Marcus Hale" }, NodeKinds.Split, null, false), "Ana").Title);
+            Assert.Equal("Erik Lund y Marcus Hale no han subido: se quedarían fuera, y se perderían. Sin nadie de su grupo a bordo, la etapa se supera sin la recompensa. Ana tiene que aceptar.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Erik Lund", "Marcus Hale" }, null, 4, new[] { "Erik Lund", "Marcus Hale" }, NodeKinds.Split, null, false), "Ana").Text);
+            Assert.Equal("Pedir evacuar", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Erik Lund", "Marcus Hale" }, null, 4, new[] { "Erik Lund", "Marcus Hale" }, NodeKinds.Split, null, false), "Ana").Go);
+            Assert.Equal("Erik Lund no ha subido: se quedaría fuera, y se perdería. Sin Erik a bordo, la etapa se supera sin la recompensa.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Erik Lund" }, null, 2, new[] { "Erik Lund" }, NodeKinds.Split, null, false), null).Text);
+            Assert.Equal("Lena Vos, Erik Lund y Marcus Hale no han subido: se quedarían fuera, y se perderían. Sin nadie del grupo de Erik y Marcus a bordo, la etapa se supera sin la recompensa.", Lore.EvacAsk("Ana", new Lore.EvacSituation(false, false, new[] { "Lena Vos", "Erik Lund", "Marcus Hale" }, null, 6, new[] { "Erik Lund", "Marcus Hale" }, NodeKinds.Split, null, false)).Text);
+            Assert.Equal("Lena Vos y Erik Lund no han subido: se quedarían fuera, y se perderían. Sin Erik a bordo, la etapa se supera sin la recompensa.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Lena Vos", "Erik Lund" }, null, 4, new[] { "Erik Lund" }, NodeKinds.Split, null, false), null).Text);
+            // A group all fallen (Rules.SplitLost): nothing to wait for, a Saqueo's prompt with the reward already gone.
+            Assert.Equal("Ya no hay recompensa. Salís todos.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new string[0], null, 4, null, NodeKinds.Split, null, true), null).Text);
+            Assert.Equal("Evacuar en La Lata", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Lena Vos" }, null, 4, null, NodeKinds.Split, null, true), null).Title);
+            Assert.Equal("Ya no hay recompensa. Lena Vos no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Lena Vos" }, null, 4, null, NodeKinds.Split, null, true), null).Text);
+            Assert.Equal("Evacuar", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Lena Vos" }, null, 4, null, NodeKinds.Split, null, true), null).Go);
+            // In an expedition, leaving without the objective is what the run does with it (RunFights.ApplyFight): the stage passed without
+            // its reward, and without the recruit in Mordido and El herido; the boss alive, the expedition over. One a kind.
+            Assert.Equal("Evacuar sin el objetivo", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Recovery, null, false), null).Title);
+            Assert.Equal("El objetivo no está cumplido: si salís ahora, la etapa se supera sin la recompensa. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Recovery, null, false), null).Text);
+            Assert.Equal("Evacuar sin el objetivo", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Sabotage, null, false), null).Title);
+            Assert.Equal("El objetivo no está cumplido: si salís ahora, la etapa se supera sin la recompensa. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Sabotage, null, false), null).Text);
+            Assert.Equal("Evacuar sin el objetivo", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Stealth, null, false), null).Title);
+            Assert.Equal("El objetivo no está cumplido: si salís ahora, la etapa se supera sin la recompensa. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Stealth, null, false), null).Text);
+            Assert.Equal("Evacuar sin el objetivo", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Elite, null, false), null).Title);
+            Assert.Equal("El objetivo no está cumplido: si salís ahora, la etapa se supera sin la recompensa. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Elite, null, false), null).Text);
+            Assert.Equal("Si os vais ahora, la Limpieza queda a medias: la etapa se supera sin la recompensa. Salís todos.", Lore.EvacPrompt(new Lore.EvacSituation(true, false, new string[0], null, 4, null, NodeKinds.Elimination, null, false), null).Text);
+            Assert.Equal("Evacuar sin el objetivo", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Bitten, null, false), null).Title);
+            Assert.Equal("El objetivo no está cumplido: si salís ahora, la etapa se supera sin recluta ni recompensa. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Bitten, null, false), null).Text);
+            Assert.Equal("Evacuar en La Lata", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Bitten, null, true), null).Title);
+            Assert.Equal("Ya no hay recluta ni recompensa. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Bitten, null, true), null).Text);
+            Assert.Equal("Evacuar sin el objetivo", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Wounded, null, false), null).Title);
+            Assert.Equal("El objetivo no está cumplido: si salís ahora, la etapa se supera sin recluta ni recompensa. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Wounded, null, false), null).Text);
+            Assert.Equal("Evacuar en La Lata", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Wounded, null, true), null).Title);
+            Assert.Equal("Ya no hay recluta ni recompensa. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Wounded, null, true), null).Text);
+            Assert.Equal("Evacuar sin el objetivo", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Boss, "El Toro", false), null).Title);
+            Assert.Equal("El Toro sigue en pie: si salís ahora, la expedición acaba y volvéis a la base. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null, NodeKinds.Boss, "El Toro", false), null).Text);
+            // Ready (a Saqueo, La llave, a Rescate's survivor, a Travesía, an Asedio): who stays out, nothing else.
+            Assert.Equal("Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new[] { "Ana" }, null, 2, null, NodeKinds.Normal, null, false), null).Text);
+            Assert.Equal("Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new[] { "Ana" }, null, 2, null, NodeKinds.Key, null, false), null).Text);
+            Assert.Equal("Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new[] { "Ana" }, null, 2, null, NodeKinds.Rescue, null, false), null).Text);
+            Assert.Equal("Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new[] { "Ana" }, null, 2, null, NodeKinds.Crossing, null, false), null).Text);
+            Assert.Equal("Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new[] { "Ana" }, null, 2, null, NodeKinds.Hold, null, false), null).Text);
+            // Without the stage (as before it was passed), the seats say it is an expedition.
+            Assert.Equal("El objetivo no está cumplido: si salís ahora, la etapa se supera sin la recompensa. Ana no ha subido: se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, false, new[] { "Ana" }, null, 2, null), null).Text);
             // G23.1, La llave (cuadros 71, 73 and 79).
             Assert.Equal("La llave", Lore.StageName(NodeKinds.Key));
             Assert.Equal("La armería de la comisaría está cerrada, con todos sus muebles llenos. Uno de los muertos de uniforme lleva la llave; también se puede volar la pared con una granada. Salid en La Lata.", Lore.StageLine(NodeKinds.Key));

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Bastion.Engine
 {
@@ -51,6 +52,7 @@ namespace Bastion.Engine
             [NodeKinds.Key] = "La llave",
             [NodeKinds.Bitten] = "Mordido",
             [NodeKinds.Wounded] = "El herido", // G23.3: the stage, as Arturo and Producto call it (as «Mordido»), not the person
+            [NodeKinds.Split] = "Separados", // G23.4: as Arturo calls it (put by Gameplay, 20/11; kept by Lore)
             [NodeKinds.Refuge] = "Refugio",
             [NodeKinds.Trade] = "Trueque",
             [NodeKinds.Event] = "Suceso",
@@ -212,6 +214,50 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// Separados (G23.4; Gameplay's .dev-snapshots/gameplay/g23/SEPARADOS.md; Arturo, cuadros 71, 94 and 95): a Saqueo
+        /// whose squad starts in two groups on either side of La Lata (MissionState.Split), with the reward only if one of each
+        /// is aboard as it goes (Rules.SplitSafe). No recruit. A group is said by its soldiers (Group), never by its player:
+        /// the same words for both players, and for one playing alone.
+        /// </summary>
+        public static class SplitText
+        {
+            /// <summary>
+            /// A group by name, for the texts here and UI's arrow at the edge («Pierre y Ana · 40 casillas»): first names, all
+            /// of them up to three, then «Erik, Marcus y 2 más». `names`: the living, or the whole group once it has fallen.
+            /// </summary>
+            public static string Group(IReadOnlyList<string> names)
+            {
+                var first = names.Select((n) => n.Split(' ')[0]).ToList();
+                return first.Count > 3 ? $"{first[0]}, {first[1]} y {first.Count - 2} más" : JoinAnd(first);
+            }
+
+            /// <summary>
+            /// After «sin»: «nadie del grupo de Erik y Marcus», and one alone by name, «Erik» (with 2 seats each group is a
+            /// soldier: Arturo, cuadro 95). Here and in EvacStakes.
+            /// </summary>
+            public static string NobodyOf(IReadOnlyList<string> names) => names.Count == 1 ? Group(names) : $"nadie del grupo de {Group(names)}";
+
+            /// <summary>
+            /// The objective's steps (UI's strip): to La Lata with one of each group (done as Rules.SplitShort is null), with a
+            /// note under it of the group with nobody there yet (none while neither has); out; and a group fallen
+            /// (Rules.SplitLost), in red.
+            /// </summary>
+            public static string Reach => $"Llegad {Bus.To} con alguien de cada grupo";
+            public static string Missing(IReadOnlyList<string> names) => names.Count == 1 ? $"Falta {Group(names)}" : $"Falta el grupo de {Group(names)}";
+            public const string Leave = "Salid " + Bus.In;
+            public const string LostObjective = "Sin recompensa: salid " + Bus.In;
+            /// <summary>The strip's help.</summary>
+            public const string ObjectiveTip = "Hay recompensa si " + Bus.Name + " sale con alguien de cada grupo a bordo. Quien no haya subido se queda fuera. Si cae un grupo entero, ya no hay recompensa. La ocultación se pierde para los dos grupos a la vez.";
+
+            /// <summary>Leaving with a group with nobody aboard (EvacSituation.SplitShort): the prompt's title. The text is EvacStakes'.</summary>
+            public const string EvacTitle = "Evacuar sin la recompensa";
+            /// <summary>The log, as a whole group falls (Rules.SplitLost turning true): the group's names, all of them.</summary>
+            public static string Lost(IReadOnlyList<string> names) => $"Sin {NobodyOf(names)}, ya no hay recompensa: salid {Bus.In}.";
+            /// <summary>The end's line under «SIN LA RECOMPENSA» (in place of EvacText.WithoutObjective): the group none of whom came out.</summary>
+            public static string WithoutGroup(IReadOnlyList<string> names) => $"Salisteis sin {NobodyOf(names)}";
+        }
+
+        /// <summary>
         /// What is done at a stage, in one line, for its sheet on the map. The figures and names when known: the item to
         /// bring back, the alarm (Alarms), the turn La Lata comes on a Hold, the guard of a Guarida (a template); a Rescate
         /// with Cuervos round the survivor (`crows`; Arturo, 17/11: some are held by them, others hide alone).
@@ -249,6 +295,10 @@ namespace Bastion.Engine
                 case NodeKinds.Wounded:
                     // G23.3 (Arturo, cuadros 71, 73 and 92): carried to La Lata, which won't leave without them; dead, no recruit nor reward.
                     return $"Alguien con la pierna rota pide ayuda en una zona marcada. No anda: se le lleva a hombros {Bus.To}, y la escuadra se puede turnar. Quien carga anda como mucho {Paths.CarryMoves / Paths.CostOrtho} casillas por turno y no dispara el arma larga. {Bus.Name} no sale mientras siga fuera con vida; si muere, se sale sin recluta ni recompensa.";
+                case NodeKinds.Split:
+                    // G23.4 (Arturo, cuadros 71, 94 and 95): two groups, the reward with one of each aboard; La Lata goes as always.
+                    // Its concealment one for the squad (SEPARADOS.md): this is also what the card says on arrival.
+                    return $"La escuadra empieza partida en dos grupos, a los dos lados de {Bus.Name}. Hay recompensa si {Bus.Name} sale con alguien de cada grupo a bordo; quien no haya subido se queda fuera. La ocultación es de toda la escuadra: se pierde para los dos grupos a la vez.";
                 case NodeKinds.Refuge:
                     // G22 (cuadro 72): the only way back to the base, but beating the boss.
                     return "Un sitio seguro para descansar: todos se curan del todo. Desde aquí se puede volver a la base.";

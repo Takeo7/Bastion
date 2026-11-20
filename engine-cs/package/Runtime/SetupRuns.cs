@@ -110,6 +110,306 @@ namespace Bastion.Engine
             return Array.IndexOf(gaps, gaps.Min());
         }
 
+        // -------------------------------------------------------------- Separados
+
+        /// <summary>A Separados group's start from La Lata on foot, against the usual start's: SplitNear to SplitFar of it.</summary>
+        private const double SplitNear = 0.8;
+        private const double SplitFar = 1.3;
+        /// <summary>
+        /// A Separados group's start this far at least (tiles) from any of the dead, the first that has room: as the usual
+        /// start (a Saqueo's nearest dead 12 tiles away at the least, 18–21 the median; Gameplay's probe, 20/11), down to the
+        /// Travesía's (CrossingClear). At 5 only, as the contract had it, each group began with 2 or 3 of the dead within 10.
+        /// </summary>
+        private static readonly IReadOnlyList<int> SplitClear = new[] { 12, 10, 8, CrossingClear };
+        /// <summary>
+        /// Before a start nearer the dead, one nearer or farther from La Lata (SplitNearWide to SplitFarWide of the usual
+        /// start): a town's dead stand all round its ring at 12 tiles.
+        /// </summary>
+        private const double SplitNearWide = 0.6;
+        private const double SplitFarWide = 1.6;
+        /// <summary>A group's soldiers within this of its start (tiles), and as clear of the dead as it less this.</summary>
+        private const int SplitHuddle = 4;
+        private const int SplitHuddleClear = 3;
+        /// <summary>La Lata between the two starts: their walk to each other at least this share of their two walks to it.</summary>
+        private const double SplitBetween = 0.8;
+        /// <summary>
+        /// The two walks to La Lata alike: the longer this many times the shorter at the most (Producto, 20/11: four of a
+        /// factory's maps had its first start 56–72 steps away, its second 24–52, and the first fell twice as often). On 600
+        /// of the maps (Gameplay's probe, 20/11): at 1.3 or 1.2, 99 % of them; at 1.1 too, but the walks some 4 steps shorter.
+        /// </summary>
+        private const double SplitEven = 1.2;
+
+        /// <summary>
+        /// G23.4 Separados (Arturo, cuadros 71 and 94; .dev-snapshots/gameplay/g23/SEPARADOS.md): each soldier's group, 0 or 1,
+        /// by the squad's order (`owners`, each one's slot): by owner with two players who both have soldiers in it (slot 0's
+        /// first); else the squad halved, the odd one in the first. Null with fewer than two: no groups.
+        /// </summary>
+        public static List<int>? SplitGroups(IReadOnlyList<int> owners)
+        {
+            if (owners.Count < 2) return null;
+            var slots = owners.Distinct().OrderBy((o) => o).ToList();
+            if (slots.Count > 1) return owners.Select((o) => o == slots[0] ? 0 : 1).ToList();
+            var first = (owners.Count + 1) / 2;
+            return owners.Select((o, i) => i < first ? 0 : 1).ToList();
+        }
+
+        /// <summary>
+        /// Separados: the squad in two groups (SplitGroups, MissionState.Split) on either side of La Lata, once its zone is
+        /// set (Runs.SeatZone): two tiles out of doors as far from La Lata on foot as the usual start (SplitNear to SplitFar of
+        /// it), clear of the dead (SplitClear) and of fire, as far apart on foot as they can be (two sweeps, from the one
+        /// farthest from the usual start), their walks to La Lata alike (SplitEven) before anything else; each group on the
+        /// free tiles nearest its own, looking towards La Lata. On foot as the squad walks (Paths: hills and all; the ground
+        /// alone left a country's start on its hill cut off; and one drops off a hill but never climbs it, so a walk to La
+        /// Lata is the start's, not La Lata's to it). Nothing with one soldier, no La Lata or no room: a Saqueo of the stage,
+        /// its reward by getting out. The sweep leaves its second start on the usual start's side, clear of the dead (the map
+        /// put them away from it): the first group fell before getting to La Lata 149 times in 400 there, the second 59 (R1,
+        /// 20/11). Which group goes where is `swap`'s (the map's seed), so it is not always the first player's. Then the dead
+        /// kept off both (DeadOffTheGroups; `seed`, where to).
+        /// </summary>
+        public static void Split(GameState s, bool swap = false, int seed = 0)
+        {
+            var squad = s.Units.Where((u) => u.Team == Teams.Xcom && u.Alive && u.CampaignId != null).ToList();
+            var groups = SplitGroups(squad.Select((u) => u.Owner ?? 0).ToList());
+            var bus = s.Mission.EvacZone.Select((z) => new Pos { X = (int)z.X, Y = (int)z.Y, Z = 0 }).FirstOrDefault((p) => Grid.InBounds(s, p.X, p.Y));
+            if (groups == null || bus == null) return;
+            var area = s.Width * s.Height;
+            var walker = squad[0];
+            var home = walker.Pos;
+            Dictionary<int, int> From(Pos p)
+            {
+                walker.Pos = p;
+                var cost = Paths.ComputeReach(s, walker, 1_000_000, ignore: (_) => true).Cost.Where((kv) => kv.Key < area).ToDictionary((kv) => kv.Key, (kv) => kv.Value);
+                walker.Pos = home;
+                cost[Grid.TileIndex(s, p.X, p.Y)] = 0;
+                return cost;
+            }
+            Pos At(int i) => new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 };
+            var fromBus = From(bus);
+            var usual = squad.Where((u) => u.Pos.Z == 0 && fromBus.ContainsKey(Grid.TileIndex(s, u.Pos.X, u.Pos.Y))).Select((u) => fromBus[Grid.TileIndex(s, u.Pos.X, u.Pos.Y)]).DefaultIfEmpty(0).Min();
+            if (usual <= 0) return;
+            var dead = s.Units.Where((u) => u.Alive && u.Team == Teams.Alien).Select((u) => u.Pos).ToList();
+            var ours = new HashSet<Unit>(squad);
+            // Each tile's nearest of the dead, as the crow flies (Chebyshev).
+            int Clear(Pos p) => dead.Select((d) => Math.Max(Math.Abs(d.X - p.X), Math.Abs(d.Y - p.Y))).DefaultIfEmpty(int.MaxValue).Min();
+            var fromHome = From(home);
+            var froms = new Dictionary<int, Dictionary<int, int>>();
+            Dictionary<int, int> FromTile(int i) => froms.TryGetValue(i, out var f) ? f : froms[i] = From(At(i));
+            // La Lata's zone, and a start's walk to the nearest of it (`from`, the start's): as its group walks in.
+            var zone = s.Mission.EvacZone.Select((z) => Grid.TileIndex(s, (int)z.X, (int)z.Y)).Where(fromBus.ContainsKey).Distinct().ToList();
+            int Walk(Dictionary<int, int> from) => zone.Where(from.ContainsKey).Select((z) => from[z]).DefaultIfEmpty(int.MaxValue).Min();
+            // Each tile's from the nearest of it: the same but on the hills, which one drops off and never climbs.
+            var toZone = new Dictionary<int, int>();
+            foreach (var z in zone)
+                foreach (var kv in FromTile(z))
+                    if (!toZone.TryGetValue(kv.Key, out var c) || kv.Value < c) toZone[kv.Key] = kv.Value;
+            bool Alike(int w, int v) => w < int.MaxValue && v < int.MaxValue && Math.Max(w, v) <= SplitEven * Math.Min(w, v);
+            (List<Queue<int>> Spots, double Apart)? Place(int clear, double near, double far, bool even)
+            {
+                bool Free(int i, int least)
+                {
+                    var p = At(i);
+                    return fromBus.ContainsKey(i) && !Abilities.InEvacZone(s, p) && !Burning.At(s, p) && (s.Ground == null || i >= s.Ground.Count || s.Ground[i] != 2)
+                        && (s.Storeys == null || i >= s.Storeys.Count || s.Storeys[i] == 0) && Flights.CanStopAt(s, p) && (Grid.UnitAt(s, p) is not Unit o || ours.Contains(o))
+                        && Clear(p) >= least;
+                }
+                var band = fromBus.Keys.Where((i) => fromBus[i] >= near * usual && fromBus[i] <= far * usual && Free(i, clear)).OrderBy((i) => i).ToList();
+                int Farthest(Dictionary<int, int> from, int like = -1) => band.Where((i) => from.ContainsKey(i) && (like < 0 || (toZone.TryGetValue(i, out var w) && Alike(w, like)))).OrderByDescending((i) => from[i]).ThenBy((i) => i).DefaultIfEmpty(-1).First();
+                (List<Queue<int>> Spots, double Apart)? Pair(int a, int b)
+                {
+                    if (a < 0 || b < 0 || a == b) return null;
+                    var taken = new HashSet<int>();
+                    // By group: each one's tiles.
+                    var spots = new List<Queue<int>> { new Queue<int>(), new Queue<int>() };
+                    foreach (var (start, group) in new[] { (a, swap ? 1 : 0), (b, swap ? 0 : 1) })
+                    {
+                        var walk = FromTile(start);
+                        var count = groups.Count((g) => g == group);
+                        var least = Math.Max(CrossingClear, clear - SplitHuddleClear);
+                        var mine = walk.Keys.Where((i) => Grid.Distance(At(i), At(start)) <= SplitHuddle && Free(i, least) && !taken.Contains(i)).OrderBy((i) => walk[i]).ThenBy((i) => i).Take(count).ToList();
+                        if (mine.Count < count) return null;
+                        taken.UnionWith(mine);
+                        spots[group] = new Queue<int>(mine);
+                    }
+                    // How far apart on foot against their two walks to La Lata: 1 with La Lata on the way between them. With
+                    // `even`, the walks to it as they walk them (and alike); else from it, as it was.
+                    if (!even) return (spots, FromTile(a)[b] / (double)(fromBus[a] + fromBus[b]));
+                    var busAt = Grid.TileIndex(s, bus.X, bus.Y);
+                    if (!Alike(Walk(FromTile(a)), Walk(FromTile(b))) || !FromTile(a).TryGetValue(b, out var ab) || !FromTile(a).TryGetValue(busAt, out var ga) || !FromTile(b).TryGetValue(busAt, out var gb)) return null;
+                    return (spots, ab / (double)(ga + gb));
+                }
+                var first = Farthest(fromHome);
+                if (first < 0) return null;
+                var second = Farthest(FromTile(first));
+                if (second < 0 || second == first) return null;
+                // The first start, the farthest from the second.
+                if (!even) return Pair(Farthest(FromTile(second)), second);
+                // With `even`, one whose walk to La Lata is like the second's (by the walk from it, then by its own); else the
+                // first as it comes and a second like it.
+                var placed = Pair(Farthest(FromTile(second), Walk(FromTile(second))), second);
+                if (placed != null && placed.Value.Apart >= SplitBetween) return placed;
+                first = Farthest(FromTile(second));
+                return first < 0 ? null : Pair(first, Farthest(FromTile(first), Walk(FromTile(first))));
+            }
+            // The clearest that leaves La Lata between them (SplitBetween: a city's at 12 tiles had both on one side, 27 steps
+            // apart and 42 and 49 from it), at the usual distance from it or else wider, with their walks to it alike
+            // (SplitEven) before anything; with none, as unlike as they come; with none still, the one farthest apart, the
+            // clearer first.
+            (List<Queue<int>> Spots, double Apart)? best = null;
+            foreach (var even in new[] { true, false })
+            {
+                foreach (var (clear, near, far) in SplitClear.SelectMany((c) => new[] { (c, SplitNear, SplitFar), (c, SplitNearWide, SplitFarWide) }))
+                {
+                    var placed = Place(clear, near, far, even);
+                    if (placed == null) continue;
+                    if (placed.Value.Apart >= SplitBetween)
+                    {
+                        best = placed;
+                        break;
+                    }
+                    if (!even && (best == null || placed.Value.Apart > best.Value.Apart)) best = placed;
+                }
+                if (best != null) break;
+            }
+            if (best == null) return;
+            var spots = best.Value.Spots;
+            for (var k = 0; k < squad.Count; k++)
+            {
+                squad[k].Pos = At(spots[groups[k]].Dequeue());
+                squad[k].Facing = Los.FacingTo(squad[k].Pos, new Vec2 { X = bus.X, Y = bus.Y }) ?? squad[k].Facing;
+            }
+            s.Mission.Split = new[] { 0, 1 }.Select((g) => squad.Where((u, k) => groups[k] == g).Select((u) => u.Id).ToList()).ToList();
+            DeadOffTheGroups(s, new[] { 0, 1 }.Select((g) => squad.Where((u, k) => groups[k] == g).ToList()).ToList(), fromBus, new Rng(unchecked((uint)seed ^ 0x5911u)));
+        }
+
+        /// <summary>The dead's groups (with a round) this far from a Separados group's middle at least, as from the usual start (Mapgen's PodDistance).</summary>
+        private const int SplitPodGap = 16;
+        /// <summary>Nor their rounds' stops this near it (Mapgen: 12 from the usual start).</summary>
+        private const int SplitRound = 12;
+
+        /// <summary>
+        /// Separados (Arturo, cuadro 95: «Igualar los lados»): the dead kept off both groups as the map keeps them off the
+        /// usual start, which is no one's now: a group of theirs with its first tile (its round's, where the map put it) nearer
+        /// a group's middle than a third of the map's side (SplitPodGap at the least, as Mapgen's podGap) goes to a spot that
+        /// is not, drawn as the map draws them (`rng`), as spread from the other groups as there is room for (Mapgen's
+        /// podSpread, then 6, 3); the stops of their rounds nearer than SplitRound are left out; a lone one (LurkerSpots)
+        /// nearer any soldier than LurkerClear goes to a tile drawn among those that are not, inside if it was inside. The R1
+        /// of 20/11 had a group fall before getting to La Lata 36 times in 100 on the side with the dead, 12 on the other; with
+        /// them moved to the nearest spot they stood at its edge, the nearest at 14 tiles on that side and 21 on the other,
+        /// and fell 23 and 9. Only those on the ground; nothing else moves.
+        /// </summary>
+        private static void DeadOffTheGroups(GameState s, List<List<Unit>> groups, Dictionary<int, int> fromBus, Rng rng)
+        {
+            var side = Math.Max(s.Width, s.Height);
+            var gap = Math.Max(SplitPodGap, (int)Js.Round(side / 3.0));
+            var spreads = new[] { Math.Max(11, (int)Js.Round(side / 4.5)), 6, 3, 0 };
+            var middles = groups.Select((g) => (X: g.Average((u) => u.Pos.X), Y: g.Average((u) => u.Pos.Y))).ToList();
+            var ours = groups.SelectMany((g) => g).ToList();
+            Pos At(int i) => new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 };
+            double FromMiddles(Pos p) => middles.Min((m) => Js.Hypot(m.X - p.X, m.Y - p.Y));
+            double FromOurs(Pos p) => ours.Min((u) => Js.Hypot(u.Pos.X - p.X, u.Pos.Y - p.Y));
+            bool Inside(int i) => s.Ground != null && i < s.Ground.Count && s.Ground[i] == 2;
+            // Where one of the dead can wait: on the ground the squad walks (from La Lata), out of its zone, off fire and
+            // flights, nobody there.
+            bool Free(int i)
+            {
+                var p = At(i);
+                return fromBus.ContainsKey(i) && Grid.CanStandOn(Grid.KindAt(s, p)) && !(s.Ground != null && i < s.Ground.Count && s.Ground[i] == 4)
+                    && !Abilities.InEvacZone(s, p) && !Burning.At(s, p) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null;
+            }
+            var tiles = fromBus.Keys.OrderBy((i) => i).ToList();
+            List<int> Shuffled(List<int> xs)
+            {
+                var out_ = new List<int>(xs);
+                for (var i = out_.Count - 1; i > 0; i--)
+                {
+                    var j = rng.Int(i + 1);
+                    (out_[i], out_[j]) = (out_[j], out_[i]);
+                }
+                return out_;
+            }
+            var dead = s.Units.Where((u) => u.Alive && u.Team == Teams.Alien).ToList();
+            foreach (var pod in s.Pods)
+            {
+                var members = pod.UnitIds.Select((id) => Grid.GetUnit(s, id)).Where((u) => u != null && u.Alive).Select((u) => u!).ToList();
+                if (members.Count == 0 || members.Any((u) => u.Pos.Z != 0)) continue;
+                if (pod.Patrol.Count > 0)
+                {
+                    if (FromMiddles(pod.Patrol[0]) < gap)
+                    {
+                        var anchors = s.Pods.Where((o) => o != pod && o.Patrol.Count > 0).Select((o) => o.Patrol[0]).ToList();
+                        var was = members.Select((u) => u.Pos).ToList();
+                        // Off their own tiles while their new ones are looked for.
+                        foreach (var u in members) u.Pos = new Pos { X = -1, Y = -1, Z = 0 };
+                        var room = Shuffled(tiles.Where((i) => Free(i) && FromMiddles(At(i)) >= gap).ToList());
+                        List<int>? placed = null;
+                        foreach (var spread in spreads)
+                        {
+                            foreach (var a in room.Where((i) => anchors.All((p) => Js.Hypot(p.X - At(i).X, p.Y - At(i).Y) >= spread)))
+                            {
+                                // Round it as Mapgen's Cluster: by the eight ways, within 3 of it, on its level.
+                                var lvl = Js.At(s.Elev, a, 0);
+                                var near = new List<int>();
+                                var seen = new HashSet<int> { a };
+                                var queue = new List<int> { a };
+                                for (var head = 0; head < queue.Count && near.Count < members.Count; head++)
+                                {
+                                    var i = queue[head];
+                                    if (Free(i) && Js.At(s.Elev, i, 0) == lvl) near.Add(i);
+                                    foreach (var d in Grid.Dirs8)
+                                    {
+                                        int x = i % s.Width + d.X, y = i / s.Width + d.Y;
+                                        if (!Grid.InBounds(s, x, y)) continue;
+                                        var j = Grid.TileIndex(s, x, y);
+                                        if (seen.Contains(j) || Js.Hypot(x - a % s.Width, y - a / s.Width) > 3) continue;
+                                        seen.Add(j);
+                                        if (Grid.IsWalkable(Grid.KindAt(s, At(j)))) queue.Add(j);
+                                    }
+                                }
+                                if (near.Count < members.Count) continue;
+                                placed = near;
+                                break;
+                            }
+                            if (placed != null) break;
+                        }
+                        if (placed == null)
+                        {
+                            // No room: where they were.
+                            for (var k = 0; k < members.Count; k++) members[k].Pos = was[k];
+                            continue;
+                        }
+                        for (var k = 0; k < members.Count; k++) members[k].Pos = At(placed[k]);
+                        pod.Patrol[0] = At(placed[0]);
+                    }
+                }
+                else
+                {
+                    foreach (var u in members)
+                    {
+                        if (FromOurs(u.Pos) >= LurkerClear) continue;
+                        var was = Grid.TileIndex(s, u.Pos.X, u.Pos.Y);
+                        bool Fits(int i)
+                        {
+                            var p = At(i);
+                            return Free(i) && FromOurs(p) >= LurkerClear && s.Mission.EvacZone.All((z) => Js.Hypot(z.X - p.X, z.Y - p.Y) >= LurkerBus)
+                                && dead.All((o) => o == u || Js.Hypot(o.Pos.X - p.X, o.Pos.Y - p.Y) >= (o.PodId != null && s.Pods.Any((q) => q.Id == o.PodId && q.Patrol.Count > 0) ? LurkerPodGap : LurkerGap));
+                        }
+                        var fits = tiles.Where(Fits).ToList();
+                        var alike = fits.Where((i) => Inside(i) == Inside(was)).ToList();
+                        if (fits.Count > 0) u.Pos = At(rng.Pick(alike.Count > 0 ? alike : fits));
+                    }
+                }
+            }
+            // No round of theirs through a group's start.
+            foreach (var pod in s.Pods)
+            {
+                if (pod.Patrol.Count < 2) continue;
+                var kept = new List<Pos> { pod.Patrol[0] };
+                kept.AddRange(pod.Patrol.Skip(1).Where((p) => FromMiddles(p) >= SplitRound));
+                pod.Patrol = kept;
+                pod.PatrolIndex = 0;
+            }
+        }
+
         // ---------------------------------------------------------------- Guarida
 
         /// <summary>A Guarida's box from La Lata, on foot (Networking, R2: opened at the far end, the squad never got back): 15 to 25.</summary>

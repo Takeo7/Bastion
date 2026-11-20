@@ -33,6 +33,11 @@ namespace Bastion.Engine
         /// and La Lata doesn't go without them alive (MissionState.Wounded).
         /// </summary>
         public const string Wounded = "wounded";
+        /// <summary>
+        /// G23.4 Separados (Arturo, cuadros 71 y 94): a Saqueo whose squad starts in two groups on either side of La Lata; its
+        /// reward with one of each aboard (MissionState.Split). Only on open maps (RunMap.SplitSites).
+        /// </summary>
+        public const string Split = "split";
         // Stops, no fight (H4).
         public const string Refuge = "refuge";
         public const string Trade = "trade";
@@ -41,8 +46,8 @@ namespace Bastion.Engine
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Key, Bitten, Wounded, Refuge, Trade, Event,
-            Boss,
+            Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Key, Bitten, Wounded, Split, Refuge, Trade,
+            Event, Boss,
         };
 
         /// <summary>The stops: no fight, the squad answers them on the map.</summary>

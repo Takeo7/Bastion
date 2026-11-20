@@ -1573,6 +1573,7 @@ namespace Bastion.UI.Combat
             var curedBefore = V.Mission.Cured == true;
             var biteBefore = V.Mission.BiteTurns;
             var turning = e is DiedEvent dies && V.Mission.Bitten == true && V.Mission.Cured != true && V.Mission.BiteTurns == 0 && dies.Unit == V.Mission.ObjectiveUnit;
+            var splitLost = Rules.SplitLost(V);
             if (!applied) Apply(r, e);
             if (e is PodSplitEvent split) splitFrom[split.Into] = split.Pod;
             // A soldier falls and their rucksack stays on the floor (#49), said once; in a run, all they carried, on their
@@ -1605,6 +1606,9 @@ namespace Bastion.UI.Combat
                     if (IsVisible(bitten.Pos.X, bitten.Pos.Y)) Float(Board.TileToWorld(V, bitten.Pos, KeyFloatHeight), Lore.BiteText.TurnedFloat, "callout", Bastion.UI.Hud.UnitFlags.BiteIcon);
                 }
             }
+            // Separados (U27): a group all fallen, Lore's line with all their names, as the objective's card turns red in the
+            // same refresh. Not those left behind as La Lata goes (EvacDepartedEvent comes first): the end says it.
+            if (!splitLost && V.Mission.EvacDone != true && Rules.SplitLost(V) && FallenGroup(V) is List<Unit> gone) Log(Lore.SplitText.Lost(gone.Select(u => u.Name).ToList()), "#ff6b5a");
             // El herido (U25, Lore's words; with the event on View, so the card changes in the same refresh): carried, passed
             // on, set down (in La Lata, «sube a La Lata», and then not their own Boarded line too), and fallen with whoever
             // carried them, over the tile with the important plate.
@@ -3549,6 +3553,22 @@ namespace Bastion.UI.Combat
 
         static Lore.EvacSituation Situation(GameState s) => CombatController.Situation(s);
 
+        /// <summary>Separados' group all fallen (U27: nobody of it alive nor in La Lata), all of it; null if none is.</summary>
+        static List<Unit> FallenGroup(GameState s)
+        {
+            for (var g = 0; g < (s.Mission.Split?.Count ?? 0); g++)
+                if (CombatController.SplitAll(s, g) is List<Unit> all && all.Count > 0 && !all.Any(u => u.Alive || u.Evacuated)) return all;
+            return null;
+        }
+
+        /// <summary>Separados' group none of whom went in La Lata (U27), all of it; null if each had someone.</summary>
+        static List<Unit> LeftGroup(GameState s)
+        {
+            for (var g = 0; g < (s.Mission.Split?.Count ?? 0); g++)
+                if (CombatController.SplitAll(s, g) is List<Unit> all && all.Count > 0 && !all.Any(u => u.Evacuated)) return all;
+            return null;
+        }
+
         // ------------------------------------------------------- the partner's moments
 
         /// <summary>
@@ -3666,7 +3686,12 @@ namespace Bastion.UI.Combat
                     why = s.Mission.EvacZone.Count == 0 ? Lore.TimeText.TimeUp : s.Units.Any(u => u.Team == Teams.Xcom && u.Evacuated) ? Lore.TimeText.LostOnTime : Lore.TimeText.LeftEmpty;
                     break;
                 case "abandoned":
-                    why = s.Mission.EvacDone == true ? (s.Mission.Kind == MissionKinds.Elimination ? Lore.EvacText.Retreat : Lore.EvacText.WithoutObjective) : s.Run != null ? HudText.Mission.StageAbandoned : "Misión abandonada";
+                    why = s.Mission.EvacDone == true
+                        ? (s.Mission.Kind == MissionKinds.Elimination ? Lore.EvacText.Retreat
+                            // Separados (U27): out without anyone of a group, by all their names.
+                            : LeftGroup(s) is List<Unit> behind ? Lore.SplitText.WithoutGroup(behind.Select(u => u.Name).ToList())
+                            : Lore.EvacText.WithoutObjective)
+                        : s.Run != null ? HudText.Mission.StageAbandoned : "Misión abandonada";
                     break;
                 case "objectiveLost":
                     why = vip != null ? $"{vip} ha muerto" : "La persona retenida ha muerto";

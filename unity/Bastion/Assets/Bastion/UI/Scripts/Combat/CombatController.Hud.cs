@@ -176,6 +176,24 @@ namespace Bastion.UI.Combat
             // Mordido's bitten off the screen (U23), from their finding till cured: «Mordido · 5 turnos», an alert at 2 and 1.
             if (UnitById(v, m.ObjectiveUnit) is Unit bitten && BiteLeft(v, bitten) is int left && !Unfound(bitten))
                 view.Marks.Add(new EdgeMarkView { Kind = left <= 2 ? "alert" : "bite", Name = $"{Lore.StageName(NodeKinds.Bitten)} · {left} {(left == 1 ? "turno" : "turnos")}", World = Board.TileToWorld(v, bitten.Pos, Board.Tile) });
+            // Separados (U27): the other group off the screen, «Pierre y Ana · 40 casillas» (Lore's SplitText.Group, its living),
+            // in its player's colour with the stage's icon; to the one of them nearest the picked soldier. None once it is all
+            // in La Lata or fallen.
+            foreach (var g in OtherGroups(v))
+            {
+                var group = SplitField(v, g);
+                if (group.Count == 0) continue;
+                var at = Unit()?.Pos ?? group[0].Pos;
+                var near = group.OrderBy(u => Math.Abs(u.Pos.X - at.X) + Math.Abs(u.Pos.Y - at.Y)).First();
+                view.Marks.Add(new EdgeMarkView
+                {
+                    Kind = "split",
+                    Icon = "node:split",
+                    Color = PlayerColor(near.Owner ?? MySlot),
+                    Name = Lore.SplitText.Group(group.Select(u => u.Name).ToList()),
+                    World = FeetOf(near.Id) is Vector3 foot ? foot + Vector3.up * Board.Tile : Board.TileToWorld(v, near.Pos, Board.Tile),
+                });
+            }
             if (moment != null && Time.time < momentUntil) view.Marks.Add(new EdgeMarkView { Kind = "alert", Name = moment.Value.who, World = moment.Value.at + Vector3.up * Board.Tile });
             // The soldier pointed at from the list, when it is off the screen (#11): an arrow at the edge, as the marks'.
             var pointed = UnitById(v, listPointed);
@@ -709,8 +727,12 @@ namespace Bastion.UI.Combat
                     // Dressed by the figure's own seed (UnitViews: the campaign's id), or each card showed someone else (Arte, 15/11).
                     Bastion.Client.Portraits.Know(u.Id, u.Appearance, u.Name, Bastion.Client.Units.SquadTint.ColourOf(u.Owner ?? MySlot), u.CampaignId ?? u.Name);
             int Rank(Unit u) => u.Owner == MySlot || u.Owner == null ? 0 : 1;
+            // Separados (U27): each group together, a gap between them (playing alone the cards said nothing of who was in
+            // which); with two, the same as by owner. A survivor who joined is of neither: last.
+            int Group(Unit u) => v.Mission.Split?.FindIndex(g => g.Contains(u.Id)) is int g && g >= 0 ? g : int.MaxValue;
             var carrier = v.Mission.Item?.Carrier;
-            foreach (var u in units.OrderBy(Rank))
+            int? lastGroup = null;
+            foreach (var u in units.OrderBy(Rank).ThenBy(Group))
             {
                 var mine = Commands(u);
                 var theirs = u.Owner != null && u.Owner != MySlot;
@@ -741,6 +763,9 @@ namespace Bastion.UI.Combat
                 };
                 // «EN JUEGO» is the card's own (SquadList, from InPlay), first.
                 card.Tags.AddRange(StateTags(u, carrier));
+                var group = Group(u);
+                card.GroupStart = v.Mission.Split != null && lastGroup != null && group != lastGroup && group != int.MaxValue;
+                lastGroup = group;
                 view.Cards.Add(card);
             }
             return view;
@@ -1008,6 +1033,12 @@ namespace Bastion.UI.Combat
                 objective = (hurt.FirstOrDefault(x => !x.Done) ?? hurt.Last()).Text;
                 tip = Lore.WoundedText.ObjectiveTip;
             }
+            else if (SplitSteps(s) is List<GoalStepView> split)
+            {
+                steps = split;
+                objective = (split.FirstOrDefault(x => !x.Done) ?? split.Last()).Text;
+                tip = Lore.SplitText.ObjectiveTip;
+            }
             return new MissionView
             {
                 Label = s.Run != null ? Bastion.UI.Strategy.StrategyText.Runs.NodeName(s.Run.NodeKind) : MissionName(m.Kind),
@@ -1105,6 +1136,80 @@ namespace Bastion.UI.Combat
             steps.Add(new GoalStepView { Text = Lore.WoundedText.Bring(w.Name), Done = aboard });
             steps.Add(new GoalStepView { Text = Lore.WoundedText.Leave, Done = s.Mission.ObjectiveDone && w.Evacuated });
             return steps;
+        }
+
+        // ------------------------------------------------------- Separados (U27, G23.4)
+
+        /// <summary>
+        /// Separados' objective in steps (U27; Lore's words, SplitText): to La Lata with one of each group, done as
+        /// Rules.SplitShort is null, the group still missing named under it once only that one is (none while both are); out,
+        /// done as La Lata has gone. A group all fallen (Rules.SplitLost): what was done stays, and Lore's line in red. Gone
+        /// (EvacDone), those left behind are no fallen group: the first done only with one of each in it. Null in another fight.
+        /// </summary>
+        static List<GoalStepView> SplitSteps(GameState s)
+        {
+            var split = s.Mission.Split;
+            if (split == null) return null;
+            var gone = s.Mission.EvacDone == true;
+            var lost = !gone && Rules.SplitLost(s);
+            var reach = new GoalStepView { Text = Lore.SplitText.Reach, Done = gone ? Rules.SplitSafe(s) : !lost && Rules.SplitShort(s) == null };
+            if (!reach.Done && !lost && !gone)
+            {
+                var noSeat = Rules.NoSeat(s);
+                var missing = Enumerable.Range(0, split.Count).Where(g => !SplitGoes(s, g, noSeat)).ToList();
+                if (missing.Count == 1) reach.Note = Lore.SplitText.Missing(SplitField(s, missing[0]).Select(u => u.Name).ToList());
+            }
+            var steps = new List<GoalStepView> { reach };
+            if (lost)
+            {
+                steps.RemoveAll(x => !x.Done);
+                steps.Add(new GoalStepView { Text = Lore.SplitText.LostObjective, Lost = true });
+                return steps;
+            }
+            steps.Add(new GoalStepView { Text = Lore.SplitText.Leave, Done = gone });
+            return steps;
+        }
+
+        /// <summary>Separados' group `g`, all of it: fallen and in La Lata too (the names of one fallen, or none of whom got out).</summary>
+        public static List<Unit> SplitAll(GameState v, int g) => v.Mission.Split != null && g >= 0 && g < v.Mission.Split.Count
+            ? v.Mission.Split[g].Select(id => UnitById(v, id)).Where(u => u != null).ToList()
+            : new List<Unit>();
+
+        /// <summary>Separados' group `g` out on the field: its living not in La Lata (T24: inside is Alive false, Evacuated).</summary>
+        static List<Unit> SplitField(GameState v, int g) => SplitAll(v, g).Where(u => u.Alive && !u.Evacuated).ToList();
+
+        /// <summary>
+        /// Whether someone of Separados' group `g` would go if La Lata went now, as Rules.SplitShort counts them: inside it,
+        /// or in its zone with a seat (`noSeat`: Rules.NoSeat).
+        /// </summary>
+        static bool SplitGoes(GameState s, int g, List<Unit> noSeat) => SplitAll(s, g).Any(u => u.Evacuated || (u.Alive && Abilities.InEvacZone(s, u.Pos) && !noSeat.Contains(u)));
+
+        /// <summary>
+        /// This player's group in Separados (U27): the first with one of theirs (two players: by owner, as the engine splits
+        /// them); playing alone, or with none of theirs, the first. −1 outside the stage.
+        /// </summary>
+        int MyGroup(GameState v)
+        {
+            var split = v.Mission.Split;
+            if (split == null) return -1;
+            for (var g = 0; g < split.Count; g++)
+                if (split[g].Any(id => UnitById(v, id)?.Owner == MySlot)) return g;
+            return 0;
+        }
+
+        /// <summary>
+        /// Separados' groups other than the one being looked after (U27), for their arrows: those without the picked soldier;
+        /// with none of them picked, those other than this player's.
+        /// </summary>
+        IEnumerable<int> OtherGroups(GameState v)
+        {
+            var split = v.Mission.Split;
+            if (split == null) yield break;
+            var picked = Unit();
+            var at = picked != null ? split.FindIndex(g => g.Contains(picked.Id)) : -1;
+            var mine = at >= 0 ? at : MyGroup(v);
+            for (var g = 0; g < split.Count; g++)
+                if (g != mine) yield return g;
         }
 
         /// <summary>Mordido's turns left for `u` (U23): the bitten survivor found, alive and not cured; else null.</summary>
@@ -1442,6 +1547,9 @@ namespace Bastion.UI.Combat
             if (Rig == null) return;
             var v = Shown;
             var squad = v.Units.Where(u => u.Alive && u.Team == Teams.Xcom && !u.Captive && !u.Objective).ToList();
+            // Separados (U27): each player's own group, the first playing alone; the whole squad's middle is La Lata, between
+            // the two. The other one, by its arrow at the edge.
+            if (v.Mission.Split != null && SplitField(v, MyGroup(v)) is List<Unit> group && group.Count > 0) squad = group;
             if (squad.Count == 0) return;
             var here = new UnityEngine.Vector2((float)squad.Average(u => u.Pos.X), (float)squad.Average(u => u.Pos.Y));
             var foes = v.Units.Where(a => a.Alive && a.Team == Teams.Alien && Visible(a)).ToList();

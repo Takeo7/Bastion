@@ -1613,7 +1613,7 @@ namespace Bastion.Engine
             if (m.EvacDone == true)
             {
                 var someoneOut = s.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated);
-                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(s) || Rules.BittenSafe(s) || Rules.WoundedSafe(s));
+                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(s) || Rules.BittenSafe(s) || Rules.WoundedSafe(s) || Rules.SplitSafe(s));
                 End(won ? Outcomes.Victory : Outcomes.Defeat, won ? EndReasons.Objective : EndReasons.Abandoned);
                 return;
             }
@@ -1662,7 +1662,7 @@ namespace Bastion.Engine
                 Emit(new LeftBehindEvent { Unit = u.Id, NoSeat = noSeat.Contains(u) ? true : (bool?)null });
             }
             var m = S.Mission;
-            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S) || Rules.BittenSafe(S) || Rules.WoundedSafe(S));
+            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S) || Rules.BittenSafe(S) || Rules.WoundedSafe(S) || Rules.SplitSafe(S));
             if (timeUp && !won) Emit(new MissionEndedEvent { Outcome = Outcomes.Defeat, Reason = EndReasons.Timer });
             else CheckOutcome();
         }
@@ -2442,6 +2442,8 @@ namespace Bastion.Engine
             var aboard = s.Units.Where((u) => (u.Alive && u.Team == Teams.Xcom && Abilities.InEvacZone(s, u.Pos)) || u.Aboard == true).ToList();
             if (aboard.Count == 0) return false;
             if (Rules.FreeExit(m) || m.ObjectiveDone || RunsRescue(s)) return true;
+            // Separados (G23.4): one of each group going.
+            if (m.Split != null) return SplitShort(s) == null && !SplitLost(s);
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier) && aboard.Any((u) => u.Id == m.Item!.Carrier);
             if (m.Kind == MissionKinds.Rescue) return !string.IsNullOrEmpty(m.ObjectiveUnit) && aboard.Any((u) => u.Id == m.ObjectiveUnit) && (m.Bitten != true || m.Cured == true);
             return false;

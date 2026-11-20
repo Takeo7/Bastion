@@ -233,6 +233,12 @@ namespace Bastion.Engine
         /// doesn't go while they live out of it; won with them aboard. Missing, none of it.
         /// </summary>
         public bool? Wounded { get; set; }
+        /// <summary>
+        /// G23.4 Separados (Arturo, cuadros 71 and 94; .dev-snapshots/gameplay/g23/SEPARADOS.md): a run's Saqueo whose squad
+        /// starts in two groups on either side of La Lata (Setup.Split): the two, by unit id. Won with one of each
+        /// aboard as La Lata goes (Rules.SplitSafe). Missing, none of it (one soldier, or no room on the map).
+        /// </summary>
+        public List<List<string>>? Split { get; set; }
         /// <summary>Mordido: the squad's turns left till the bitten turns, from their finding (Setup.BiteTurns); null before.</summary>
         public int? BiteTurns { get; set; }
         /// <summary>Mordido: the antiviral used on the bitten (GearUsedEvent): no count any more, and La Lata takes them.</summary>

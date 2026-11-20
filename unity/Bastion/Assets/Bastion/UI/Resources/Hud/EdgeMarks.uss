@@ -73,6 +73,12 @@
     color: #ffc93a;
 }
 
+/* Separados' other group off the screen (U27): framed as El herido's; the frame, arrow, words and icon in its player's
+   colour (EdgeMarkView.Color, inline). */
+.edge-mark--split {
+    border-width: 2px;
+}
+
 .edge-mark__icon {
     width: 22px;
     height: 22px;
