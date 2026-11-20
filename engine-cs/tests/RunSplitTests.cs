@@ -410,11 +410,34 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void NoSurvivorLooseOnItsMap()
+        {
+            // Producto, 20/11 (Red's R14): with 2 seats a loose survivor took the other group's seat in La Lata and the reward
+            // was lost. Never in Separados; every other stage as before, on the same seeds.
+            var seeds = Enumerable.Range(1, 400).Where((seed) => RunMap.LooseSurvivor(new RunNode { Kind = NodeKinds.Normal, Row = 2, Seed = seed })).ToList();
+            Assert.NotEmpty(seeds);
+            foreach (var seed in seeds)
+            {
+                Assert.False(RunMap.LooseSurvivor(new RunNode { Kind = NodeKinds.Split, Row = 2, Seed = seed }));
+                foreach (var kind in new[] { NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Key, NodeKinds.Recovery })
+                    Assert.True(RunMap.LooseSurvivor(new RunNode { Kind = kind, Row = 2, Seed = seed }), $"{kind} {seed}");
+            }
+            // On the map: the Saqueo of that seed has its survivor; Separados, with 2 seats, none.
+            var (_, plain) = Split(seeds[0], Places.Town, 0, true, kind: NodeKinds.Normal);
+            Assert.NotNull(plain.Mission.Survivor);
+            var (_, s) = Split(seeds[0], Places.Town, 0, true);
+            Assert.NotNull(s.Mission.Split);
+            Assert.Null(s.Mission.Survivor);
+            Assert.DoesNotContain(s.Units, (u) => u.Captive);
+        }
+
+        [Fact]
         public void AJoinedSurvivorCountsForNoGroup()
         {
             var (_, s) = Split();
             Board(s, Group(s, 0)[0]);
-            // A survivor loose on the map, talked to, in La Lata: nobody of the second group yet.
+            // A survivor (none is loose in Separados since 20/11, but one of neither group), talked to, in La Lata: nobody of
+            // the second group yet.
             var x = Group(s, 1)[0];
             var vip = new Unit { Id = "vip", Team = Teams.Xcom, Alive = true, Name = "Superviviente", Owner = 0, Template = TemplateIds.Rookie, Hp = 3, MaxHp = 3, Pos = Events.CopyPos(x.Pos) };
             s.Units.Add(vip);
