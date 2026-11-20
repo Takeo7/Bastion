@@ -72,5 +72,44 @@ namespace Bastion.Engine.Tests
             s.Mission.Rifled = null;
             Assert.Contains(Decor.ObjectAt(s.Decor!, s.Width, nose)!.Tiles, (j) => Looting.BootOf(s, j) == nose);
         }
+
+        [Fact]
+        public void AMolotovOnACarsNoseLeavesItsBoot()
+        {
+            // Gameplay, 19/11: a molotov landing on a whole car's nose made its fire's Source the nose, and the car a burning
+            // one (no boot while it burnt; drawn a burning wreck when the map was built again). It leaves the scenery alone
+            // (Arturo, 1/11): only the map's own fires burn a car (Burning.Car).
+            var (_, s) = RunInteriorTests.At(Places.City, NodeKinds.Normal, 7);
+            s.Concealed = false;
+            var u = s.Units.First((x) => x.Team == Teams.Xcom && x.Alive && x.CampaignId != null);
+            u.Gear = new List<string> { ItemIds.Molotov };
+            u.Charges[ChargeIds.Molotov] = 2;
+            u.Ap = 2;
+            var throws = Boots(s).Select((p) => Looting.BootOf(s, Grid.TileIndex(s, p.X, p.Y))!.Value).Distinct().SelectMany((nose) =>
+            {
+                var np = new Pos { X = nose % s.Width, Y = nose / s.Width, Z = 0 };
+                return Enumerable.Range(0, 49).Select((k) => new Pos { X = np.X + k % 7 - 3, Y = np.Y + k / 7 - 3, Z = 0 })
+                    .Where((p) => Grid.InBounds(s, p.X, p.Y) && Grid.Distance(p, np) >= 2 && Grid.IsWalkable(Grid.KindAt(s, p)) && Grid.UnitAt(s, p) == null && Decor.ObjectAt(s.Decor!, s.Width, Grid.TileIndex(s, p.X, p.Y)) == null)
+                    .Select((p) => (nose, np, from: p));
+            });
+            var (carNose, at, stand) = throws.First((t) =>
+            {
+                var was = u.Pos;
+                u.Pos = t.from;
+                var can = Abilities.CanTargetTile(s, u, AbilityIds.Molotov, t.np);
+                u.Pos = was;
+                return can;
+            });
+            u.Pos = stand;
+            var ctx = new CommandContext { Slot = u.Owner ?? 0, Connected = new[] { 0, 1 }, Rng = new Rng(1) };
+            Assert.True(Rules.ExecuteCommand(s, new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Molotov, Tile = at }, ctx).Ok);
+            Assert.Contains(s.Fires!, (f) => f.Source == carNose && f.Turns != null);
+            Assert.False(Burning.Car(s, carNose));
+            Assert.Contains(Decor.ObjectAt(s.Decor!, s.Width, carNose)!.Tiles, (j) => Looting.BootOf(s, j) == carNose);
+            // One of the map's own (no turns, for ever) from that nose: a burning car, no boot.
+            s.Fires!.Add(new Fire { Id = "f9", Source = carNose, Tiles = new List<int>() });
+            Assert.True(Burning.Car(s, carNose));
+            Assert.All(Decor.ObjectAt(s.Decor!, s.Width, carNose)!.Tiles, (j) => Assert.Null(Looting.BootOf(s, j)));
+        }
     }
 }

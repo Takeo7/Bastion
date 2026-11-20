@@ -239,5 +239,15 @@ namespace Bastion.Engine.Tests
             Assert.Equal(Biomes.Facility, RunMap.MapOf(n)!.Biome);
             Assert.Null(RunMap.MapOf(new RunNode { Kind = NodeKinds.Trade }));
         }
+
+        [Fact]
+        public void EveryKindAndModifierIsInItsList()
+        {
+            // NodeKinds.All went without Bitten and Wounded (UI, 19/11): every constant in its list, once.
+            static List<string> Constants(System.Type t) => t.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                .Where((f) => f.IsLiteral && f.FieldType == typeof(string)).Select((f) => (string)f.GetValue(null)!).ToList();
+            Assert.Equal(Constants(typeof(NodeKinds)).OrderBy((k) => k), NodeKinds.All.OrderBy((k) => k));
+            Assert.Equal(Constants(typeof(Modifiers)).OrderBy((k) => k), Modifiers.All.OrderBy((k) => k));
+        }
     }
 }

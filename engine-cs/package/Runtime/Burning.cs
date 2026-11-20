@@ -22,5 +22,15 @@ namespace Bastion.Engine
             if (s.Fires == null || s.Fires.Count == 0) return null;
             return new HashSet<int>(s.Fires.SelectMany((f) => f.Tiles));
         }
+
+        /// <summary>
+        /// Whether the car whose nose is ground tile `anchor` burns: one of the map's own fires from it (Fire.Turns absent,
+        /// for ever). Never a molotov's, even one landing on its nose (Arturo, 1/11: it leaves the scenery alone; it took
+        /// the boot away, Gameplay 19/11). For the boot (Looting.BootOf) and the client's burning wreck.
+        /// </summary>
+        public static bool Car(GameState s, int anchor)
+        {
+            return s.Fires != null && s.Fires.Any((f) => f.Turns == null && f.Source == anchor);
+        }
     }
 }

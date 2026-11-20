@@ -41,7 +41,8 @@ namespace Bastion.Engine
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Key, Refuge, Trade, Event, Boss,
+            Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Key, Bitten, Wounded, Refuge, Trade, Event,
+            Boss,
         };
 
         /// <summary>The stops: no fight, the squad answers them on the map.</summary>

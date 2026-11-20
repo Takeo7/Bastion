@@ -410,7 +410,7 @@ namespace Bastion.Engine
             // Nor one rifled before the squad came (G21: MissionState.Rifled), nor one burning (GameState.Fires from its nose,
             // for ever): drawn rusted, both (Arturo, cuadro 74: «oxidado = no se registra»).
             if (s.Mission.Rifled?.Contains(car.Anchor) == true) return null;
-            if ((s.Fires ?? new List<Fire>()).Any((f) => f.Source == car.Anchor)) return null;
+            if (Burning.Car(s, car.Anchor)) return null;
             int nx = car.Anchor % s.Width, ny = car.Anchor / s.Width;
             var boot = car.Tiles.OrderByDescending((j) => Js.Hypot(j % s.Width - nx, j / s.Width - ny)).First();
             return boot == i ? car.Anchor : (int?)null;

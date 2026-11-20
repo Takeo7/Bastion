@@ -2415,7 +2415,7 @@ namespace Bastion.Client.Map
             string id;
             // A car crashed or left in the road (GameState.wrecks, Arturo 1/11), or one burning (GameState.fires).
             var wreck = thing.Kind == "carFront" && floor == 0 ? s.Wrecks?.FirstOrDefault(w => w.Anchor == thing.Anchor) : null;
-            bool burning = thing.Kind == "carFront" && floor == 0 && s.Fires?.Any(f => f.Source == thing.Anchor) == true;
+            bool burning = thing.Kind == "carFront" && floor == 0 && Burning.Car(s, thing.Anchor);
             // The police car of the campaign's first mission (MissionState.PoliceCar, Arturo 1/11: its two pistols to search for).
             bool police = thing.Kind == "carFront" && floor == 0 && s.Mission?.PoliceCar != null && s.Mission.PoliceCar.Contains(thing.Anchor);
             // A police station's bench and cell bunk, as their marks say (H9 §3, MapBuilder.Police.cs).
