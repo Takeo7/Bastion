@@ -67,7 +67,8 @@ namespace Bastion.Engine.Tests
             // Rows 2–5, one special out of ten.
             Assert.All(bitten, (n) => Assert.InRange(n.Row, 2, RunMap.NodeRows));
             double share = bitten.Count / (double)nodes.Count((n) => n.Row >= 2 && n.Row <= RunMap.NodeRows);
-            Assert.InRange(share, 0.015, 0.04);
+            // (One of thirteen specials since Saqueadores, G23.5: 0.014 on these 500 maps.)
+            Assert.InRange(share, 0.012, 0.04);
             // Always the hospital (RunMap.SpecialFor), whatever the seed; no survivor loose besides its own; a Rescate's fight.
             Assert.All(bitten, (n) => Assert.Equal(Places.Hospital, n.Site));
             Assert.All(bitten, (n) => Assert.False(RunMap.LooseSurvivor(n)));

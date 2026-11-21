@@ -57,8 +57,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal(MissionKinds.Scavenge, Runs.MissionKindOf(NodeKinds.Raiders));
             Assert.Contains(NodeKinds.Raiders, NodeKinds.All);
             Assert.Equal(new[] { Places.Country, Places.Roadside, Places.Camping }, RunMap.RaidersSites);
-            // Not on the maps till the cuadro.
-            Assert.DoesNotContain(NodeKinds.Raiders, RunMap.Specials);
+            // On the maps since the 0.13.7 (Producto, 21/11).
+            Assert.Contains(NodeKinds.Raiders, RunMap.Specials);
             Assert.Equal("Saqueadores", Lore.StageName(NodeKinds.Raiders));
         }
 
@@ -347,7 +347,7 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void OnTheMapsOnlyAtItsSitesFromItsRowNeverASpecialMapNorALooseSurvivor()
         {
-            // Producto's review of 21/11, 3 and 8: what the maps draw for it once there (it isn't on them yet).
+            // Producto's review of 21/11, 3 and 8: what the maps draw for it.
             var n = new RunNode { Kind = NodeKinds.Raiders, Row = 3, Seed = 5, Site = Places.Country };
             for (var seed = 0; seed < 50; seed++)
             {
@@ -357,6 +357,13 @@ namespace Bastion.Engine.Tests
             var loose = Enumerable.Range(1, 400).First((x) => RunMap.LooseSurvivor(new RunNode { Kind = NodeKinds.Normal, Row = 3, Seed = x }));
             Assert.False(RunMap.LooseSurvivor(new RunNode { Kind = NodeKinds.Raiders, Row = 3, Seed = loose }));
             foreach (var seed in Enumerable.Range(1, 200)) Assert.Contains(RunMap.SiteOf(NodeKinds.Raiders, 3, new Rng(seed)), RunMap.RaidersSites);
+            // And on the maps themselves, every chapter: from its row, at its sites, all three of them.
+            var raids = Enumerable.Range(1, 3).SelectMany((chapter) => Enumerable.Range(1, 300).SelectMany((seed) => RunMap.Generate(chapter, seed)))
+                .Where((x) => x.Kind == NodeKinds.Raiders).ToList();
+            Assert.NotEmpty(raids);
+            Assert.All(raids, (x) => Assert.True(x.Row >= RunMap.RaidersFrom && x.Row <= RunMap.NodeRows, $"{x.Row}"));
+            Assert.All(raids, (x) => Assert.Contains(x.Site, RunMap.RaidersSites));
+            Assert.All(RunMap.RaidersSites, (site) => Assert.Contains(raids, (x) => x.Site == site));
         }
 
         [Fact]

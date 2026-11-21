@@ -568,8 +568,9 @@ namespace Bastion.Engine
                 }
                 case SearchPieces.MedicalCart:
                     return (rng.Int(100) < CartMedicine ? new Loot { Medicines = 1 } : null, 0);
-                // G23.5 (to size with the bench and the cuadro): a long gun with a magazine one time in two, else twice a box's
-                // supplies and a medicine.
+                // G23.5: a long gun with a magazine one time in two, else twice a box's supplies and a medicine. Kept after R2
+                // of 21/11 (400 chapters): the stash brings 74 § of worth a fight (164 with its three crates), a Saqueo of
+                // the same rows 19, at the same risk for the bots.
                 case SearchPieces.StashCrate:
                     if (rng.Int(100) < StashGun)
                     {

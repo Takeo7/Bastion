@@ -26,13 +26,14 @@ namespace Bastion.Engine
         /// station. Mordido since G23.2 (Arturo, cuadro 90: «Como está, y lo pruebo yo»), rows 2–5, always at the hospital.
         /// El herido since G23.3 (Arturo, cuadro 92; Producto, 19/11: the 0.13.5), rows 2–5, on a Rescate's maps. Separados
         /// since G23.4 (Arturo, cuadros 94 and 95; Producto, 20/11), rows 2–5, on the open maps only (SplitSites), never
-        /// «Despiertos» from the map (ModifiersFor).
+        /// «Despiertos» from the map (ModifiersFor). Saqueadores since G23.5 (Arturo, cuadros 98–100; Producto, 21/11: the
+        /// 0.13.7), from row RaidersFrom, on its own sites only (RaidersSites), never a special map.
         /// </summary>
         public static readonly IReadOnlyList<string> Specials = new[]
         {
             NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Rescue,
             NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Key, NodeKinds.Bitten,
-            NodeKinds.Wounded, NodeKinds.Split,
+            NodeKinds.Wounded, NodeKinds.Split, NodeKinds.Raiders,
         };
 
         /// <summary>

@@ -190,7 +190,7 @@ namespace Bastion.Engine.Tests
             [NodeKinds.Normal] = "Saqueo", [NodeKinds.Hold] = "Asedio", [NodeKinds.Crossing] = "Travesía", [NodeKinds.Stealth] = "Sigilo*",
             [NodeKinds.Elite] = "Guarida", [NodeKinds.Sabotage] = "Sabotaje", [NodeKinds.Elimination] = "Limpieza",
             [NodeKinds.Recovery] = "Recuperación", [NodeKinds.Rescue] = "Rescate", [NodeKinds.Key] = "La llave", [NodeKinds.Bitten] = "Mordido",
-            [NodeKinds.Wounded] = "El herido", [NodeKinds.Split] = "Separados",
+            [NodeKinds.Wounded] = "El herido", [NodeKinds.Split] = "Separados", [NodeKinds.Raiders] = "Saqueadores",
         };
 
         private static string SiteName(string site) => site == Places.Town ? "Pueblo o ciudad" : Places.Names[site];
@@ -389,6 +389,13 @@ namespace Bastion.Engine.Tests
             public int[] SplitSizes = new int[0];
             public int?[] SplitArrived = new int?[2], SplitFell = new int?[2];
             public bool SplitFellBefore(int g) => SplitFell[g] != null && SplitArrived[g] == null;
+            /// <summary>
+            /// G23.5 Saqueadores' (Producto, 21/11: on the maps with R2): whether its camp was made (else a Saqueo of the stage), its
+            /// crates searched and how many while the camp slept, the turn it woke (null: never), its guards and those down.
+            /// </summary>
+            public bool Camp;
+            public int Crates, Unseen, Guards, GuardsDown;
+            public int? WokeTurn;
         }
 
         private sealed class Expedition
@@ -398,8 +405,8 @@ namespace Bastion.Engine.Tests
             public string? Ended;
             /// <summary>La llave's on its map, and in reach from where it went out (all of them: from row 1).</summary>
             public int Keys;
-            /// <summary>G23.2 Mordido's on its map, likewise; G23.3 El herido's; G23.4 Separados'.</summary>
-            public int Bitten, Wounded, Split;
+            /// <summary>G23.2 Mordido's on its map, likewise; G23.3 El herido's; G23.4 Separados'; G23.5 Saqueadores'.</summary>
+            public int Bitten, Wounded, Split, Raiders;
             public readonly List<Leg> Legs = new List<Leg>();
         }
 
@@ -412,6 +419,9 @@ namespace Bastion.Engine.Tests
             public double Seconds;
             public int Missions;
         }
+
+        /// <summary>Saqueadores: its stash's crates searched (GameState.Searched, by node as the crates).</summary>
+        private static int CratesSearched(GameState s) => s.Mission.Raiders == null ? 0 : s.Mission.Raiders.Crates.Count((i) => s.Searched != null && s.Searched.Contains(i));
 
         private static int RowOf(string? node) => node != null && node.StartsWith("n") && int.TryParse(node.Substring(1).Split('-')[0], out var r) ? r : 0;
 
@@ -493,6 +503,7 @@ namespace Bastion.Engine.Tests
             var bite = new Leg();
             string? back = null;
             var split = new Leg();
+            var raid = new Leg();
             var played = CampaignAutoRun.Run(seed, 1000,
                 watch: (c) =>
                 {
@@ -500,7 +511,7 @@ namespace Bastion.Engine.Tests
                     {
                         if (now == null)
                         {
-                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c), Keys = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Key), Bitten = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Bitten), Wounded = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Wounded), Split = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Split) };
+                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c), Keys = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Key), Bitten = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Bitten), Wounded = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Wounded), Split = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Split), Raiders = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Raiders) };
                             ch.Expeditions.Add(now);
                         }
                         now.Row = Math.Max(now.Row, RowOf(c.Run.At));
@@ -563,13 +574,32 @@ namespace Bastion.Engine.Tests
                         seen.SplitArrived = split.SplitArrived;
                         seen.SplitFell = split.SplitFell;
                     }
+                    if (s.Mission.Raiders != null)
+                    {
+                        seen.Camp = true;
+                        seen.Crates = CratesSearched(s);
+                        seen.Unseen = raid.Unseen;
+                        seen.WokeTurn = raid.WokeTurn;
+                        seen.Guards = s.Units.Count((u) => u.Guard != null);
+                        seen.GuardsDown = s.Units.Count((u) => u.Guard != null && !u.Alive);
+                    }
                     bite = new Leg();
                     back = null;
                     split = new Leg();
+                    raid = new Leg();
                 },
                 playing: (s) =>
                 {
                     lost |= Looting.KeyLost(s);
+                    if (s.Mission.Raiders != null)
+                    {
+                        // A crate searched with the camp still asleep after it (a search that wakes it is a seen one).
+                        var awake = s.Units.Any((u) => u.Guard != null && u.Alive && !Paths.OnPatrol(s, u));
+                        var crates = CratesSearched(s);
+                        if (crates > raid.Crates && !awake) raid.Unseen += crates - raid.Crates;
+                        raid.Crates = crates;
+                        if (awake) raid.WokeTurn ??= s.Turn;
+                    }
                     if (s.Mission.Split != null)
                         for (var g = 0; g < s.Mission.Split.Count; g++)
                         {
@@ -775,13 +805,50 @@ namespace Bastion.Engine.Tests
                 foreach (var g in saqueo.GroupBy(RowsOf).OrderBy((g) => g.Key)) Row3($"Saqueo, {g.Key}", g.ToList());
                 Row3("Saqueo, todos (filas 2–5)", saqueo);
             }
+            // G23.5 Saqueadores (Producto, 21/11: on the maps with R2, the 0.13.7): its stash, unseen or not, and what it brings
+            // against a Saqueo of the same rows in the same bench (is the stash worth its risk: Looting.StashCrate's loot).
+            var raidLegs = legs.Where((l) => l.Kind == NodeKinds.Raiders).ToList();
+            lines.Add("");
+            lines.Add("## Saqueadores");
+            lines.Add("");
+            lines.Add($"- En los mapas: {expeditions.Sum((e) => e.Raiders)} en {expeditions.Count} expediciones ({expeditions.Sum((e) => e.Raiders) / (double)Math.Max(1, expeditions.Count):0.00} por mapa; {expeditions.Count((e) => e.Raiders > 0) / (double)Math.Max(1, expeditions.Count):P0} de los mapas con alguno); {expeditions.Sum((e) => e.Raiders) / (double)count:0.0} por capítulo.");
+            lines.Add($"- Jugados: {raidLegs.Count} en {count} capítulos ({raidLegs.Count / (double)count:0.00} por capítulo; filas {string.Join(", ", raidLegs.GroupBy((l) => l.Row).OrderBy((g) => g.Key).Select((g) => $"{g.Key}: {g.Count()}"))}).");
+            if (raidLegs.Count > 0)
+            {
+                var camps = raidLegs.Where((l) => l.Camp).ToList();
+                lines.Add($"- Con campamento: {camps.Count} de {raidLegs.Count} (sin él, un Saqueo del sitio).");
+                if (camps.Count > 0)
+                {
+                    lines.Add($"- Cajas registradas: {string.Join(", ", Enumerable.Range(0, Mapgen.StashCrates + 1).Select((k) => $"{k}: {camps.Count((l) => l.Crates == k)}"))}; sin despertar al campamento, {camps.Sum((l) => l.Unseen)} de {camps.Sum((l) => l.Crates)} cajas, y alguna en {camps.Count((l) => l.Unseen > 0)} de {camps.Count} combates.");
+                    lines.Add($"- El campamento despierta: {camps.Count((l) => l.WokeTurn != null)} de {camps.Count} (turno: {string.Join(" ", camps.Where((l) => l.WokeTurn != null).Select((l) => l.WokeTurn!.Value).OrderBy((x) => x))}); guardias tumbados o muertos: {camps.Sum((l) => l.GuardsDown)} de {camps.Sum((l) => l.Guards)}.");
+                }
+                lines.Add($"- Ganados {raidLegs.Count((l) => l.Victory)} de {raidLegs.Count}; caídos {raidLegs.Sum((l) => l.Fallen)} ({raidLegs.Average((l) => l.Fallen):0.0} por combate); cae la escuadra entera {raidLegs.Count((l) => l.Ended == RunEnds.Wiped)}; razones: {string.Join(", ", raidLegs.GroupBy((l) => l.Reason).OrderByDescending((g) => g.Count()).Select((g) => $"{g.Key} {g.Count()}"))}.");
+                lines.Add("");
+                lines.Add("| | combates | ganados | caídos (media) | cae la escuadra entera | lo hallado, § (media) | § sueltos (media) |");
+                lines.Add("|---|---|---|---|---|---|---|");
+                void Row4(string name, List<Leg> ls)
+                {
+                    if (ls.Count > 0) lines.Add($"| {name} | {ls.Count} | {ls.Count((l) => l.Victory)} | {ls.Average((l) => l.Fallen):0.0} | {ls.Count((l) => l.Ended == RunEnds.Wiped)} | {ls.Average((l) => l.Worth):0} | {ls.Average((l) => l.Supplies + l.Reward):0} |");
+                }
+                string RowsOf4(Leg l) => l.Row <= 4 ? "filas 3–4" : "fila 5";
+                foreach (var g in raidLegs.GroupBy(RowsOf4).OrderBy((g) => g.Key)) Row4($"Saqueadores, {g.Key}", g.ToList());
+                Row4("Saqueadores, con las 3 cajas", raidLegs.Where((l) => l.Crates == Mapgen.StashCrates).ToList());
+                Row4("Saqueadores, con 1–2", raidLegs.Where((l) => l.Crates > 0 && l.Crates < Mapgen.StashCrates).ToList());
+                Row4("Saqueadores, sin ninguna", raidLegs.Where((l) => l.Crates == 0).ToList());
+                Row4("Saqueadores, todos", raidLegs);
+                var saqueo3 = legs.Where((l) => l.Kind == NodeKinds.Normal && l.Row >= RunMap.RaidersFrom).ToList();
+                foreach (var g in saqueo3.GroupBy(RowsOf4).OrderBy((g) => g.Key)) Row4($"Saqueo, {g.Key}", g.ToList());
+                Row4("Saqueo, todos (filas 3–5)", saqueo3);
+                lines.Add("");
+                lines.Add("Lo hallado, a los precios de la sonda de G19 (un fusil de asalto 90 §, una escopeta 80 §, un cargador o una medicina 15 §…), con lo del alijo.");
+            }
             lines.Add("");
             lines.Add("## Cada expedición");
             lines.Add("");
             foreach (var ch in chapters)
                 foreach (var e in ch.Expeditions)
                     lines.Add($"{ch.Seed}·{e.Index}: {e.Squad} de {e.Soldiers} vivos, armas {e.Arms}, mejoras «{e.Upgrades}», § {e.Before} → {e.After}, fila {e.Row}, acaba {e.Ended ?? "-"}: "
-                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.KeyAt != null ? $" llave {l.KeyAt}{(l.KeyLost ? " PERDIDA" : "")}, armería {(l.ArmoryOpen ? "abierta" : "cerrada")} {l.ArmorySearched}/{l.ArmoryPieces}" : "")}{(l.Kind == NodeKinds.Wounded ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, cargado t{l.CarriedTurn?.ToString() ?? "-"}, dentro t{l.AboardTurn?.ToString() ?? "-"}, {l.Relays} relevos{(l.WoundedDead ? ", MUERE" : "")}" : "")}{(l.Kind == NodeKinds.Bitten ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, antiviral t{l.AntiviralTurn?.ToString() ?? "-"}, curado t{l.CuredTurn?.ToString() ?? "-"}{(l.Turned ? ", CONVERTIDO" : "")}{(l.Killed ? ", MUERTO" : "")}{(l.Left ? ", EN TIERRA" : "")}{(l.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "")}{(l.SplitSizes.Length == 2 ? $" grupos {l.SplitSizes[0]}+{l.SplitSizes[1]}, llegan t{l.SplitArrived[0]?.ToString() ?? "-"}/t{l.SplitArrived[1]?.ToString() ?? "-"}, caen t{l.SplitFell[0]?.ToString() ?? "-"}/t{l.SplitFell[1]?.ToString() ?? "-"}" : "")}{(l.Matched ? "" : " ¿?")}")));
+                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.KeyAt != null ? $" llave {l.KeyAt}{(l.KeyLost ? " PERDIDA" : "")}, armería {(l.ArmoryOpen ? "abierta" : "cerrada")} {l.ArmorySearched}/{l.ArmoryPieces}" : "")}{(l.Kind == NodeKinds.Wounded ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, cargado t{l.CarriedTurn?.ToString() ?? "-"}, dentro t{l.AboardTurn?.ToString() ?? "-"}, {l.Relays} relevos{(l.WoundedDead ? ", MUERE" : "")}" : "")}{(l.Kind == NodeKinds.Bitten ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, antiviral t{l.AntiviralTurn?.ToString() ?? "-"}, curado t{l.CuredTurn?.ToString() ?? "-"}{(l.Turned ? ", CONVERTIDO" : "")}{(l.Killed ? ", MUERTO" : "")}{(l.Left ? ", EN TIERRA" : "")}{(l.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "")}{(l.SplitSizes.Length == 2 ? $" grupos {l.SplitSizes[0]}+{l.SplitSizes[1]}, llegan t{l.SplitArrived[0]?.ToString() ?? "-"}/t{l.SplitArrived[1]?.ToString() ?? "-"}, caen t{l.SplitFell[0]?.ToString() ?? "-"}/t{l.SplitFell[1]?.ToString() ?? "-"}" : "")}{(l.Kind == NodeKinds.Raiders ? (l.Camp ? $" cajas {l.Crates} ({l.Unseen} sin despertar), despierta t{l.WokeTurn?.ToString() ?? "-"}, guardias {l.GuardsDown}/{l.Guards}, hallado {l.Worth} §" : " SIN CAMPAMENTO") : "")}{(l.Matched ? "" : " ¿?")}")));
             File.WriteAllLines(Path.Combine(BenchFactAttribute.Folder!, "r2.md"), lines);
             foreach (var l in lines.Take(30)) output.WriteLine(l);
             Assert.All(chapters, (c) => Assert.Null(c.Stuck));

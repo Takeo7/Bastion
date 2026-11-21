@@ -287,10 +287,11 @@ namespace Bastion.Engine.Tests
         {
             // On since 16/11 (Arte's camera and walls, UI's pass).
             Assert.True(RunMap.HospitalSites);
-            // (300 maps: since H9 the hospital shares a town's or a city's fights with three more.)
-            var off = Enumerable.Range(0, 300).Select((seed) => RunMap.Generate(1, seed, false)).ToList();
+            // (400 maps: since H9 the hospital shares a town's or a city's fights with three more; since Saqueadores went on
+            // the maps, G23.5, the first Asedio at the hospital is at seed 315.)
+            var off = Enumerable.Range(0, 400).Select((seed) => RunMap.Generate(1, seed, false)).ToList();
             Assert.DoesNotContain(off.SelectMany((m) => m), (n) => n.Site == Places.Hospital);
-            var on = Enumerable.Range(0, 300).Select((seed) => RunMap.Generate(1, seed, true)).ToList();
+            var on = Enumerable.Range(0, 400).Select((seed) => RunMap.Generate(1, seed, true)).ToList();
             var hospitals = on.SelectMany((m) => m).Where((n) => n.Site == Places.Hospital).ToList();
             Assert.NotEmpty(hospitals);
             // Normal nodes and specials both; never a sabotage nor the boss.

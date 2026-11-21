@@ -290,7 +290,8 @@ namespace Bastion.Engine
                     return "Registra un estante de medicinas que tengas al lado. Puede haber una medicina o un botiquín, o nada. Hace un poco de ruido.";
                 case SearchPieces.MedicalCart:
                     return "Registra un carro de curas que tengas al lado. Puede haber una medicina, o nada. Hace un poco de ruido.";
-                // G23.5: a long gun with a magazine, or twice a box's supplies and a medicine (provisional, Gameplay's bench).
+                // G23.5: a long gun with a magazine one time in two, else twice a box's supplies and a medicine (kept after the
+                // R2, Gameplay and Producto, 21/11).
                 case SearchPieces.StashCrate:
                     return "Abre una caja del alijo que tengas al lado. Da siempre algo: un arma larga con un cargador, o suministros y una medicina. Hace un poco de ruido.";
                 default:
