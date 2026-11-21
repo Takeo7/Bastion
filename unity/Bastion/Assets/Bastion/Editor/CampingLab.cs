@@ -211,6 +211,16 @@ namespace Bastion.EditorTools
             "Assets/Synty/PolygonApocalypse/Prefabs/Buildings/SM_Bld_Military_Tent_01.prefab",
             "Assets/Synty/PolygonApocalypse/Prefabs/Buildings/SM_Bld_Quarantine_Tent_01.prefab",
             "Assets/Synty/PolygonTown/Prefabs/Props/SM_Prop_Cooler_01.prefab",
+            // The raiders' camp (G23.5): its fence of sandbags, its stash's crates on their pallets.
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Sandbag_Wall_02.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Pallet_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Crate_Open_03.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Barricade_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Barricade_04.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Barricade_Metal_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Barricade_Corrugated_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Barricade_Pallet_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Tire_Pile_01.prefab",
         };
 
         /// <summary>

@@ -3442,8 +3442,10 @@ namespace Bastion.UI.Combat
             // Those in sight that heard it, marked a moment over their heads in the ring's colour (Gameplay, 16/11: Arte turns
             // them, but from the game's camera that is small); the camera stays where it is.
             var units = Units;
+            // (A Saqueadores' guard's over where its flag hangs standing, U28: clear of the state it has on a line of its own.
+            // One seated gets up to go and look, and its flag rises with it: the mark stays where it was put.)
             foreach (var a in e.Heard.Select(Unit).Where(a => a != null && a.Alive && control.Visible(a) && (units == null || units.Drawn(a.Id))))
-                Hud?.Heard(Head(a.Id), ours ? "#ffc93a" : scream ? "#c58cff" : "#ff6b5a");
+                Hud?.Heard(a.Guard != null ? Feet(a.Id) + Vector3.up * GuardHeardAt : Head(a.Id), ours ? "#ffc93a" : scream ? "#c58cff" : "#ff6b5a");
             var fresh = e.Heard.Select(Unit).Where(a => a != null && a.Alive && a.Heard == null && !control.Visible(a)).ToList();
             if (fresh.Count == 0 || by == null) return;
             if (!ours)
@@ -3457,6 +3459,9 @@ namespace Bastion.UI.Combat
             if (!alarmRaised) Hud?.Banner("OS HAN OÍDO", "warn", Capitalize(text));
             Log($"Os han oído: {text}", "#ffc93a");
         }
+
+        /// <summary>How high (m) over a Saqueadores' guard's feet its heard mark goes (U28): a standing figure's flag (1.75 and 0.35), and a little more.</summary>
+        const float GuardHeardAt = 2.3f;
 
         /// <summary>Whether anything of the enemy turn now queued will be seen: something done in sight, or to one of ours.</summary>
         bool EnemyTurnShows()

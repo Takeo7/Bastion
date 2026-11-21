@@ -180,6 +180,13 @@ namespace Bastion.Engine
             else if (site == Sites.Roadside) objRect = Roadside(c, rng, style, role);
             else objRect = Wilds(c, rng, style, role);
             ThinClutter(c, opts.Seed);
+            // Saqueadores (G23.5): the camp of the living, on a seed of its own.
+            if (opts.Camp == true && biome == Biomes.Wilds)
+            {
+                var campRng = new Rng(opts.Seed ^ 0xca3b);
+                if (site == Sites.Camping) RaidersAtCamping(c, campRng);
+                else RaidersCamp(c, campRng);
+            }
             // Something to take cover behind on the squad's first move: barricades and crates, rocks in the wilds. In town, only
             // with nothing else a few tiles round (the squad's square has its fountain, benches and trees: playtest 18/10, #12).
             var posts = new[] { Barricade, Corner, Pair }.Select((parts) => (IReadOnlyList<Part>)(biome == Biomes.Wilds ? Dressed(parts, DecorKinds.Rock) : Dressed(parts, DecorKinds.Barricade, DecorKinds.Crates))).ToList();
@@ -232,7 +239,10 @@ namespace Bastion.Engine
                 if (site == Sites.Hospital) evacZone = HospitalEvac(c);
                 else if (site == Sites.Offices || site == Sites.Shed || site == Sites.Police) evacZone = StripEvac(c, site == Sites.Shed ? ShedStrip : site == Sites.Police ? PoliceStrip : OfficesStrip);
                 else if (site == Sites.Plaza) evacZone = PlazaEvac(c);
-                else if (site == Sites.Camping) evacZone = CampingEvac(c);
+                // Saqueadores at the camping (G23.5): La Lata near where the squad comes in, not by the turning place beside the
+                // military area (Red's R15, 20/11: the way out passed before the camp and woke it every time).
+                else if (site == Sites.Camping) evacZone = opts.Camp == true ? CampingNearEvac(c) : CampingEvac(c);
+                if (site == Sites.Camping && opts.Camp == true && evacZone.Count == 0) evacZone = CampingEvac(c);
                 if (opts.EvacNear == true && evacZone.Count == 0) evacZone = NearEvac(c);
                 // In a facility entered from the apron the evac is inside the fence (a yard by the far wall).
                 var top = compound != null && !compound.Value.Inside ? FacilityInside : 0;

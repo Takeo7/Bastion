@@ -8,7 +8,8 @@ namespace Bastion.Engine.Tests
 {
     /// <summary>
     /// Golpe silencioso (Arturo, 16/11, chosen in the box): with a blade, from behind one of the dead that hasn't seen you, it
-    /// always kills, silently; only a Zombi or a Corredor; never with the chainsaw (Gameplay). Abilities.TakedownRefusal,
+    /// always kills, silently; only a Zombi or a Corredor, and of the living a Saqueador or a Cazador (cuadro 99), never the
+    /// Cabecilla; never with the chainsaw (Gameplay). Abilities.TakedownRefusal,
     /// Rules.Takedown. And how one gets there: while the squad is hidden, the dead don't notice whoever comes up behind or
     /// beside them, out of their cone (Los.InNoticeCone: «por detrás de un zombi que no te ha visto»).
     /// </summary>
@@ -121,9 +122,31 @@ namespace Bastion.Engine.Tests
             {
                 var s = Behind(out _, out var b, template);
                 var r = Takedown(s);
-                Assert.Equal((false, "Solo contra Zombis y Corredores."), (r.Ok, r.Error));
+                Assert.Equal((false, "Solo contra Zombis, Corredores, Saqueadores y Cazadores."), (r.Ok, r.Error));
                 Assert.True(b.Alive);
             }
+        }
+
+        [Fact(DisplayName = "takedown › of the living, the Saqueador and the Cazador unaware die at once; never the Cabecilla (cuadro 99)")]
+        public void OfTheLivingTheSaqueadorAndTheCazadorNotTheCabecilla()
+        {
+            foreach (var template in new[] { TemplateIds.Trooper, TemplateIds.Lancer })
+            {
+                var s = Behind(out _, out var l, template);
+                var r = Takedown(s);
+                Assert.True(r.Ok, r.Error);
+                Assert.False(l.Alive);
+                Assert.Empty(Of<NoiseEvent>(r.Events));
+                Assert.True(s.Concealed);
+            }
+            var o = Behind(out _, out var officer, TemplateIds.Officer);
+            var refused = Takedown(o);
+            Assert.Equal((false, "Contra el Cabecilla no hay golpe silencioso."), (refused.Ok, refused.Error));
+            Assert.True(officer.Alive);
+            // Awake, not one of them.
+            var a = Behind(out _, out var awake, TemplateIds.Trooper, alert: true);
+            Assert.Equal((false, "Ya está alerta."), (Takedown(a).Ok, Takedown(a).Error));
+            Assert.True(awake.Alive);
         }
 
         [Fact(DisplayName = "takedown › hidden, a soldier walks up behind one of the dead unnoticed, and takes it down")]
@@ -141,6 +164,32 @@ namespace Bastion.Engine.Tests
             Assert.True(r.Ok, r.Error);
             Assert.False(z.Alive);
             Assert.True(s.Concealed);
+        }
+
+        [Fact(DisplayName = "takedown › hidden, a soldier walks up behind a Saqueador and a Cazador unnoticed, and takes them down (Red's R15)")]
+        public void WalksUpBehindTheLivingUnnoticed()
+        {
+            foreach (var template in new[] { TemplateIds.Trooper, TemplateIds.Lancer })
+            {
+                var s = Behind(out var u, out var l, template);
+                u.Pos = P(2, 3);
+                var r = Exec(s, Move("s1", 5, 3));
+                Assert.True(r.Ok, r.Error);
+                Assert.Empty(Of<PodActivatedEvent>(r.Events));
+                Assert.True(s.Concealed);
+                Assert.DoesNotContain(l, Los.Watchers(s, u, u.Pos));
+                r = Takedown(s);
+                Assert.True(r.Ok, r.Error);
+                Assert.False(l.Alive);
+                Assert.True(s.Concealed);
+            }
+            // In front of one, it wakes, as ever; once the squad is found, beside it too.
+            var f = Behind(out var v, out var w, TemplateIds.Trooper, facing: West);
+            v.Pos = P(2, 3);
+            Assert.NotEmpty(Of<PodActivatedEvent>(Exec(f, Move("s1", 5, 3)).Events));
+            var g = Behind(out var x, out var y, TemplateIds.Trooper);
+            g.Concealed = false;
+            Assert.Contains(y, Los.Watchers(g, x, x.Pos));
         }
 
         [Fact(DisplayName = "takedown › walking up in front of one of the dead wakes its group, as before")]

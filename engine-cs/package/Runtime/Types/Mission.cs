@@ -105,6 +105,34 @@ namespace Bastion.Engine
         public int? Turns { get; set; }
     }
 
+    /// <summary>G23.6: a civilian of an Evacuación (MissionState.Civilians): its unit, its circle while hidden, found or not, its panics.</summary>
+    public sealed class CivilianSpot
+    {
+        public string Unit { get; set; } = "";
+        /// <summary>Where to look for them while hidden (as a Rescate's survivor's); null once found.</summary>
+        public SearchArea? Area { get; set; }
+        /// <summary>Seen by the squad (CivilianFoundEvent): they walk to La Lata. Hidden again by a panic, not.</summary>
+        public bool Found { get; set; }
+        /// <summary>How many times panic took them (CivilianPanickedEvent): its draw's seed with Seed.</summary>
+        public int Panics { get; set; }
+        /// <summary>Their own seed (the node's and theirs): what a panic makes them do (Rules.PanicOf), the same on every machine.</summary>
+        public int Seed { get; set; }
+
+        public CivilianSpot Copy() => new CivilianSpot { Unit = Unit, Area = Area != null ? new SearchArea { Center = new Vec2 { X = Area.Center.X, Y = Area.Center.Y }, Radius = Area.Radius } : null, Found = Found, Panics = Panics, Seed = Seed };
+    }
+
+    /// <summary>G23.5 Saqueadores' camp (MissionState.Raiders): its bounds with its fence, and its stash's crates by tile (GameState nodes).</summary>
+    public sealed class RaidersCamp
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int W { get; set; }
+        public int H { get; set; }
+        public List<int> Crates { get; set; } = new List<int>();
+
+        public RaidersCamp Copy() => new RaidersCamp { X = X, Y = Y, W = W, H = H, Crates = new List<int>(Crates) };
+    }
+
     /// <summary>A smoke cloud: units inside are harder to hit.</summary>
     public sealed class SmokeCloud
     {
@@ -239,6 +267,16 @@ namespace Bastion.Engine
         /// aboard as La Lata goes (Rules.SplitSafe). Missing, none of it (one soldier, or no room on the map).
         /// </summary>
         public List<List<string>>? Split { get; set; }
+        /// <summary>
+        /// G23.5 Saqueadores (Arturo, cuadro 71; .dev-snapshots/gameplay/g23/SAQUEADORES.md): a run's Saqueo with a camp of the
+        /// living (Setup.PlaceCamp): its bounds, fence in, and its stash's crates (SearchPieces.StashCrate). Missing, none of it.
+        /// </summary>
+        public RaidersCamp? Raiders { get; set; }
+        /// <summary>
+        /// G23.6 Evacuación (Arturo, cuadros 71 and 100; .dev-snapshots/gameplay/g23/EVACUACION.md): the civilians (Setup.PlaceCivilians),
+        /// each with its circle to look in till found, and its panics. Won with two aboard (Rules.EvacWins). Missing, none of it.
+        /// </summary>
+        public List<CivilianSpot>? Civilians { get; set; }
         /// <summary>Mordido: the squad's turns left till the bitten turns, from their finding (Setup.BiteTurns); null before.</summary>
         public int? BiteTurns { get; set; }
         /// <summary>Mordido: the antiviral used on the bitten (GearUsedEvent): no count any more, and La Lata takes them.</summary>

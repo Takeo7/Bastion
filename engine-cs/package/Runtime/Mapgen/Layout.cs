@@ -107,5 +107,7 @@ namespace Bastion.Engine
         /// from where it comes in (Mapgen.NearWalk), where the map allows. Null: where the map puts it.
         /// </summary>
         public bool? EvacNear { get; set; }
+        /// <summary>G23.5 Saqueadores: a camp of the living (Mapgen.RaidersCamp) in a clearing of the wilds, or in the camping's military area.</summary>
+        public bool? Camp { get; set; }
     }
 }

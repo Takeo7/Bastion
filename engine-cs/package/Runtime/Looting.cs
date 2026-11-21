@@ -69,12 +69,16 @@ namespace Bastion.Engine
         public const string MedicalCabinet = DecorKinds.MedicalCabinet;
         public const string MedicalShelf = DecorKinds.MedicalShelf;
         public const string MedicalCart = DecorKinds.MedicalCart;
+        /// <summary>G23.5 Saqueadores: a crate of the raiders' stash, a mark of their camp (MissionState.Raiders).</summary>
+        public const string StashCrate = CampDetailKinds.StashCrate;
 
         /// <summary>A police station's: marks of its InteriorSite.</summary>
         public static readonly IReadOnlyList<string> Police = new[] { WeaponRack, WeaponLocker, GunCase, AmmoCase, EvidenceShelf, LockerRow, CorpseOfficer };
         /// <summary>Anywhere: decor, by its anchor.</summary>
         public static readonly IReadOnlyList<string> Medical = new[] { MedicalCabinet, MedicalShelf, MedicalCart };
-        public static readonly IReadOnlyList<string> All = Police.Concat(Medical).ToList();
+        /// <summary>A raiders' camp's: marks of its camping site (G23.5).</summary>
+        public static readonly IReadOnlyList<string> Camp = new[] { StashCrate };
+        public static readonly IReadOnlyList<string> All = Police.Concat(Medical).Concat(Camp).ToList();
 
         /// <summary>Furniture: its room isn't searched whole (LootRoom.Pieces). All but the officer's body.</summary>
         public static bool Furniture(string kind) => kind != CorpseOfficer;
@@ -364,8 +368,9 @@ namespace Bastion.Engine
             if (!Grid.InBounds(s, p.X, p.Y)) return null;
             foreach (var site in s.Interiors ?? new List<InteriorSite>())
             {
-                if (site.Kind != InteriorKinds.Police) continue;
-                foreach (var d in site.Dressing) if (d.X == p.X && d.Y == p.Y && d.Z == p.Z && SearchPieces.Police.Contains(d.Kind)) return d.Kind;
+                if (site.Kind != InteriorKinds.Police && site.Kind != InteriorKinds.Camping) continue;
+                var kinds = site.Kind == InteriorKinds.Police ? SearchPieces.Police : SearchPieces.Camp;
+                foreach (var d in site.Dressing) if (d.X == p.X && d.Y == p.Y && d.Z == p.Z && kinds.Contains(d.Kind)) return d.Kind;
             }
             var decor = DecorLayer(s, p.Z);
             if (decor == null) return null;
@@ -512,6 +517,8 @@ namespace Bastion.Engine
 
         /// <summary>RollPiece's shares in 100: a locker's vest and magazine, an evidence shelf's supplies and belt's thing, a medicine shelf's medicine and kit, a cart's medicine; the rest, nothing.</summary>
         public const int LockerVest = 30, LockerMag = 30, EvidenceSupplies = 30, EvidenceBelt = 20, ShelfMedicine = 40, ShelfFirstAid = 15, CartMedicine = 35;
+        /// <summary>A raiders' stash crate's long gun, in 100 (G23.5).</summary>
+        public const int StashGun = 50;
 
         /// <summary>
         /// G19 (CONTRATO.md §3, cuadro 67): what searching a piece that holds something turns up, and the chance in 100 of a
@@ -561,6 +568,17 @@ namespace Bastion.Engine
                 }
                 case SearchPieces.MedicalCart:
                     return (rng.Int(100) < CartMedicine ? new Loot { Medicines = 1 } : null, 0);
+                // G23.5 (to size with the bench and the cuadro): a long gun with a magazine one time in two, else twice a box's
+                // supplies and a medicine.
+                case SearchPieces.StashCrate:
+                    if (rng.Int(100) < StashGun)
+                    {
+                        var roll = rng.Int(3);
+                        var gun = Gun(roll == 0 ? FoundWeaponIds.AssaultRifle : roll == 1 ? FoundWeaponIds.HuntingRifle : FoundWeaponIds.PumpShotgun);
+                        if (mags) gun.Mags = 1;
+                        return (gun, 0);
+                    }
+                    return (new Loot { Supplies = Supplies(d, rng, night) + Supplies(d, rng, night), Medicines = 1 }, 0);
                 default:
                     return (null, 0);
             }

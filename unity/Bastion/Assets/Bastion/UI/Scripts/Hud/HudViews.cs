@@ -558,6 +558,11 @@ namespace Bastion.UI.Hud
         /// <summary>-1 none shown, 0 flanked, 1 low, 2 high.</summary>
         public int Cover = -1;
         public List<TagView> Tags = new List<TagView>();
+        /// <summary>
+        /// A state on a line of its own over the health (Saqueadores' guards, U28: «DESPREVENIDO», «ALERTA»), not in the row:
+        /// the flag stays as wide as its gauge, so two guards two tiles apart don't cover each other's. Null, none.
+        /// </summary>
+        public TagView State;
         /// <summary>Over an enemy, from the tile under the pointer: aim, sight, flank or none, and its words («74 %»).</summary>
         public string HoverKind;
         public string HoverText;

@@ -164,6 +164,8 @@ namespace Bastion.Engine
         public string? Boss { get; set; } // TemplateIds
         /// <summary>A run's normal node (Gameplay, 16/11): La Lata near the squad (GenOptions.EvacNear).</summary>
         public bool? EvacNear { get; set; }
+        /// <summary>A run's Saqueadores (G23.5): a camp of the living with its stash (GenOptions.Camp, MissionState.Raiders).</summary>
+        public bool? Raiders { get; set; }
         /// <summary>
         /// A run's Rescate (N2): the survivor at the objective, a recruit with a knife (RunFights.SurvivorOf), captive till
         /// talked to, in a circle to look in (MissionState.SearchArea). Without it, the VIP of before (VipName).
@@ -769,7 +771,7 @@ namespace Bastion.Engine
         /// </summary>
         private static readonly IReadOnlyDictionary<string, string> LayoutKind = new Dictionary<string, string> { [MissionKinds.Scavenge] = MissionKinds.Recovery };
 
-        public static MissionLayout MissionLayout(MapSource map, string kind, List<int> podSizes, bool itemOutdoors = false, bool clinic = false, bool hospital = false, string? alarm = null, bool evacNear = false)
+        public static MissionLayout MissionLayout(MapSource map, string kind, List<int> podSizes, bool itemOutdoors = false, bool clinic = false, bool hospital = false, string? alarm = null, bool evacNear = false, bool camp = false)
         {
             if (map.Kind == MapSourceKinds.Base) return Base.BaseLayout(map.Base!);
             if (map.Kind == MapSourceKinds.Handmade)
@@ -790,6 +792,7 @@ namespace Bastion.Engine
                 Hospital = hospital ? true : (bool?)null,
                 Alarm = !string.IsNullOrEmpty(alarm) ? alarm : null,
                 EvacNear = evacNear ? true : (bool?)null,
+                Camp = camp ? true : (bool?)null,
             });
         }
 
@@ -894,7 +897,7 @@ namespace Bastion.Engine
             var plan = new List<List<string>>(basePlan);
             if (extra != null) plan.Add(extra);
             if (opts.Night == true && opts.Map.Kind != MapSourceKinds.Base) plan.Add(NightPod(difficulty));
-            var layout = MissionLayout(opts.Map, kind, plan.Select((p) => p.Count).ToList(), opts.ItemOutdoors == true, opts.CampaignMission?.Story == 1, opts.CampaignMission?.Story == 2, opts.Alarm, opts.EvacNear == true);
+            var layout = MissionLayout(opts.Map, kind, plan.Select((p) => p.Count).ToList(), opts.ItemOutdoors == true, opts.CampaignMission?.Story == 1, opts.CampaignMission?.Story == 2, opts.Alarm, opts.EvacNear == true, opts.Raiders == true);
             if (opts.Vehicle != null) FitVehicle(layout, opts.Vehicle.Value);
             // A run's Travesía (H5): the squad at the far end from La Lata.
             if (opts.Crossing == true) FarSpawns(layout);

@@ -105,6 +105,9 @@ namespace Bastion.Engine
             return plan;
         }
 
+        /// <summary>G23.6: the map's buildings as it stands now, each its ground tiles (a copy: Evacuación's houses to hide the civilians in).</summary>
+        public static List<List<int>> GroundTiles(GameState s) => PlanOf(s).Tiles.Select((t) => new List<int>(t)).ToList();
+
         /// <summary>The building of a ground tile; on a wall's (a storey above laid out otherwise), those beside it.</summary>
         private static IEnumerable<int> Under(GameState s, Plan plan, int i)
         {

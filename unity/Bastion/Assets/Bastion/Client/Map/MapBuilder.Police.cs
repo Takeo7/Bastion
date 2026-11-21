@@ -207,7 +207,9 @@ namespace Bastion.Client.Map
         /// <summary>A part's mesh's middle in `model`'s frame, or null without a mesh.</summary>
         static Vector3? Middle(Transform model, Transform part)
         {
-            var mesh = part.GetComponent<MeshFilter>()?.sharedMesh;
+            // (A part without a filter: Unity's null, which «?.» lets through.)
+            var filter = part.GetComponent<MeshFilter>();
+            var mesh = filter != null ? filter.sharedMesh : null;
             return mesh != null ? model.InverseTransformPoint(part.TransformPoint(mesh.bounds.center)) : (Vector3?)null;
         }
 

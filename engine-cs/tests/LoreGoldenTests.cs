@@ -74,13 +74,13 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Mátalo de lejos, y lejos de tus soldados.", Lore.EnemyFiles["bloater"].Tip);
             Assert.Equal("Saqueador de los Cuervos.", Lore.EnemyFiles["trooper"].What);
             Assert.Equal("Escopeta o fusil de caza, y alguna granada. Se cubre y dispara.", Lore.EnemyFiles["trooper"].Does);
-            Assert.Equal("Rómpele la cobertura o flanquéalo. Sus disparos también atraen zombis.", Lore.EnemyFiles["trooper"].Tip);
+            Assert.Equal("Rómpele la cobertura o flanquéalo. Si aún no está alerta, el golpe silencioso lo mata. Sus disparos también atraen zombis.", Lore.EnemyFiles["trooper"].Tip);
             Assert.Equal("Jefe de un grupo de Cuervos.", Lore.EnemyFiles["officer"].What);
             Assert.Equal("Mejor arma y más aguante que un Saqueador. Usa la vigilancia.", Lore.EnemyFiles["officer"].Does);
-            Assert.Equal("Es el más peligroso del grupo: dispárale primero.", Lore.EnemyFiles["officer"].Tip);
+            Assert.Equal("Es el más peligroso del grupo: dispárale primero. El golpe silencioso no sirve contra él.", Lore.EnemyFiles["officer"].Tip);
             Assert.Equal("Cuervo que captura en vez de matar.", Lore.EnemyFiles["lancer"].What);
             Assert.Equal("Red y porra cuerpo a cuerpo: el soldado inmovilizado empieza su siguiente turno con una sola acción.", Lore.EnemyFiles["lancer"].Does);
-            Assert.Equal("Corre mucho y no necesita línea de tiro. Pon vigilancia en su camino y no dejes a nadie solo.", Lore.EnemyFiles["lancer"].Tip);
+            Assert.Equal("Corre mucho y no necesita línea de tiro. Pon vigilancia en su camino y no dejes a nadie solo. Si aún no está alerta, el golpe silencioso lo mata.", Lore.EnemyFiles["lancer"].Tip);
             Assert.Equal("La alarma: un coche patrulla, una ambulancia o la de una nave.", Lore.EnemyFiles["relay"].What);
             Assert.Equal("No dispara. Tiene salud y blindaje 1. Mientras suena, la zona se llena de zombis.", Lore.EnemyFiles["relay"].Does);
             Assert.Equal("Es el objetivo: hay que callarla antes de que acabe la cuenta atrás. Los explosivos ayudan.", Lore.EnemyFiles["relay"].Tip);
@@ -3156,8 +3156,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Cuenta los puntos gastados en el tablero: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.", Lore.Glossary["Veteranía"]);
             Assert.Equal("Los muertos que entran por los bordes. El ruido llena el medidor, en dB: a 90 se oye llegar una oleada, que entra un turno después. Salvo en la Limpieza, además, llegan unos pocos cada turno, el doble mientras suena la alarma de un Sabotaje.", Lore.Glossary["Horda"]);
             // Gameplay, 16/11 (0.12.26): the stealth.
-            Assert.Equal("Salvo en un Asedio, la escuadra empieza cada misión oculta: los enemigos no saben que estáis ahí. Mientras dura, cada soldado tiene 3 puntos de movimiento más, y un zombi solo nota a quien tiene delante: por detrás o por un lado, no te nota aunque estés pegado a él. Se rompe cuando un enemigo ve a un soldado o cuando atacáis, salvo con el golpe silencioso. Entonces cada soldado pierde 3 de los puntos de movimiento que le queden.", Lore.Glossary["Ocultación"]);
-            Assert.Equal("Mata siempre, sin ruido y sin romper la ocultación, a un Zombi o un Corredor que tengas al lado, si aún no está alerta y no te tiene delante. No sirve con la motosierra.", Lore.Glossary["Golpe silencioso"]);
+            Assert.Equal("Salvo en un Asedio, la escuadra empieza cada misión oculta: los enemigos no saben que estáis ahí. Mientras dura, cada soldado tiene 3 puntos de movimiento más, y un zombi, o un vivo que aún no está alerta, solo nota a quien tiene delante: por detrás o por un lado, no te nota aunque estés pegado a él. Se rompe cuando un enemigo ve a un soldado o cuando atacáis, salvo con el golpe silencioso. Entonces cada soldado pierde 3 de los puntos de movimiento que le queden.", Lore.Glossary["Ocultación"]);
+            Assert.Equal("Mata siempre, sin ruido y sin romper la ocultación, a un Zombi, un Corredor, un Saqueador o un Cazador que tengas al lado, si aún no está alerta y no te tiene delante. No sirve contra el Cabecilla ni con la motosierra.", Lore.Glossary["Golpe silencioso"]);
             Assert.Equal("Mientras la escuadra está oculta, cada soldado tiene 3 puntos más: 11. Al romperse la ocultación, pierde 3 de los que le queden ese turno.", Lore.MoveText.Rules[1]);
             Assert.Equal("El jefe del capítulo 1: un muerto enorme que embiste y tumba. Matarlo supera el capítulo.", Lore.Glossary["El Toro"]);
             Assert.Equal(40, Lore.Glossary.Count);
@@ -3200,8 +3200,24 @@ namespace Bastion.Engine.Tests
             // T8 (Arturo, 18/11): «Salir» looked like quitting the game.
             Assert.Equal("Partir", Lore.ExpeditionText.Start);
             Assert.Equal("Parte la escuadra: empieza una expedición del capítulo 1.", Lore.ExpeditionText.StartHelp(1));
-            // G23.4 Separados (Gameplay, 20/11): its name only, Lore's to write the rest.
-            Assert.Equal(17, Lore.StageNames.Count);
+            // G23.4 Separados, G23.5 Saqueadores and G23.6 Evacuación (Gameplay, 20/11): their names only, Lore's to write the rest.
+            Assert.Equal(19, Lore.StageNames.Count);
+            Assert.Equal("Evacuación", Lore.StageName(NodeKinds.Evacuation));
+            Assert.Equal("Saqueadores", Lore.StageName(NodeKinds.Raiders));
+            // G23.5 Saqueadores (Arturo, cuadros 71, 98 and 99): the stage, the objective, the stash's crates (Lore, 20/11).
+            Assert.Equal("Un campamento de los Cuervos, vivos y armados, guarda su alijo en tres cajas. El alijo es la única recompensa: sin robarlo, la etapa es un Saqueo. Uno hace la ronda y otro vigila el alijo; los de la hoguera miran al fuego y solo ven a 4 casillas. Mientras la escuadra esté oculta, no notan a quien les llega por detrás o de lado, y el golpe silencioso los mata sin ruido, salvo al Cabecilla. Si uno ve a un soldado, despierta todo el campamento. Los tiros, también los suyos, atraen a los muertos.", Lore.StageLine(NodeKinds.Raiders));
+            Assert.Equal("Robad el alijo: quedan 3 de 3 cajas", Lore.RaidersText.Stash(3, 3));
+            Assert.Equal("Robad el alijo: queda 1 de 3 cajas", Lore.RaidersText.Stash(1, 3));
+            Assert.Equal("Alijo robado", Lore.RaidersText.Stash(0, 3));
+            Assert.Equal("Salid en La Lata", Lore.RaidersText.Leave);
+            Assert.Equal("Las tres cajas del alijo están en el campamento. Se abren desde una casilla de al lado, con un poco de ruido. Un ruido manda a mirar a quien lo oye, y el de la hoguera que lo oye se levanta y ve como los demás. Si uno ve a un soldado, despierta todo el campamento. Mientras la escuadra esté oculta, quien aún no está alerta no nota a quien le llega por detrás o de lado. El golpe silencioso no sirve contra el Cabecilla. Sin robar el alijo, la etapa es un Saqueo.", Lore.RaidersText.ObjectiveTip);
+            Assert.Equal("Los Cuervos se han ido: no hay campamento. La etapa es un Saqueo.", Lore.RaidersText.NoCamp);
+            Assert.Equal("DESPREVENIDO", Lore.RaidersText.UnawareTag);
+            Assert.Equal("ALERTA", Lore.RaidersText.AwakeTag);
+            Assert.Equal("Abrir la caja del alijo", Lore.BoxTitle(SearchPieces.StashCrate));
+            Assert.Equal("Abre una caja del alijo que tengas al lado. Da siempre algo: un arma larga con un cargador, o suministros y una medicina. Hace un poco de ruido.", Lore.SearchEffect(SearchPieces.StashCrate));
+            Assert.Equal("Ana abre la caja del alijo: garrafas de gasolina (+24 §) y una caja de ibuprofeno a medias.", Lore.SearchLine("Ana", SearchPieces.StashCrate, new Loot { Supplies = 24, Medicines = 1 }, 1));
+            Assert.Equal("Ana abre la caja del alijo. Está vacía.", Lore.SearchLine("Ana", SearchPieces.StashCrate, null, 1));
             // G23.2, Mordido (cuadros 73 and 87).
             Assert.Equal("Mordido", Lore.StageName(NodeKinds.Bitten));
             Assert.Equal("Alguien mordido se esconde en una zona marcada. Desde que se le encuentra, le quedan 15 turnos: dadle el antiviral, que está en uno de los armarios o estantes de medicinas. Volved todos a La Lata. Si se convierte, se sale sin recluta ni recompensa.", Lore.StageLine(NodeKinds.Bitten));

@@ -371,6 +371,25 @@ namespace Bastion.UI.Combat
             }
         }
 
+        /// <summary>The ring of Saqueadores' crates' marks (U28): the crates' orange (Arte's, cuadro 98).</summary>
+        const string StashRing = "#f39a3c";
+
+        /// <summary>
+        /// Saqueadores' crates still shut (U28): the stage's icon over each, ringed in their orange, from the start and through
+        /// the fog (the stash is the stage's prize, and the objective's arrow goes to it); not where a rucksack's mark stands
+        /// (the hand's or Mayús's: ShowSearchMarks), which says the same and more.
+        /// </summary>
+        void StashMarks(GameState v, List<WorldTagView> list)
+        {
+            foreach (var p in StashLeft(v))
+            {
+                if (searchMarks.Any(m => Same(m.at, p))) continue;
+                var world = Board.TileToWorld(v, p, LootMarkHeight * Board.Tile);
+                if (Bastion.Client.Units.SearchOutline.TopOf(v, p) is float top) world.y = top + SearchOverTop;
+                list.Add(new WorldTagView { Kind = "loot", Icon = "node:raiders", Ring = StashRing, Size = LootMarkSize * Board.Tile, World = world });
+            }
+        }
+
         /// <summary>The marks of the boxes to show now, added to the tags over the map.</summary>
         void LootMarks(GameState v, List<WorldTagView> list)
         {

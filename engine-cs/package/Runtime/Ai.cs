@@ -369,6 +369,12 @@ namespace Bastion.Engine
                 // Nobody there, or no way to it.
                 foreach (var m in members) if (m.Heard != null) sim.Emit(new ForgotEvent { Unit = m.Id });
             }
+            // G23.5: a camp's guard at the fire or the stash keeps to its post, looking as it does there.
+            if (members.Count == 1 && pod.Patrol.Count == 1 && (leader.Guard == GuardPosts.Fire || leader.Guard == GuardPosts.Stash))
+            {
+                KeepPost(sim, pod, leader);
+                return;
+            }
             if (pod.Patrol.Count == 0)
             {
                 LookRound(sim, pod, members);
@@ -390,6 +396,28 @@ namespace Bastion.Engine
             var walker = walk.Value.m;
             sim.MoveAlong(walker, walk.Value.path, 0);
             Follow(sim, pod, new[] { walker }.Concat(members.Where((m) => m != walker)).ToList(), 1);
+        }
+
+        /// <summary>
+        /// G23.5 Saqueadores: a posted guard of the camp, unaware (Unit.Guard): back to its post (its group's one stop) if it
+        /// left it to look at a noise, and there it looks as its post does (Setup.PostFacing), never about: what is behind it
+        /// it doesn't see. On watch at its post, a soldier in its view it sees at its turn, and its camp wakes.
+        /// </summary>
+        private static void KeepPost(Sim sim, Pod pod, Unit u)
+        {
+            var s = sim.S;
+            var post = pod.Patrol[0];
+            if (!Grid.SamePos(u.Pos, post))
+            {
+                var back = WalkPath(s, u, post, 0, 1);
+                if (back != null) sim.MoveAlong(u, back, 0);
+            }
+            if (sim.Over || !u.Alive || !Grid.SamePos(u.Pos, post) || (s.Pods.Find((p) => p.Id == pod.Id)?.Active ?? true)) return;
+            var facing = Setup.PostFacing(s, u, post);
+            if (facing != null && (u.Facing == null || u.Facing.Value != facing.Value)) sim.Emit(new TurnedEvent { Unit = u.Id, Facing = facing.Value });
+            // On watch: who stands in its view at its turn, it sees (Arte's lab wakes the camp so, the camera still: Producto, 20/11).
+            var spotted = sim.SpottedFrom(u, u.Pos);
+            if (spotted != null) sim.ActivatePods(new List<string> { pod.Id }, new Activation { Cause = PodCauses.Sighted, Unit = spotted.Id, By = u.Id });
         }
 
         /// <summary>How likely one of an unaware pod standing about turns its head, each enemy turn.</summary>

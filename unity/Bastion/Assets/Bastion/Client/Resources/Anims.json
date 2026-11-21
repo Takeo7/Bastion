@@ -456,6 +456,42 @@
    "pack": "mixamo",
    "fbx": "Sitting Idle 2"
   },
+  "bowToAim": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Neutral/Standing/Idle/A_POLY_BOW_Stand_Idle_BowDown_ToAiming_Neut"
+  },
+  "bowToDrawn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Neutral/Standing/Aim/A_POLY_BOW_Stand_Aiming_ToDrawn_Neut"
+  },
+  "bowShootDown": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Neutral/Standing/Shoot/A_POLY_BOW_Stand_Shoot_ToBowDown_Neut"
+  },
+  "bowIdle": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Neutral/Standing/Idle/A_POLY_BOW_Stand_Idle_BowDown_Neut"
+  },
+  "bowAim": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Neutral/Standing/Aim/A_POLY_BOW_Stand_Aiming_Undrawn_Neut"
+  },
+  "bowDrawn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Neutral/Standing/Aim/A_POLY_BOW_Stand_Aiming_Drawn_Neut"
+  },
+  "bowDrawnLong": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Neutral/Standing/Aim/Lng/A_POLY_BOW_Lng_Stand_Aiming_Drawn_Neut"
+  },
+  "bowDrawnRecurve": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Neutral/Standing/Aim/Rcv/A_POLY_BOW_Rcv_Stand_Aiming_Drawn_Neut"
+  },
+  "bowShoot": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Neutral/Standing/Shoot/A_POLY_BOW_Stand_Shoot_Reload_Neut"
+  },
   "sitReclined": {
    "pack": "mixamo",
    "fbx": "Sitting Idle 4"

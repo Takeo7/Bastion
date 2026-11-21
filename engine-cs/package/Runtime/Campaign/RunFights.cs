@@ -212,8 +212,12 @@ namespace Bastion.Engine
                 Guard = node.Kind == NodeKinds.Elite ? Setup.GuardOf(seed) : null,
                 Boss = boss ? TemplateIds.Brute : null,
                 // A normal node's La Lata near the squad (Gameplay, 16/11): far was for the Travesía. Separados' too: its two
-                // starts are measured from there (SEPARADOS.md).
-                EvacNear = node.Kind == NodeKinds.Normal || node.Kind == NodeKinds.Split ? true : (bool?)null,
+                // starts are measured from there (SEPARADOS.md). Saqueadores' too (G23.5): the camp a way off it, not on the way
+                // (R1 of 20/11, rifles, 4 seats: out 0–33 % with La Lata far, 73–87 % near; the Saqueo, 93–100 %).
+                // Evacuación's too (G23.6): the squad goes out for the civilians, and they walk back to it.
+                EvacNear = node.Kind == NodeKinds.Normal || node.Kind == NodeKinds.Split || node.Kind == NodeKinds.Raiders || node.Kind == NodeKinds.Evacuation ? true : (bool?)null,
+                // Saqueadores (G23.5): the camp of the living on the map.
+                Raiders = node.Kind == NodeKinds.Raiders ? true : (bool?)null,
             });
             // Nothing to search out of everyone's reach (Red, R3 17/11: a police car walled in).
             Setup.OnlyWithinReach(state);
@@ -222,6 +226,10 @@ namespace Bastion.Engine
             // Separados (G23.4): the squad in two groups on either side of La Lata, measured from its zone as it is now.
             // Which group takes which side, by the map's seed (one is clearer of the dead: R1, 20/11).
             if (node.Kind == NodeKinds.Split) Setup.Split(state, unchecked((uint)Math.Abs(node.Seed ?? 0) * 2654435761u) >> 31 == 1, node.Seed ?? 0);
+            // Evacuación (G23.6): its civilians hidden in buildings, each in its circle.
+            if (node.Kind == NodeKinds.Evacuation) Setup.PlaceCivilians(state, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xc1b1))), node.Seed ?? 0);
+            // Saqueadores (G23.5): the camp's guards at their posts and its stash, the dead kept off it.
+            if (node.Kind == NodeKinds.Raiders) Setup.PlaceCamp(state, difficulty, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xca4e))));
             // One in RunMap.LooseOdds of the other fights, a survivor loose on the map, unmarked (N2, Arturo 17/11).
             if (RunMap.LooseSurvivor(node)) PlaceLoose(state, SurvivorOf(c, node), new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x10057))));
             state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId };
@@ -652,13 +660,16 @@ namespace Bastion.Engine
                 return report;
             }
             // What a stage won gives, into the packs while there is room: a special's reward (a Sigilo's doubled unseen,
-            // halved seen; a Guarida's was in its box; La llave's is its armoury, won as a Saqueo: G23.1), the boss's 150 §
+            // halved seen; a Guarida's was in its box; La llave's is its armoury, won as a Saqueo: G23.1; Saqueadores' its
+            // stash, cuadro 99), the boss's 150 §
             // and a good weapon (H5, H6).
             int? won = null;
             if (victory && node.Kind == NodeKinds.Boss) won = BossReward;
-            else if (victory && node.Kind != NodeKinds.Elite && node.Kind != NodeKinds.Key && RunMap.Rewarded(node.Kind))
+            else if (victory && node.Kind != NodeKinds.Elite && node.Kind != NodeKinds.Key && node.Kind != NodeKinds.Raiders && RunMap.Rewarded(node.Kind))
             {
                 won = rng.Range(RewardMin, RewardMax);
+                // Evacuación (G23.6, cuadro 100): 20 § more for each civilian aboard past two.
+                if (mission.Mission.Civilians != null) won += Rules.CivilianBonus * Math.Max(0, Rules.CiviliansAboard(mission) - Rules.CiviliansNeeded);
                 if (node.Kind == NodeKinds.Stealth)
                 {
                     report.Run.Unseen = mission.Concealed;

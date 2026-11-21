@@ -53,6 +53,8 @@ namespace Bastion.Engine
             [NodeKinds.Bitten] = "Mordido",
             [NodeKinds.Wounded] = "El herido", // G23.3: the stage, as Arturo and Producto call it (as «Mordido»), not the person
             [NodeKinds.Split] = "Separados", // G23.4: as Arturo calls it (put by Gameplay, 20/11; kept by Lore)
+            [NodeKinds.Raiders] = "Saqueadores", // G23.5: as Arturo calls it (put by Gameplay, 20/11, for the engine to start the stage)
+            [NodeKinds.Evacuation] = "Evacuación", // G23.6: as Arturo calls it (put by Gameplay, 20/11, for the engine to start the stage)
             [NodeKinds.Refuge] = "Refugio",
             [NodeKinds.Trade] = "Trueque",
             [NodeKinds.Event] = "Suceso",
@@ -258,6 +260,35 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// Saqueadores (G23.5; Gameplay's .dev-snapshots/gameplay/g23/SAQUEADORES.md; Arturo, cuadros 71, 98 and 99): a camp of
+        /// Cuervos (the Glossary's «bandas de saqueadores armados») with its stash in three crates (MissionState.Raiders,
+        /// SearchPieces.StashCrate), won as a Saqueo. The stash is the reward, with no 40–80 § besides; left alone, a Saqueo.
+        /// One of them seeing a soldier wakes the whole camp (Sim.CampWakes); a noise only sends who hears it to look.
+        /// </summary>
+        public static class RaidersText
+        {
+            /// <summary>
+            /// The objective's steps (UI's strip): the stash, with the crates still shut of all (`left` of `all`), and «Alijo
+            /// robado» once none is; out. Stealing it is up to the squad: without it, the stage is a Saqueo.
+            /// </summary>
+            public static string Stash(int left, int all) => left <= 0 ? "Alijo robado" : $"Robad el alijo: {(left == 1 ? "queda" : "quedan")} {left} de {all} {(all == 1 ? "caja" : "cajas")}";
+            public const string Leave = "Salid " + Bus.In;
+            /// <summary>The strip's help.</summary>
+            public const string ObjectiveTip = "Las tres cajas del alijo están en el campamento. Se abren desde una casilla de al lado, con un poco de ruido. Un ruido manda a mirar a quien lo oye, y el de la hoguera que lo oye se levanta y ve como los demás. Si uno ve a un soldado, despierta todo el campamento. Mientras la escuadra esté oculta, quien aún no está alerta no nota a quien le llega por detrás o de lado. El golpe silencioso no sirve contra el Cabecilla. Sin robar el alijo, la etapa es un Saqueo.";
+            /// <summary>
+            /// When the map had no room for the camp (MissionState.Raiders null, one in 90; Producto, 21/11): a Saqueo, with its
+            /// objective, under the card still named «SAQUEADORES». UI's: the objective's note, and once in the log at the start.
+            /// </summary>
+            public const string NoCamp = "Los Cuervos se han ido: no hay campamento. La etapa es un Saqueo.";
+            /// <summary>
+            /// Over a guard's flag (UI; Arturo, cuadro 104): the camp not woken yet, and woken. Agreed with the unit as
+            /// «ESCONDIDO» is (UnitWords.Agree): «DESPREVENIDA». Where a guard looks is a fan on the ground, with no words.
+            /// </summary>
+            public const string UnawareTag = "DESPREVENIDO";
+            public const string AwakeTag = "ALERTA";
+        }
+
+        /// <summary>
         /// What is done at a stage, in one line, for its sheet on the map. The figures and names when known: the item to
         /// bring back, the alarm (Alarms), the turn La Lata comes on a Hold, the guard of a Guarida (a template); a Rescate
         /// with Cuervos round the survivor (`crows`; Arturo, 17/11: some are held by them, others hide alone).
@@ -299,6 +330,12 @@ namespace Bastion.Engine
                     // G23.4 (Arturo, cuadros 71, 94 and 95): two groups, the reward with one of each aboard; La Lata goes as always.
                     // Its concealment one for the squad (SEPARADOS.md): this is also what the card says on arrival.
                     return $"La escuadra empieza partida en dos grupos, a los dos lados de {Bus.Name}. Hay recompensa si {Bus.Name} sale con alguien de cada grupo a bordo; quien no haya subido se queda fuera. La ocultación es de toda la escuadra: se pierde para los dos grupos a la vez.";
+                case NodeKinds.Raiders:
+                    // G23.5 (Arturo, cuadros 71 and 99): the stash the only reward, a Saqueo without it; the round and the stash's
+                    // guard, and those at the fire with their eyes on it (Rules.FireWatch; Gameplay, 21/11); hidden, the unaware
+                    // blind behind and beside (Los.InNoticeCone), the Golpe silencioso but on the Cabecilla; the camp wakes whole;
+                    // their shots too wind the horde (Rules.HordeClock). Also what the card says on arrival, as Separados'.
+                    return $"Un campamento de los Cuervos, vivos y armados, guarda su alijo en tres cajas. El alijo es la única recompensa: sin robarlo, la etapa es un Saqueo. Uno hace la ronda y otro vigila el alijo; los de la hoguera miran al fuego y solo ven a {(int)Rules.FireWatch} casillas. Mientras la escuadra esté oculta, no notan a quien les llega por detrás o de lado, y el golpe silencioso los mata sin ruido, salvo al Cabecilla. Si uno ve a un soldado, despierta todo el campamento. Los tiros, también los suyos, atraen a los muertos.";
                 case NodeKinds.Refuge:
                     // G22 (cuadro 72): the only way back to the base, but beating the boss.
                     return "Un sitio seguro para descansar: todos se curan del todo. Desde aquí se puede volver a la base.";

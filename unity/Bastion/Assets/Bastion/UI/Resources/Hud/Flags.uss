@@ -49,6 +49,12 @@
 
 /* Mordido's count (U23): the biohazard and the turns left on a dark plate of its own, over the health; amber, at 2 and 1
    red and beating (UnitFlags' schedule toggles --lit). A number, never a bar: not taken for health. */
+/* A guard's state over its health (U28): a tag on a line of its own, so the flag is no wider than its gauge. */
+.uflag__state {
+    margin-left: 0;
+    margin-bottom: 1px;
+}
+
 .uflag__bite {
     flex-direction: row;
     align-items: center;
@@ -246,7 +252,8 @@
 }
 
 .flags-layer--close .uflag--other .uflag__row,
-.flags-layer--close .uflag--other .uflag__name {
+.flags-layer--close .uflag--other .uflag__name,
+.flags-layer--close .uflag--other .uflag__state {
     display: none;
 }
 
@@ -256,7 +263,8 @@
 }
 
 .flags-layer--close .uflag--why .uflag__row,
-.flags-layer--close .uflag--why .uflag__name {
+.flags-layer--close .uflag--why .uflag__name,
+.flags-layer--close .uflag--why .uflag__state {
     display: none;
 }
 

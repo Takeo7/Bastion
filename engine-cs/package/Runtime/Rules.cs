@@ -287,6 +287,8 @@ namespace Bastion.Engine
                     if (ability == AbilityIds.OpenDoor && Looting.LockedAt(S, tile!) && Looting.KeyOf(u) is Gear key) Emit(new UnlockedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile!), Gear = key.Id });
                     Emit(new TileChangedEvent { Pos = Engine.Events.CopyPos(tile!), Kind = ability == AbilityIds.OpenDoor ? TileKinds.DoorOpen : TileKinds.Door });
                     if (ability == AbilityIds.OpenDoor && Rules.SurvivorSeen(S, u, u.Pos) is Unit found) Emit(new SurvivorFoundEvent { Unit = found.Id, By = u.Id });
+                    // G23.6: the civilians it sees now the door is open.
+                    if (ability == AbilityIds.OpenDoor) foreach (var c in Rules.CiviliansSeen(S, u, u.Pos)) Emit(new CivilianFoundEvent { Unit = c.Id, By = u.Id });
                     break;
                 case AbilityIds.RunAndGun:
                     break;
@@ -971,6 +973,13 @@ namespace Bastion.Engine
                     Flush();
                     Emit(new SurvivorFoundEvent { Unit = found.Id, By = u.Id });
                 }
+                // G23.6: an Evacuación's civilians seen for the first time (or again, after hiding): shown and walking.
+                var civilians = Rules.CiviliansSeen(S, u, step);
+                if (civilians.Count > 0)
+                {
+                    Flush();
+                    foreach (var c in civilians) Emit(new CivilianFoundEvent { Unit = c.Id, By = u.Id });
+                }
                 // A patrolling pod that walks into sight of the squad stops and takes cover; on a flight of stairs, once off it.
                 var spotted = sighted ?? (patrolling ? SpottedFrom(u, step, Los.FacingTo(i != 0 ? path[i - 1] : u.Pos, step) ?? u.Facing) : null);
                 if (spotted != null && !Flights.CanStopAt(S, step)) sighted = spotted;
@@ -1125,13 +1134,7 @@ namespace Bastion.Engine
 
         /// <summary>How far `u` notices a soldier on `p`: its detection while the squad is hidden, its sight after (both shorter at night, unless lit).</summary>
         /// <remarks>`who`: the one going to `p` (a soldier on its move, not there yet); else whoever stands there. `from`: where `u` looks from, if not its place.</remarks>
-        private double NoticeRange(Unit u, Pos p, Unit? who = null, Pos? from = null)
-        {
-            var range = S.Concealed ? Los.DetectionTo(S, u, p) : Los.SightTo(S, u, p);
-            // One hiding there, at half of it (Esconderse); behind cover, less to the dead (Arturo, 5/11 #4): the one that hides more.
-            var there = who ?? Grid.UnitAt(S, p);
-            return there != null ? range * Los.ConcealShare(S, u, there, p, from) : range;
-        }
+        private double NoticeRange(Unit u, Pos p, Unit? who = null, Pos? from = null) => Rules.NoticeRange(S, u, p, who, from);
 
         /// <summary>The first soldier an alien standing on `p` would spot (`facing`: the dead see ahead of them, the way they walk).</summary>
         /// <remarks>Hidden, not one behind or beside one of the dead (Los.InNoticeCone; Arturo, 16/11).</remarks>
@@ -1175,6 +1178,8 @@ namespace Bastion.Engine
         public void BreakConcealment(string reason, string? unit = null, string? by = null, double? range = null)
         {
             if (!S.Concealed) return;
+            // G23.6: a civilian seen gives nobody of the squad away (EVACUACION.md); the dead go for them all the same.
+            if (!string.IsNullOrEmpty(unit) && Grid.GetUnit(S, unit!) is Unit seen && Rules.IsCivilian(seen)) return;
             Emit(new ConcealmentBrokenEvent { Reason = reason, Unit = unit, By = by, Range = range });
             // A run's Sigilo seen (H5): the horde at once.
             if (S.Mission.Stealth == true) StealthSpotted();
@@ -1229,6 +1234,7 @@ namespace Bastion.Engine
 
         public void ActivatePods(IReadOnlyList<string> podIds, Func<Pod, Activation> whyOf)
         {
+            podIds = CampWakes(podIds);
             var pods = S.Pods.Where((p) => podIds.Contains(p.Id) && !p.Active).ToList();
             if (pods.Count == 0) return;
             var first = whyOf(pods[0]);
@@ -1276,6 +1282,20 @@ namespace Bastion.Engine
             }
             // Woken by the sight of a soldier: whoever else of the dead sees them goes after them.
             if (seen && spotted?.Team == Teams.Xcom && spotted.Alive && !Over) HuntedBy(spotted);
+        }
+
+        /// <summary>
+        /// G23.5 Saqueadores (SAQUEADORES.md: «al ver a un soldado, el campamento despierta»): one of a camp's guards woken,
+        /// all of them are (each is a group of its own, Unit.Guard). Else `podIds` as they are.
+        /// </summary>
+        private IReadOnlyList<string> CampWakes(IReadOnlyList<string> podIds)
+        {
+            if (S.Mission.Raiders == null) return podIds;
+            bool Camp(Pod p) => p.UnitIds.Any((id) => Grid.GetUnit(S, id) is Unit g && g.Guard != null);
+            // Only the groups of those alive (Producto's review of 21/11: one taken down woke as an empty group).
+            bool Alive(Pod p) => p.UnitIds.Any((id) => Grid.GetUnit(S, id) is Unit g && g.Alive);
+            if (!S.Pods.Any((p) => podIds.Contains(p.Id) && Camp(p))) return podIds;
+            return podIds.Concat(S.Pods.Where((p) => Camp(p) && Alive(p) && !podIds.Contains(p.Id)).Select((p) => p.Id)).ToList();
         }
 
         /// <summary>
@@ -1581,8 +1601,8 @@ namespace Bastion.Engine
             if (Over) return;
             var s = S;
             var m = s.Mission;
-            // G23.3: the wounded alone on the field is nobody to fight on (they never act).
-            var squad = Grid.Combatants(s, Teams.Xcom).Where((u) => u.Lame != true).ToList();
+            // G23.3: the wounded alone on the field is nobody to fight on (they never act); G23.6, nor are the civilians.
+            var squad = Grid.Combatants(s, Teams.Xcom).Where((u) => u.Lame != true && !Rules.IsCivilian(u)).ToList();
             var hostiles = Grid.Combatants(s, Teams.Alien);
             void End(string outcome, string reason) => Emit(new MissionEndedEvent { Outcome = outcome, Reason = reason });
 
@@ -1613,12 +1633,15 @@ namespace Bastion.Engine
             if (m.EvacDone == true)
             {
                 var someoneOut = s.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated);
-                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(s) || Rules.BittenSafe(s) || Rules.WoundedSafe(s) || Rules.SplitSafe(s));
+                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(s) || Rules.BittenSafe(s) || Rules.WoundedSafe(s) || Rules.SplitSafe(s) || Rules.CiviliansSafe(s));
                 End(won ? Outcomes.Victory : Outcomes.Defeat, won ? EndReasons.Objective : EndReasons.Abandoned);
                 return;
             }
             // G23.3: everyone in La Lata waiting for the wounded (WoundedOut) isn't wiped: they may get down for them.
-            if (squad.Count == 0 && !(Rules.WoundedOut(s) && s.Units.Any((u) => u.Aboard == true && u.Lame != true))) End(Outcomes.Defeat, EndReasons.Wiped);
+            // G23.6: nor waiting for a civilian found walking to it (AllAboard): one aboard calls it to leave, or waits (Producto's
+            // review of 21/11).
+            var waiting = (Rules.WoundedOut(s) || s.Units.Any((u) => u.Alive && Rules.IsCivilian(u) && !u.Captive)) && s.Units.Any((u) => u.Aboard == true && u.Lame != true && !Rules.IsCivilian(u));
+            if (squad.Count == 0 && !waiting) End(Outcomes.Defeat, EndReasons.Wiped);
         }
 
         /// <summary>
@@ -1662,7 +1685,7 @@ namespace Bastion.Engine
                 Emit(new LeftBehindEvent { Unit = u.Id, NoSeat = noSeat.Contains(u) ? true : (bool?)null });
             }
             var m = S.Mission;
-            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S) || Rules.BittenSafe(S) || Rules.WoundedSafe(S) || Rules.SplitSafe(S));
+            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S) || Rules.BittenSafe(S) || Rules.WoundedSafe(S) || Rules.SplitSafe(S) || Rules.CiviliansSafe(S));
             if (timeUp && !won) Emit(new MissionEndedEvent { Outcome = Outcomes.Defeat, Reason = EndReasons.Timer });
             else CheckOutcome();
         }
@@ -1698,12 +1721,16 @@ namespace Bastion.Engine
             // Whoever of the squad ends its turn on fire burns.
             BurnStanding(Teams.Xcom);
             if (Over) return;
+            // G23.6 Evacuación: the civilians' step, as the squad's turn ends, before the dead's.
+            CivilianStep();
+            if (Over) return;
             Emit(new TurnBeganEvent { Team = Teams.Alien, Turn = turn });
             // Mordido (G23.2): the bitten's count out, they turn.
             Bite();
             if (Over) return;
             // The base's turrets keep watch through the enemy's turn: each of the dead that moves in sight, once (docs/FASE12.md §11.4).
-            foreach (var t in S.Units.Where((x) => x.Alive && x.Automaton != null && Content.LoadedFor(x, AbilityIds.Shoot)).ToList()) Emit(new OverwatchEvent { Unit = t.Id, KillZone = true });
+            // (Not an Evacuación's civilians: they go by themselves too, but never shoot; Producto's review of 21/11.)
+            foreach (var t in S.Units.Where((x) => x.Alive && x.Automaton != null && !Rules.IsCivilian(x) && Content.LoadedFor(x, AbilityIds.Shoot)).ToList()) Emit(new OverwatchEvent { Unit = t.Id, KillZone = true });
             // They rise now, but only act from the next turn on (they had no turn to begin).
             RiseFallen();
             var active = S.Units.Where((u) => u.Alive && u.Team == Teams.Alien && !u.Objective && (S.Pods.Find((p) => p.Id == u.PodId)?.Active ?? false)).ToList();
@@ -2444,6 +2471,8 @@ namespace Bastion.Engine
             if (Rules.FreeExit(m) || m.ObjectiveDone || RunsRescue(s)) return true;
             // Separados (G23.4): one of each group going.
             if (m.Split != null) return SplitShort(s) == null && !SplitLost(s);
+            // Evacuación (G23.6): two civilians aboard.
+            if (m.Civilians != null) return CiviliansAboard(s) >= CiviliansNeeded;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier) && aboard.Any((u) => u.Id == m.Item!.Carrier);
             if (m.Kind == MissionKinds.Rescue) return !string.IsNullOrEmpty(m.ObjectiveUnit) && aboard.Any((u) => u.Id == m.ObjectiveUnit) && (m.Bitten != true || m.Cured == true);
             return false;

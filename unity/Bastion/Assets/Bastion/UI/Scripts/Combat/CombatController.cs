@@ -720,10 +720,37 @@ namespace Bastion.UI.Combat
                 // Only with the hidden squad's extra (Gameplay, 16/11): the second band, lost if the squad is found.
                 Dash = d.Cost > keep,
                 Run = Paths.IsRun(State, u, d.Cost),
-                Detected = watchers.Any(a => Los.InNoticeCone(State, a, d.Pos) && Los.SightOrigin(State, a.Pos, d.Pos, Los.DetectionTo(State, a, d.Pos) * Los.ConcealShare(State, a, u, d.Pos), Los.WindowReachOf(a.Team)) != null),
+                Detected = watchers.Any(a => Notices(a, u, d.Pos)),
                 // As shown, not as the engine has it already: a molotov's fire marks the reach once it has caught on screen.
                 Fire = Burning.At(Shown, d.Pos),
             }).ToList();
+        }
+
+        /// <summary>
+        /// Whether `a` would notice `u` standing on `p`, as the rules do (Gameplay's Rules.Notices, 21/11: in its notice cone, as
+        /// far as it notices there, one sitting by a camp's fire only close, cut by cover and hiding). The move's eyes and the
+        /// way's warning (U28).
+        /// </summary>
+        bool Notices(Unit a, Unit u, Pos p) => Rules.Notices(State, a, u, p);
+
+        /// <summary>
+        /// On `u`'s way (`path`, its end left out: the destination's own eye says it), the first step where an enemy in sight
+        /// would notice it, the squad hidden, and who (U28, Producto 21/11: the move's eyes, dead or living, for the steps
+        /// too: the rules notice it on any of them, Rules.MoveAlong); none, null.
+        /// </summary>
+        (Pos step, Unit by)? NoticedOnWay(Unit u, List<Pos> path)
+        {
+            if (path == null || path.Count < 2 || !State.Concealed || tiles == null) return null;
+            var watched = new HashSet<(int, int, int)>(tiles.Where(t => t.Detected).Select(t => (t.Pos.X, t.Pos.Y, t.Pos.Z)));
+            if (watched.Count == 0) return null;
+            for (var i = 0; i < path.Count - 1; i++)
+            {
+                var step = path[i];
+                if (!watched.Contains((step.X, step.Y, step.Z))) continue;
+                var by = State.Units.FirstOrDefault(a => a.Alive && a.Team == Teams.Alien && Visible(a) && Notices(a, u, step));
+                if (by != null) return (step, by);
+            }
+            return null;
         }
 
         /// <summary>
@@ -1136,6 +1163,8 @@ namespace Bastion.UI.Combat
         string concealWarn;
 
         const string ConcealWarning = "Desde ahí os ven: se rompe la ocultación. Haz clic otra vez para mover.";
+        /// <summary>The same, seen on the way there and not there (U28: Producto, 21/11; till Lore's words).</summary>
+        const string ConcealWayWarning = "Por el camino os ven: se rompe la ocultación. Haz clic otra vez para mover.";
 
         /// <summary>
         /// A click on the map (game.ts clickTile): a target picked, or acted on if picked already; one of the squad picked
@@ -1247,14 +1276,20 @@ namespace Bastion.UI.Combat
                 return;
             }
             var key = $"{u.Id}|{tile.X},{tile.Y}";
-            if (dest.Detected && concealWarn != key && !GameInput.Touch)
+            // Seen there, or on the way (U28): asked once.
+            var onWay = !dest.Detected ? NoticedOnWay(u, Paths.BuildPath(State, u, reach, tile)) : null;
+            if ((dest.Detected || onWay != null) && concealWarn != key && !GameInput.Touch)
             {
                 concealWarn = key;
-                Toast(ConcealWarning);
+                Toast(dest.Detected ? ConcealWarning : ConcealWayWarning);
                 return;
             }
             // Answered: the question goes, not left under the «OCULTACIÓN ROTA» that follows (P4 of 15/11).
-            if (concealWarn != null) Hud?.ClearToast(ConcealWarning);
+            if (concealWarn != null)
+            {
+                Hud?.ClearToast(ConcealWarning);
+                Hud?.ClearToast(ConcealWayWarning);
+            }
             concealWarn = null;
             Send(new MoveCommand { Unit = u.Id, To = tile });
         }
@@ -1449,20 +1484,29 @@ namespace Bastion.UI.Combat
             if (enemy != null || u == null || dest == null) return;
             var path = Paths.BuildPath(State, u, reach, hover);
             Overlay?.ShowPath(State, u.Pos, path, dest.Dash, Planning);
-            // Where on it an enemy in sight would react (T20, Gameplay's Rules.ReactionsAlong): marked before moving.
+            // Where on it an enemy in sight would react (T20, Gameplay's Rules.ReactionsAlong): marked before moving. And the
+            // first step where one would notice it, the squad hidden (U28): the same mark, with the line to who.
+            var onWay = !Planning && !dest.Detected ? NoticedOnWay(u, path) : null;
             if (Overlay != null && path != null && !Planning)
-                Overlay.ShowReactions(State, Rules.ReactionsAlong(State, u, path).Select(r => (r.Tile, UnitById(State, r.Unit)?.Pos)).ToList());
+            {
+                var marks = Rules.ReactionsAlong(State, u, path).Select(r => (r.Tile, UnitById(State, r.Unit)?.Pos)).ToList();
+                if (onWay.HasValue && !marks.Any(m => Same(m.Item1, onWay.Value.step))) marks.Add((onWay.Value.step, onWay.Value.by.Pos));
+                Overlay.ShowReactions(State, marks);
+            }
             Overlay?.ShowCover(State, CoverMatters() ? hover : null);
-            Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
+            Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected || onWay != null ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
             // Into El Toro's line, his charge drawn to it before one stands there (Gameplay, 16/11).
             var charged = ChargeLineTo(u, hover);
             // Running, a door or a window is heard (docs/FASE2.md): an icon under the destination, no words (Ana, 7/11 #3); the
             // fire it goes through; and at night, whether it ends in the light.
             // With the finger, the second tap: what it does (Lore, 7/11).
-            var again = !GameInput.Touch ? null : Planning ? HudText.Touch.AgainPlan : dest.Detected ? HudText.Touch.Concealed : HudText.Touch.AgainMove;
+            var again = !GameInput.Touch ? null : Planning ? HudText.Touch.AgainPlan : dest.Detected ? HudText.Touch.Concealed : onWay != null ? HudText.Touch.ConcealedWay : HudText.Touch.AgainMove;
             var heard = path != null && AbilityTexts.MoveNoise(State, u, path, dest.Run) != null;
             // Into the hidden squad's extra: that it is lost if they are seen (Gameplay, 16/11).
-            NoteWith(hover, heard ? "noise" : null, BoardNote(u, hover), charged ? HudText.Boss.InLine : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
+            // Who would see it on the way (U28; Lore's words): «Por el camino os ve un Saqueador», «… os ve El Toro».
+            var seenOnWay = onWay.HasValue && Content.Templates[onWay.Value.by.Template].Name is string who
+                ? $"Por el camino os ve {(who.StartsWith("El ") ? who : "un " + who)}" : null;
+            NoteWith(hover, heard ? "noise" : null, BoardNote(u, hover), seenOnWay, charged ? HudText.Boss.InLine : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
         }
 
         /// <summary>

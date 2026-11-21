@@ -297,16 +297,19 @@ namespace Bastion.Engine
         /// them moved to the nearest spot they stood at its edge, the nearest at 14 tiles on that side and 21 on the other,
         /// and fell 23 and 9. Only those on the ground; nothing else moves.
         /// </summary>
-        private static void DeadOffTheGroups(GameState s, List<List<Unit>> groups, Dictionary<int, int> fromBus, Rng rng)
+        private static void DeadOffTheGroups(GameState s, List<List<Unit>> groups, Dictionary<int, int> fromBus, Rng rng, int? podGap = null, int[]? corridor = null, int corridorGap = 0, int corridorClear = 0)
         {
             var side = Math.Max(s.Width, s.Height);
-            var gap = Math.Max(SplitPodGap, (int)Js.Round(side / 3.0));
+            var gap = podGap ?? Math.Max(SplitPodGap, (int)Js.Round(side / 3.0));
             var spreads = new[] { Math.Max(11, (int)Js.Round(side / 4.5)), 6, 3, 0 };
             var middles = groups.Select((g) => (X: g.Average((u) => u.Pos.X), Y: g.Average((u) => u.Pos.Y))).ToList();
             var ours = groups.SelectMany((g) => g).ToList();
             Pos At(int i) => new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 };
             double FromMiddles(Pos p) => middles.Min((m) => Js.Hypot(m.X - p.X, m.Y - p.Y));
             double FromOurs(Pos p) => ours.Min((u) => Js.Hypot(u.Pos.X - p.X, u.Pos.Y - p.Y));
+            // G23.5: a way to keep clear too (`corridor`: tiles from it, by tile), its groups CorridorGap off it, the lone and the
+            // stops of rounds corridorClear.
+            int FromCorridor(Pos p) => corridor == null ? int.MaxValue : corridor[p.Y * s.Width + p.X];
             bool Inside(int i) => s.Ground != null && i < s.Ground.Count && s.Ground[i] == 2;
             // Where one of the dead can wait: on the ground the squad walks (from La Lata), out of its zone, off fire and
             // flights, nobody there.
@@ -331,16 +334,17 @@ namespace Bastion.Engine
             foreach (var pod in s.Pods)
             {
                 var members = pod.UnitIds.Select((id) => Grid.GetUnit(s, id)).Where((u) => u != null && u.Alive).Select((u) => u!).ToList();
-                if (members.Count == 0 || members.Any((u) => u.Pos.Z != 0)) continue;
+                // The dead's only (G23.5: a camp's living keep their posts).
+                if (members.Count == 0 || members.Any((u) => u.Pos.Z != 0 || !Content.Templates[u.Template].Undead)) continue;
                 if (pod.Patrol.Count > 0)
                 {
-                    if (FromMiddles(pod.Patrol[0]) < gap)
+                    if (FromMiddles(pod.Patrol[0]) < gap || FromCorridor(pod.Patrol[0]) < corridorGap)
                     {
                         var anchors = s.Pods.Where((o) => o != pod && o.Patrol.Count > 0).Select((o) => o.Patrol[0]).ToList();
                         var was = members.Select((u) => u.Pos).ToList();
                         // Off their own tiles while their new ones are looked for.
                         foreach (var u in members) u.Pos = new Pos { X = -1, Y = -1, Z = 0 };
-                        var room = Shuffled(tiles.Where((i) => Free(i) && FromMiddles(At(i)) >= gap).ToList());
+                        var room = Shuffled(tiles.Where((i) => Free(i) && FromMiddles(At(i)) >= gap && FromCorridor(At(i)) >= corridorGap).ToList());
                         List<int>? placed = null;
                         foreach (var spread in spreads)
                         {
@@ -385,12 +389,12 @@ namespace Bastion.Engine
                 {
                     foreach (var u in members)
                     {
-                        if (FromOurs(u.Pos) >= LurkerClear) continue;
+                        if (FromOurs(u.Pos) >= LurkerClear && FromCorridor(u.Pos) >= corridorClear) continue;
                         var was = Grid.TileIndex(s, u.Pos.X, u.Pos.Y);
                         bool Fits(int i)
                         {
                             var p = At(i);
-                            return Free(i) && FromOurs(p) >= LurkerClear && s.Mission.EvacZone.All((z) => Js.Hypot(z.X - p.X, z.Y - p.Y) >= LurkerBus)
+                            return Free(i) && FromOurs(p) >= LurkerClear && FromCorridor(p) >= corridorClear && s.Mission.EvacZone.All((z) => Js.Hypot(z.X - p.X, z.Y - p.Y) >= LurkerBus)
                                 && dead.All((o) => o == u || Js.Hypot(o.Pos.X - p.X, o.Pos.Y - p.Y) >= (o.PodId != null && s.Pods.Any((q) => q.Id == o.PodId && q.Patrol.Count > 0) ? LurkerPodGap : LurkerGap));
                         }
                         var fits = tiles.Where(Fits).ToList();
@@ -402,12 +406,287 @@ namespace Bastion.Engine
             // No round of theirs through a group's start.
             foreach (var pod in s.Pods)
             {
-                if (pod.Patrol.Count < 2) continue;
+                if (pod.Patrol.Count < 2 || pod.UnitIds.Any((id) => Grid.GetUnit(s, id) is Unit u && !Content.Templates[u.Template].Undead)) continue;
                 var kept = new List<Pos> { pod.Patrol[0] };
-                kept.AddRange(pod.Patrol.Skip(1).Where((p) => FromMiddles(p) >= SplitRound));
+                // G23.5: nor across the way in and out of a camp, between its stops (the straight line, every tile of it).
+                bool Across(Pos a, Pos b)
+                {
+                    if (corridor == null) return false;
+                    var n = Math.Max(Math.Abs(b.X - a.X), Math.Abs(b.Y - a.Y));
+                    for (var k = 0; k <= n; k++)
+                    {
+                        var p = new Pos { X = (int)Js.Round(a.X + (b.X - a.X) * (double)k / Math.Max(1, n)), Y = (int)Js.Round(a.Y + (b.Y - a.Y) * (double)k / Math.Max(1, n)), Z = 0 };
+                        if (Grid.InBounds(s, p.X, p.Y) && FromCorridor(p) < corridorClear) return true;
+                    }
+                    return false;
+                }
+                foreach (var p in pod.Patrol.Skip(1).Where((p) => FromMiddles(p) >= SplitRound && FromCorridor(p) >= corridorClear))
+                    if (!Across(kept[kept.Count - 1], p)) kept.Add(p);
                 pod.Patrol = kept;
                 pod.PatrolIndex = 0;
             }
+        }
+
+        // ---------------------------------------------------------------- Saqueadores
+
+        /// <summary>
+        /// G23.5 Saqueadores (SAQUEADORES.md; how many waits for Arturo's cuadro): the living keeping the camp by the stage's
+        /// difficulty, the Cabecilla first, then who sits by the fire; the first Saqueador walks the round.
+        /// </summary>
+        public static List<string> RaidersBand(int difficulty) => difficulty >= 3
+            ? new List<string> { TemplateIds.Officer, TemplateIds.Trooper, TemplateIds.Lancer, TemplateIds.Trooper, TemplateIds.Trooper }
+            : new List<string> { TemplateIds.Officer, TemplateIds.Trooper, TemplateIds.Lancer, TemplateIds.Trooper };
+
+        /// <summary>The dead's groups at the start no nearer the camp's middle than this (Mapgen keeps them this far from where the squad comes in).</summary>
+        public const int CampDeadGap = 20;
+
+        /// <summary>
+        /// G23.5 Saqueadores: the camp of the living the map was made with (GenOptions.Camp: the camping site's room of
+        /// CampUses.Raiders and its marks), once La Lata's zone is set. Its bounds and crates in MissionState.Raiders, the
+        /// crates among the pieces searched one by one (MissionState.Pieces, SearchPieces.StashCrate). Its guards
+        /// (RaidersBand), each a group of its own, unaware (Unit.Guard): the first Saqueador on the round, two tiles out round
+        /// the fence (its four corners where they can be stood on); the rest on the chairs by the fire looking as they do
+        /// (GuardPosts.Fire), and with more of them than chairs, by the crates looking out (GuardPosts.Stash). Then the dead
+        /// kept off the camp and off the squad's start alike (DeadOffTheGroups, CampDeadGap; `rng`, where to). Nothing without
+        /// a camp on the map: a Saqueo of the stage.
+        /// </summary>
+        public static void PlaceCamp(GameState s, int difficulty, Rng rng)
+        {
+            var site = (s.Interiors ?? new List<InteriorSite>()).FirstOrDefault((x) => x.Kind == InteriorKinds.Camping && x.Rooms.Any((r) => r.Use == CampUses.Raiders));
+            var room = site?.Rooms.First((r) => r.Use == CampUses.Raiders);
+            if (site == null || room == null) return;
+            bool In(InteriorDetail d) => d.Z == 0 && d.X >= room.X && d.Y >= room.Y && d.X < room.X + room.W && d.Y < room.Y + room.H;
+            var crates = site.Dressing.Where((d) => d.Kind == CampDetailKinds.StashCrate && In(d)).Select((d) => Grid.TileIndex(s, d.X, d.Y)).OrderBy((i) => i).ToList();
+            var chairs = site.Dressing.Where((d) => d.Kind == CampDetailKinds.CampChair && In(d)).OrderBy((d) => d.Y).ThenBy((d) => d.X).ToList();
+            s.Mission.Raiders = new RaidersCamp { X = room.X, Y = room.Y, W = room.W, H = room.H, Crates = crates };
+            s.Mission.Pieces = (s.Mission.Pieces ?? new List<int>()).Concat(crates).Distinct().OrderBy((i) => i).ToList();
+            var middle = new Vec2 { X = room.X + room.W / 2, Y = room.Y + room.H / 2 };
+            var next = s.Units.Select((u) => u.Id.StartsWith("a") && int.TryParse(u.Id.Substring(1), out var n) ? n : 0).DefaultIfEmpty(0).Max();
+            bool Free(Pos p) => Grid.InBounds(s, p.X, p.Y) && Grid.CanStandOn(Grid.KindAt(s, p)) && Grid.UnitAt(s, p) == null && !Abilities.InEvacZone(s, p);
+            double Facing(Pos at, int side) => Js.Atan2(Grid.Dirs4[side].Y, Grid.Dirs4[side].X);
+            var guards = new List<Unit>();
+            void Post(string template, Pos at, double facing, string post, List<Pos> round)
+            {
+                var id = $"a{++next}";
+                var pod = new Pod { Id = $"rc{guards.Count + 1}", Active = false, UnitIds = new List<string> { id }, Patrol = round, PatrolIndex = 0 };
+                var u = MakeUnit(id, template, Content.Templates[template].Name, null, at, pod.Id);
+                u.Facing = facing;
+                u.Guard = post;
+                s.Units.Add(u);
+                s.Pods.Add(pod);
+                guards.Add(u);
+            }
+            var band = RaidersBand(difficulty);
+            var walker = band.IndexOf(TemplateIds.Trooper);
+            // One by the stash always (Producto, 20/11: the round and the stash's guard keep watch, the fire's look at it):
+            // the last Saqueador after the round's, else the Cazador.
+            var keeper = Enumerable.Range(0, band.Count).Where((k) => k != walker && band[k] == TemplateIds.Trooper).DefaultIfEmpty(band.IndexOf(TemplateIds.Lancer)).Last();
+            // The round: two tiles out round the fence, its corners where one can stand, from the one nearest the middle's north-west.
+            var corners = new[] { (room.X - 2, room.Y - 2), (room.X + room.W + 1, room.Y - 2), (room.X + room.W + 1, room.Y + room.H + 1), (room.X - 2, room.Y + room.H + 1) }
+                .Select((c) => new Pos { X = c.Item1, Y = c.Item2, Z = 0 }).Where(Free).ToList();
+            if (walker >= 0 && corners.Count >= 2)
+            {
+                var start = corners[0];
+                Post(band[walker], start, Facing(start, 1), GuardPosts.Round, corners.Skip(1).Concat(new[] { start }).Select(Grid.ToPos).ToList());
+            }
+            var seated = 0;
+            var stash = crates.Select((i) => new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 }).ToList();
+            // The stash's guard first (its post by a crate), then the rest to the chairs, by the stash too without one.
+            foreach (var k in Enumerable.Range(0, band.Count).OrderBy((k) => k == keeper ? 0 : 1).ThenBy((k) => k))
+            {
+                if (k == walker && guards.Count > 0 && guards[0].Guard == GuardPosts.Round) continue;
+                if (k != keeper && seated < chairs.Count)
+                {
+                    var chair = chairs[seated++];
+                    var at = new Pos { X = chair.X, Y = chair.Y, Z = 0 };
+                    if (Free(at))
+                    {
+                        Post(band[k], at, Facing(at, chair.Facing), GuardPosts.Fire, new List<Pos> { Grid.ToPos(at) });
+                        continue;
+                    }
+                }
+                // By the crate farthest from where the squad starts (La Lata is near it: the way in and out keeps off its eyes;
+                // Red's R15, 20/11), on the free tile beside it farthest from the middle, looking out.
+                var start = s.Units.FirstOrDefault((x) => x.Team == Teams.Xcom && x.CampaignId != null)?.Pos ?? new Pos();
+                var by = stash.OrderByDescending((c) => Js.Hypot(c.X - start.X, c.Y - start.Y)).ThenBy((c) => c.Y).ThenBy((c) => c.X)
+                    .Select((c) => Grid.Dirs8.Select((d) => new Pos { X = c.X + d.X, Y = c.Y + d.Y, Z = 0 })
+                        .Where((p) => Free(p) && p.X > room.X && p.Y > room.Y && p.X < room.X + room.W - 1 && p.Y < room.Y + room.H - 1)
+                        .OrderByDescending((p) => Math.Abs(p.X - middle.X) + Math.Abs(p.Y - middle.Y)).ThenBy((p) => p.Y).ThenBy((p) => p.X).FirstOrDefault())
+                    .FirstOrDefault((p) => p != null);
+                if (by == null) continue;
+                Post(band[k], by, Los.FacingTo(new Pos { X = middle.X, Y = middle.Y, Z = 0 }, by) ?? 0, GuardPosts.Stash, new List<Pos> { Grid.ToPos(by) });
+            }
+            // The dead off the camp, as off where the squad comes in: off both (one moved off the camp went next to the squad's
+            // start, R1 of 20/11).
+            var bus = s.Mission.EvacZone.Select((z) => new Pos { X = (int)z.X, Y = (int)z.Y, Z = 0 }).FirstOrDefault((p) => Grid.InBounds(s, p.X, p.Y));
+            var squad = s.Units.Where((u) => u.Team == Teams.Xcom && u.Alive && u.CampaignId != null).ToList();
+            var soldier = squad.FirstOrDefault();
+            if (bus == null || soldier == null || guards.Count == 0) return;
+            var home = soldier.Pos;
+            soldier.Pos = bus;
+            var area = s.Width * s.Height;
+            var fromBus = Paths.ComputeReach(s, soldier, 1_000_000, ignore: (_) => true).Cost.Where((kv) => kv.Key < area).ToDictionary((kv) => kv.Key, (kv) => kv.Value);
+            soldier.Pos = home;
+            // The way in and out kept clear of the dead too (Producto, 20/11, after Red's R15: at the service area the sleeping
+            // dead cut the hidden way, by their eyes and their bites): from the squad's start to the camp's inside, and from
+            // there to La Lata, on foot (CampWay).
+            // First off the camp and the start, as before; then off the way, where there is room (the camping is small).
+            DeadOffTheGroups(s, new List<List<Unit>> { guards, squad }, fromBus, rng, CampDeadGap);
+            DeadOffTheGroups(s, new List<List<Unit>> { guards, squad }, fromBus, rng, CampDeadGap, CampWay(s, soldier, room, bus), CampWayGap, CampWayClear);
+        }
+
+        /// <summary>G23.5: the dead's groups at the start no nearer the way in and out of the camp (CampWay) than this; the lone and the rounds' stops, CampWayClear.</summary>
+        public const int CampWayGap = 12, CampWayClear = 8;
+
+        /// <summary>
+        /// G23.5: how far each tile is from the way in and out of the camp (Chebyshev, in tiles): the walk from where `walker`
+        /// stands to the nearest floor of the camp's inside (`room` but its fence), and from there to La Lata's (`bus`) zone,
+        /// nobody in the way. Null with no way.
+        /// </summary>
+        private static int[]? CampWay(GameState s, Unit walker, InteriorRoom room, Pos bus)
+        {
+            var home = walker.Pos;
+            var inside = new List<Pos>();
+            for (var y = room.Y + 1; y < room.Y + room.H - 1; y++)
+                for (var x = room.X + 1; x < room.X + room.W - 1; x++)
+                    if (Grid.CanStandOn(Grid.KindAt(s, new Pos { X = x, Y = y, Z = 0 }))) inside.Add(new Pos { X = x, Y = y, Z = 0 });
+            var there = Paths.ComputeReach(s, walker, 1_000_000, ignore: (_) => true);
+            var into = inside.Where((p) => there.Cost.ContainsKey(Grid.NodeOf(s, p))).OrderBy((p) => there.Cost[Grid.NodeOf(s, p)]).ThenBy((p) => p.Y).ThenBy((p) => p.X).FirstOrDefault();
+            if (into == null) return null;
+            var way = Paths.BuildPath(s, walker, there, into) ?? new List<Pos>();
+            walker.Pos = into;
+            var back = Paths.ComputeReach(s, walker, 1_000_000, ignore: (_) => true);
+            walker.Pos = home;
+            var zone = s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).Where((p) => back.Cost.ContainsKey(Grid.NodeOf(s, p))).OrderBy((p) => back.Cost[Grid.NodeOf(s, p)]).FirstOrDefault();
+            if (zone != null) way.AddRange(Paths.BuildPath(s, walker, back, zone) ?? new List<Pos>());
+            way.Add(home);
+            // From every tile of it outwards, by the eight ways.
+            var far = Enumerable.Repeat(int.MaxValue, s.Width * s.Height).ToArray();
+            var queue = new List<int>();
+            foreach (var p in way.Where((p) => Grid.InBounds(s, p.X, p.Y)))
+            {
+                var i = p.Y * s.Width + p.X;
+                if (far[i] == 0) continue;
+                far[i] = 0;
+                queue.Add(i);
+            }
+            for (var head = 0; head < queue.Count; head++)
+            {
+                var i = queue[head];
+                foreach (var d in Grid.Dirs8)
+                {
+                    int x = i % s.Width + d.X, y = i / s.Width + d.Y;
+                    if (!Grid.InBounds(s, x, y)) continue;
+                    var j = y * s.Width + x;
+                    if (far[j] <= far[i] + 1) continue;
+                    far[j] = far[i] + 1;
+                    queue.Add(j);
+                }
+            }
+            return far;
+        }
+
+        /// <summary>
+        /// G23.5: a camp's guard posted (fire or stash: its group's one stop) and unaware, back to its post once nothing is
+        /// heard, and there looking as its post does (Ai.KeepPost). Its facing at the post: its chair's, or out from the
+        /// camp's middle by the stash.
+        /// </summary>
+        public static double? PostFacing(GameState s, Unit u, Pos post)
+        {
+            var camp = s.Mission.Raiders;
+            if (camp == null) return null;
+            if (u.Guard == GuardPosts.Fire)
+            {
+                foreach (var site in s.Interiors ?? new List<InteriorSite>())
+                {
+                    if (site.Kind != InteriorKinds.Camping) continue;
+                    foreach (var d in site.Dressing)
+                        if (d.Kind == CampDetailKinds.CampChair && d.X == post.X && d.Y == post.Y && d.Z == post.Z) return Js.Atan2(Grid.Dirs4[d.Facing].Y, Grid.Dirs4[d.Facing].X);
+                }
+            }
+            return Los.FacingTo(new Pos { X = camp.X + camp.W / 2, Y = camp.Y + camp.H / 2, Z = 0 }, post);
+        }
+
+        // ---------------------------------------------------------------- Evacuación
+
+        /// <summary>G23.6 Evacuación's civilians (cuadro 71: four), each in a building of its own of this many ground tiles at least.</summary>
+        public const int Civilians = 4, CivilianFewest = 3, CivilianHouse = 9;
+        /// <summary>A civilian's building this far from La Lata on foot, in tiles (EVACUACION.md: none at its door, none a chapter off).</summary>
+        public const int CivilianNear = 15, CivilianFar = 60;
+        /// <summary>A civilian's tile at least this far from where the squad starts (not found from the start).</summary>
+        public const int CivilianFromSquad = 12;
+        /// <summary>The tiles of a building drawn to hide a civilian on, each tried for its walk to La Lata, before giving the building up.</summary>
+        public const int CivilianTries = 4;
+
+        /// <summary>
+        /// G23.6 Evacuación (EVACUACION.md, cuadro 100): Civilians civilians, once La Lata's zone is set, each hidden in a
+        /// building of its own (CivilianHouse ground tiles or more) whose floor walks to La Lata's zone in CivilianNear to
+        /// CivilianFar tiles, CivilianFromSquad or more from the squad; the buildings as spread out as can be (each next the
+        /// farthest from those taken, the first drawn), on a free floor tile of each drawn on `rng`. Nobody's, captive till
+        /// found (CivilianFoundEvent), going by themselves (Automaton.Civilian), their names a soldier's; each with its search
+        /// circle (a Rescate's survivor's) and its seed (`seed`'s and theirs: their panics). With fewer than CivilianFewest
+        /// such buildings, none: a Saqueo of the stage.
+        /// </summary>
+        public static void PlaceCivilians(GameState s, Rng rng, int seed)
+        {
+            var bus = s.Mission.EvacZone.Select((z) => new Pos { X = (int)z.X, Y = (int)z.Y, Z = 0 }).FirstOrDefault((p) => Grid.InBounds(s, p.X, p.Y));
+            var squad = s.Units.Where((u) => u.Team == Teams.Xcom && u.Alive && u.CampaignId != null).ToList();
+            if (bus == null || squad.Count == 0) return;
+            var walker = squad[0];
+            var home = walker.Pos;
+            var area = s.Width * s.Height;
+            var zone = s.Mission.EvacZone.Select((z) => Grid.TileIndex(s, (int)z.X, (int)z.Y)).ToHashSet();
+            bool Free(int i) => s.Ground != null && i < s.Ground.Count && s.Ground[i] == 2 && Grid.KindAt(s, new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 }) == TileKinds.Floor
+                && Grid.UnitAt(s, new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 }) == null && !zone.Contains(i);
+            // Each building's floor that walks to La Lata in its band, as the civilian would walk from there: a tile of it
+            // drawn, up to CivilianTries of them.
+            bool InBand(int i)
+            {
+                walker.Pos = new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 };
+                var reach = Paths.ComputeReach(s, walker, 1_000_000, ignore: (_) => true).Cost;
+                walker.Pos = home;
+                var walk = zone.Where((z) => reach.ContainsKey(z)).Select((z) => reach[z]).DefaultIfEmpty(int.MaxValue).Min();
+                return walk != int.MaxValue && walk >= CivilianNear * Paths.CostOrtho && walk <= CivilianFar * Paths.CostOrtho;
+            }
+            var houses = new List<(List<int> Floor, double X, double Y)>();
+            foreach (var tiles in Buildings.GroundTiles(s).Where((t) => t.Count >= CivilianHouse))
+            {
+                var floor = tiles.Where(Free).Where((i) => squad.All((u) => Math.Max(Math.Abs(u.Pos.X - i % s.Width), Math.Abs(u.Pos.Y - i / s.Width)) >= CivilianFromSquad)).OrderBy((i) => i).ToList();
+                var tried = new List<int>();
+                for (var k = 0; k < CivilianTries && tried.Count < floor.Count; k++)
+                {
+                    var i = floor.Where((x) => !tried.Contains(x)).ElementAt(rng.Int(floor.Count - tried.Count));
+                    tried.Add(i);
+                    if (!InBand(i)) continue;
+                    houses.Add((new List<int> { i }, floor.Average((x) => x % s.Width), floor.Average((x) => x / s.Width)));
+                    break;
+                }
+            }
+            if (houses.Count < CivilianFewest) return;
+            var taken = new List<(List<int> Floor, double X, double Y)> { houses[rng.Int(houses.Count)] };
+            while (taken.Count < Civilians && taken.Count < houses.Count)
+                taken.Add(houses.Where((h) => !taken.Contains(h)).OrderByDescending((h) => taken.Min((t) => Js.Hypot(t.X - h.X, t.Y - h.Y))).First());
+            var names = Content.SoldierNames.ToList();
+            var used = s.Units.Select((u) => u.Name).ToHashSet();
+            var spots = new List<CivilianSpot>();
+            for (var k = 0; k < taken.Count; k++)
+            {
+                var at = taken[k].Floor[rng.Int(taken[k].Floor.Count)];
+                var pos = new Pos { X = at % s.Width, Y = at / s.Width, Z = 0 };
+                var free = names.Where((n) => !used.Contains(n.Name)).ToList();
+                var who = free.Count > 0 ? free[rng.Int(free.Count)] : names[rng.Int(names.Count)];
+                used.Add(who.Name);
+                var u = MakeUnit($"c{k + 1}", TemplateIds.Civilian, who.Name, null, pos, null);
+                u.Captive = true;
+                u.Ap = 0;
+                u.Moves = 0;
+                u.Automaton = new Automaton { Piece = Automaton.Civilian };
+                u.Facing = rng.Next() * 2 * Math.PI - Math.PI;
+                // No appearance: their street clothes as they are, untinted (Producto, 20/11), Arte's to draw by the template.
+                s.Units.Add(u);
+                spots.Add(new CivilianSpot { Unit = u.Id, Area = Rules.CircleAround(s, pos, rng), Seed = unchecked(seed * 31 + k * 7919) });
+            }
+            s.Mission.Civilians = spots;
         }
 
         // ---------------------------------------------------------------- Guarida

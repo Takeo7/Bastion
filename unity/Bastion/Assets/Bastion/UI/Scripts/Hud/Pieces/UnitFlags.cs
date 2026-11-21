@@ -520,6 +520,8 @@ namespace Bastion.UI.Hud
                 Ui.Icon(icon, BiteIcon, "uflag__bite-icon", bite);
                 Ui.Text(f.Countdown.ToString(), "uflag__bite-turns font-title", bite);
             }
+            // A guard's state (U28), over the health on its own line.
+            if (f.State != null) Ui.Text(f.State.Text, "tag tag--" + f.State.Kind + " uflag__state", el);
             var row = Ui.El("uflag__row", el);
             // (No cover's square by the health: the shield is on the soldier's panel now, Arturo 7/11.)
             if (f.Eye != null)

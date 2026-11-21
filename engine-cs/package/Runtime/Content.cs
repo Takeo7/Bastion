@@ -583,8 +583,9 @@ namespace Bastion.Engine
             // An action, like a shot (playtest 16/10): the turn goes on.
             [AbilityIds.Slash] = new AbilityDef { Id = AbilityIds.Slash, Name = "Tajo", Description = "Golpea a un enemigo que tengas al lado. Ignora la cobertura. La katana, la espada y la motosierra golpean a todos los que tengas al lado, y el rastrillo llega a dos casillas.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
             // Arturo, 16/11: with a blade, from behind one of the dead that hasn't seen you, it always kills, silently; only a
-            // Zombi or a Corredor, never with the chainsaw (Abilities.TakedownRefusal). No roll, no noise (Rules.Takedown).
-            [AbilityIds.Takedown] = new AbilityDef { Id = AbilityIds.Takedown, Name = "Golpe silencioso", Description = "Mata de un golpe y sin ruido a un Zombi o un Corredor que tengas al lado, si aún no está alerta y no te tiene delante. No rompe la ocultación. No sirve con la motosierra.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee, Noise = 0 },
+            // Zombi or a Corredor, a Saqueador or a Cazador (cuadro 99), never with the chainsaw (Abilities.TakedownRefusal). No
+            // roll, no noise (Rules.Takedown).
+            [AbilityIds.Takedown] = new AbilityDef { Id = AbilityIds.Takedown, Name = "Golpe silencioso", Description = "Mata de un golpe y sin ruido a un Zombi, un Corredor, un Saqueador o un Cazador que tengas al lado, si aún no está alerta y no te tiene delante. No rompe la ocultación. No sirve con la motosierra.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee, Noise = 0 },
             [AbilityIds.StunLance] = new AbilityDef { Id = AbilityIds.StunLance, Name = "Red y porra", Description = "Atrapa con la red y golpea con la porra: aturde.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = true, Weapon = AbilityWeapons.Melee },
             // An action, and the turn goes on: with two, a bite and a step, or two bites (playtest 16/10 #21).
             [AbilityIds.Claw] = new AbilityDef { Id = AbilityIds.Claw, Name = "Mordisco", Description = "Muerde a quien tiene al lado.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
@@ -1015,7 +1016,13 @@ namespace Bastion.Engine
             [TemplateIds.Turret] = Soldier(TemplateIds.Turret, "Torreta", "TOR", WeaponIds.TurretGun, hp: 12, armor: 1, aim: 60, mobility: 0, sight: 14, will: 100, robotic: true, abilities: new string[0], charges: Charges()),
             [TemplateIds.Relay] = Alien(TemplateIds.Relay, "Alarma", "ALA", WeaponIds.TrooperRifle, hp: 8, armor: 1, aim: 0, mobility: 0, sight: 0, detection: 0, robotic: true, abilities: new string[0]),
             [TemplateIds.Vip] = Soldier(TemplateIds.Vip, "VIP", "VIP", WeaponIds.Pistol, hp: 4, aim: 50, will: 30, abilities: new[] { AbilityIds.Hunker }, charges: Charges()),
+            // G23.6 Evacuación: a civilian walks to La Lata by itself, slower than one of the dead walks (EVACUACION.md: 5 a
+            // turn), and does nothing else (no ability: it never shoots).
+            [TemplateIds.Civilian] = Soldier(TemplateIds.Civilian, "Civil", "CIV", WeaponIds.Pistol, hp: 3, aim: 0, mobility: CivilianMobility, will: 20, abilities: new string[0], charges: Charges()),
         };
+
+        /// <summary>G23.6: how far a civilian walks in its step, in tiles (EVACUACION.md; a soldier walks 8 and one of the dead 5).</summary>
+        public const double CivilianMobility = 5;
 
         /// <summary>Default kits: each player gets a mix, a solo player gets all six.</summary>
         /// <remarks>Soldiers in a skirmish squad.</remarks>

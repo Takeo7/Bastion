@@ -38,6 +38,19 @@ namespace Bastion.Engine
         /// reward with one of each aboard (MissionState.Split). Only on open maps (RunMap.SplitSites).
         /// </summary>
         public const string Split = "split";
+        /// <summary>
+        /// G23.5 Saqueadores (Arturo, cuadro 71; .dev-snapshots/gameplay/g23/SAQUEADORES.md): a Saqueo with a camp of the living
+        /// on the map, their stash in three crates to rob, unseen or by fighting (MissionState.Raiders). Only out of doors with
+        /// room for it (RunMap.RaidersSites).
+        /// </summary>
+        public const string Raiders = "raiders";
+        /// <summary>
+        /// G23.6 Evacuación (Arturo, cuadros 71 and 100; .dev-snapshots/gameplay/g23/EVACUACION.md): a Saqueo with four civilians
+        /// hidden in buildings, each in a circle to look in; found, they walk to La Lata by themselves, slowly and in panic now
+        /// and then; won with two aboard, 20 § more for each one past two (MissionState.Civilians). Only where there are
+        /// buildings enough (RunMap.EvacuationSites).
+        /// </summary>
+        public const string Evacuation = "evacuation";
         // Stops, no fight (H4).
         public const string Refuge = "refuge";
         public const string Trade = "trade";
@@ -46,8 +59,8 @@ namespace Bastion.Engine
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Key, Bitten, Wounded, Split, Refuge, Trade,
-            Event, Boss,
+            Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Key, Bitten, Wounded, Split, Raiders,
+            Evacuation, Refuge, Trade, Event, Boss,
         };
 
         /// <summary>The stops: no fight, the squad answers them on the map.</summary>

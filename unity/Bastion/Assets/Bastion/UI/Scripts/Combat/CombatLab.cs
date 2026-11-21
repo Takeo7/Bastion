@@ -28,11 +28,17 @@ namespace Bastion.UI.Combat
         {
             if (App.GameSettings.SlowForTest > 0) System.Threading.Thread.Sleep(App.GameSettings.SlowForTest);
             App.GameSettings.WatchScreen();
+            // BASTION_LAB_CAMARA_QUIETA (U28, for Arte): «1», the camera still through the enemy's turn as it is seen (the
+            // view's); «todo», all along. «look=» still moves it (CameraRig.Still).
+            if (StillCamera != null && control != null && control.Rig != null) control.Rig.Still = StillCamera == "todo" || control.Shown?.ActiveTeam == Teams.Alien;
             // The touches' clock: the game's time as it would run at ×1, on through the pause (timeScale 0) and «Rápida».
             clock += Time.timeScale > 0 ? Time.deltaTime / Time.timeScale : Time.captureDeltaTime > 0 ? Time.captureDeltaTime : Time.unscaledDeltaTime;
         }
 
         float clock;
+
+        /// <summary>BASTION_LAB_CAMARA_QUIETA: «1» or «todo» (Update); unset, the camera as in the game.</summary>
+        static readonly string StillCamera = System.Environment.GetEnvironmentVariable("BASTION_LAB_CAMARA_QUIETA") is string still && still.Length > 0 ? still : null;
 
         /// <summary>A folder of engine-cs/golden (step1, step2).</summary>
         public string Step = "step2";
@@ -212,6 +218,8 @@ namespace Bastion.UI.Combat
             control = gameObject.AddComponent<CombatController>();
             control.State = mine;
             control.MySlot = Seat;
+            // BASTION_LAB_MIRADA=vista (U28): Saqueadores' guards with the other look of the two for Producto's cuadro.
+            if (System.Environment.GetEnvironmentVariable("BASTION_LAB_MIRADA") is string look && look.Length > 0) CombatController.PostsLook = look;
             control.Players = Room
                 ? new List<PlayerInfo> { new PlayerInfo { Slot = 0, Name = "Ana", Color = Content.PlayerColors[0], Connected = true }, new PlayerInfo { Slot = 1, Name = "Pepe", Color = Content.PlayerColors[1], Connected = true } }
                 : new List<PlayerInfo> { new PlayerInfo { Slot = 0, Name = "Arturo", Color = Content.PlayerColors[0], Connected = true } };

@@ -777,6 +777,36 @@ namespace Bastion.Engine
                     }
                     break;
                 }
+                case CivilianFoundEvent ev:
+                {
+                    // G23.6: shown and walking; its circle off.
+                    var spot = s.Mission.Civilians?.Find((x) => x.Unit == ev.Unit);
+                    if (spot != null)
+                    {
+                        spot.Found = true;
+                        spot.Area = null;
+                    }
+                    UnitOf(s, ev.Unit).Captive = false;
+                    break;
+                }
+                case CivilianPanickedEvent ev:
+                {
+                    var spot = s.Mission.Civilians?.Find((x) => x.Unit == ev.Unit);
+                    if (spot != null) spot.Panics++;
+                    break;
+                }
+                case CivilianHidEvent ev:
+                {
+                    // G23.6: hidden again, out of the dead's way (a captive), to be found in its new circle.
+                    var spot = s.Mission.Civilians?.Find((x) => x.Unit == ev.Unit);
+                    if (spot != null)
+                    {
+                        spot.Found = false;
+                        spot.Area = new SearchArea { Center = CopyVec(ev.Area.Center), Radius = ev.Area.Radius };
+                    }
+                    UnitOf(s, ev.Unit).Captive = true;
+                    break;
+                }
                 case SurvivorFoundEvent _:
                     SurvivorFound(s);
                     break;
@@ -813,7 +843,8 @@ namespace Bastion.Engine
                         u.Facing = Los.FacingTo(u.Pos, ev.Tile) ?? u.Facing;
                     }
                     var by = !string.IsNullOrEmpty(ev.By) ? Grid.GetUnit(s, ev.By!) : null;
-                    if (by?.Team == Teams.Xcom) s.Mission.Noise = (s.Mission.Noise ?? 0) + Content.HordePoints(ev.Radius);
+                    // Saqueadores (G23.5): the living's shots wind the horde too («el ruido atrae a los zombis de fuera»).
+                    if (by?.Team == Teams.Xcom || (s.Mission.Raiders != null && by != null && !Content.Templates[by.Template].Undead)) s.Mission.Noise = (s.Mission.Noise ?? 0) + Content.HordePoints(ev.Radius);
                     break;
                 }
                 case ForgotEvent ev:
@@ -1256,6 +1287,7 @@ namespace Bastion.Engine
                 Lost = u.Lost,
                 Aboard = u.Aboard,
                 Lame = u.Lame,
+                Guard = u.Guard,
                 Carrying = u.Carrying,
                 Hauled = u.Hauled,
                 CarriedBy = u.CarriedBy,
@@ -1392,6 +1424,8 @@ namespace Bastion.Engine
                     Bitten = m.Bitten,
                     Wounded = m.Wounded,
                     Split = m.Split?.Select((g) => g.ToList()).ToList(),
+                    Raiders = m.Raiders?.Copy(),
+                    Civilians = m.Civilians?.Select((x) => x.Copy()).ToList(),
                     BiteTurns = m.BiteTurns,
                     Cured = m.Cured,
                     Antiviral = m.Antiviral != null ? Gears.CloneGear(m.Antiviral) : null,

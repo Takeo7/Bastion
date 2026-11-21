@@ -264,6 +264,12 @@ namespace Bastion.Engine
         /// <summary>G23.3 El herido: never walks nor acts (no actions, no movement); carried by the squad. Null for everyone else.</summary>
         public bool? Lame { get; set; }
         /// <summary>
+        /// G23.5 Saqueadores: one of the living keeping the camp (GuardPosts): by its fire, sitting while its group is unaware
+        /// and it has heard nothing (Arte, 20/11); standing by the stash; or on its round. Each a group of its own, its post
+        /// its round's one stop (Pod.Patrol). Set at the start, never changed. Null for everyone else.
+        /// </summary>
+        public string? Guard { get; set; } // GuardPosts
+        /// <summary>
         /// G23.3: the one `this` carries (AbilityIds.Carry): its unit id. While so, it walks Paths.CarryMoves at most and
         /// fires no long gun. Null otherwise.
         /// </summary>
@@ -373,9 +379,14 @@ namespace Bastion.Engine
         public bool? Caged { get; set; }
     }
 
-    /// <summary>Unit.automaton: `{ piece: string }`.</summary>
+    /// <summary>
+    /// Unit.automaton: `{ piece: string }`. One of the squad that goes by itself and that nobody orders: a base's turret (its
+    /// piece) or, since G23.6, a civilian of an Evacuación (Piece = Civilian; Rules.IsCivilian).
+    /// </summary>
     public sealed class Automaton
     {
+        public const string Civilian = "civilian";
+
         public string Piece { get; set; } = "";
     }
 

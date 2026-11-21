@@ -212,8 +212,10 @@ namespace Bastion.Engine
         public const string Military = "military";
         public const string Toilets = "toilets";
         public const string FirePit = "firePit";
+        /// <summary>G23.5 Saqueadores: the camp of the living, its fence in (MissionState.Raiders).</summary>
+        public const string Raiders = "raiders";
 
-        public static readonly IReadOnlyList<string> All = new[] { Pitch, Trailer, Military, Toilets, FirePit };
+        public static readonly IReadOnlyList<string> All = new[] { Pitch, Trailer, Military, Toilets, FirePit, Raiders };
     }
 
     /// <summary>
@@ -239,8 +241,16 @@ namespace Bastion.Engine
         public const string TrailerTable = "trailerTable";
         public const string TrailerCounter = "trailerCounter";
         public const string TrailerDrawers = "trailerDrawers";
+        /// <summary>
+        /// G23.5 Saqueadores' fence (Arte, 20/11): a `low` tile of it, no decor; facing the outer side. A corner's, its first
+        /// outer side, the other one after it (Facing + 1: north-east 0, south-east 1, south-west 2, north-west 3).
+        /// </summary>
+        public const string Barricade = "barricade";
+        public const string BarricadeCorner = "barricadeCorner";
+        /// <summary>G23.5: a crate of the raiders' stash, on a `low` tile, facing the camp's middle; searched one by one (SearchPieces.StashCrate).</summary>
+        public const string StashCrate = "stashCrate";
 
-        public static readonly IReadOnlyList<string> All = new[] { TentDome, TentLong, TentMilitary, Trailer, FirePit, CampChair, SleepingBag, ToiletPortable, Clothesline, Cooler, CorpseCamper, TrailerBed, TrailerTable, TrailerCounter, TrailerDrawers };
+        public static readonly IReadOnlyList<string> All = new[] { TentDome, TentLong, TentMilitary, Trailer, FirePit, CampChair, SleepingBag, ToiletPortable, Clothesline, Cooler, CorpseCamper, TrailerBed, TrailerTable, TrailerCounter, TrailerDrawers, Barricade, BarricadeCorner, StashCrate };
     }
 
     /// <summary>A room of an InteriorSite: its rect (walls not included), its storey and its use (OfficeUses, ShedUses, PoliceUses, ShopUses, CampUses).</summary>

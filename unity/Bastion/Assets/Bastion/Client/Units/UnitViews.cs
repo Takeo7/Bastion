@@ -244,6 +244,12 @@ namespace Bastion.Client.Units
             public float mounted = -1;
             /// <summary>The camp loop a run's survivor waits in (UnitViews.Survivor), or null.</summary>
             public string survivorClip;
+            /// <summary>The loop a guard by the fire sits in (UnitViews.Guard); null, up.</summary>
+            public string guardClip;
+            /// <summary>The clip a lab holds it in (UnitViews.LabPose).</summary>
+            public string labClip;
+            public int labStep;
+            public float labTime;
             /// <summary>The camp loop the wounded sits in (UnitViews.Wounded), or null; and its splint, once built.</summary>
             public string woundedClip;
             public GameObject splint;
@@ -1407,8 +1413,11 @@ namespace Bastion.Client.Units
             if (v.anim == null || v.dead) return;
             // (A run's survivor waiting to be talked to: its own way, UnitViews.Survivor.)
             // (El herido, on the ground: sat, UnitViews.Wounded; before the survivor's, which it also is till carried.)
+            if (LabPose(v, u)) return;
             if (WoundedPose(v, u)) return;
             if (SurvivorPose(v, u)) return;
+            // (A raider on guard by the fire, its camp asleep: on its chair, UnitViews.Guard.)
+            if (GuardPose(v, u)) return;
             bool hidden = u.Hidden == true && u.Alive;
             // (Who carries the wounded stands under it, unseen or not: UnitViews.Wounded.)
             bool crouched = u.Carrying == null && (u.Hunkered || u.Captive || hidden || (u.Team == "xcom" && u.Alive && state != null && state.Concealed));
@@ -1501,6 +1510,9 @@ namespace Bastion.Client.Units
         /// <summary>Every preset the enemy is drawn as, the living made dead among them (FigureCatalogMake keeps only these).</summary>
         public static IEnumerable<string> PresetsUsed => Bodies.Values.SelectMany(b => b.Select(p => p.preset)).Distinct();
 
+        /// <summary>What an Evacuación's civilians wear (Dress's outfits: Modern Civilians' street clothes, none with a rucksack).</summary>
+        static readonly string[] CivilianClothes = { "civilian1", "civilian2", "civilian3", "civilian4", "civilian6", "civilian8" };
+
         /// <summary>Its figure: a preset whole for the enemy, a soldier put together from their dress for anyone else; null, none.</summary>
         GameObject FigureOf(Unit u, View view)
         {
@@ -1548,7 +1560,11 @@ namespace Bastion.Client.Units
             {
                 // Who has no look gets a body of their sex by their name (0.10.1's sexOfPerson; the campaign's people and
                 // relatives come with the campaign).
-                var dress = Dress.Of(u.Appearance, view.seed, u.Appearance == null ? Content.SexOfName(u.Name) : null);
+                // (An Evacuación's civilian, G23.6: no look of its own; street clothes each its own, by their order, bare-headed, as they are:
+                // Arturo's cuadro 101, «tal cual».)
+                var look = u.Appearance ?? (u.Template == TemplateIds.Civilian
+                    ? new Appearance { Character = CivilianClothes[Mathf.Max(0, state?.Units.Where(x => x.Template == TemplateIds.Civilian).ToList().FindIndex(x => x.Id == u.Id) ?? 0) % CivilianClothes.Length], Head = HeadIds.Bare, Wardrobe = Appearances.Wardrobe } : null);
+                var dress = Dress.Of(look, view.seed, u.Appearance == null ? Content.SexOfName(u.Name) : null);
                 view.build = dress.sex == "f" ? "femn" : "masc";
                 var soldier = SoldierFigure.Make(dress, "Soldado");
                 // In their colours and with their player's band if Ajustes says so (SquadTint; syntyFigures.ts paint).

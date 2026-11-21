@@ -249,13 +249,25 @@ namespace Bastion.UI.Combat
             // La llave (U22): the key on the floor, then, in a pack, the armoury's door; on its holder still, nowhere to go.
             if (m.KeyArmory == true && !Looting.ArmoryOpen(s))
                 goal = KeyOnFloor(s) ?? (Looting.KeyWhere(s) == KeyPlaces.Pack && m.Locked is List<int> locked && locked.Count > 0 ? Grid.PosOf(s, locked[0]) : null);
-            if (goal != null) return new List<(string, string, Pos)> { ("objective", "Objetivo", goal) };
+            // Saqueadores (U28): the stash's crate still shut nearest the picked soldier, and La Lata after it (O goes to one and
+            // then the other): stealing it is up to the squad.
+            var raid = false;
+            if (goal == null && m.EvacDone != true && StashLeft(s) is List<Pos> stash && stash.Count > 0)
+            {
+                var from = Unit()?.Pos ?? stash[0];
+                goal = stash.OrderBy(p => Grid.Distance(from, p)).First();
+                raid = true;
+            }
+            if (goal != null && !raid) return new List<(string, string, Pos)> { ("objective", "Objetivo", goal) };
+            var goals = new List<(string, string, Pos)>();
+            if (goal != null) goals.Add(("objective", "Objetivo", goal));
             var zone = m.EvacZone;
-            if (zone.Count == 0) return new List<(string, string, Pos)>();
+            if (zone.Count == 0) return goals;
             var mx = zone.Average(t => t.X);
             var my = zone.Average(t => t.Y);
             var centre = zone.OrderBy(t => (t.X - mx) * (t.X - mx) + (t.Y - my) * (t.Y - my)).First();
-            return new List<(string, string, Pos)> { ("evac", "Evacuación", new Pos { X = centre.X, Y = centre.Y }) };
+            goals.Add(("evac", "Evacuación", new Pos { X = centre.X, Y = centre.Y }));
+            return goals;
         }
 
         /// <summary>O: the camera to the mission's marks, one after another.</summary>
@@ -378,6 +390,15 @@ namespace Bastion.UI.Combat
                 Tag(u.Lame == true && u.CarriedBy == null, Lore.WoundedText.FloorTag, "stun");
                 Tag(u.Carrying != null, Lore.WoundedText.CarrierTag, "data");
                 Tag(u.Objective, "OBJETIVO", "stun");
+                // Saqueadores' guards (U28; Lore's words): «DESPREVENIDO» while their camp sleeps (the Golpe silencioso's
+                // word, Paths.OnPatrol), «ALERTA» once it woke; on a line of their own over the health (FlagView.State: in
+                // the row, two guards two tiles apart covered each other's bar). None with «GOLPE SILENCIOSO», which says as much.
+                if (u.Guard != null && u.Team == Teams.Alien)
+                {
+                    var unaware = Paths.OnPatrol(v, u);
+                    if (!unaware) f.State = new TagView { Text = Lore.RaidersText.AwakeTag, Kind = "awake" };
+                    else if (!quiet.Contains(u.Id)) f.State = new TagView { Text = UnitWords.Agree(u, Lore.RaidersText.UnawareTag), Kind = "unaware" };
+                }
                 // Mordido's count over the bitten (U23): from their finding till cured; red and beating at 2 and 1.
                 if (BiteLeft(v, u) is int left && !Unfound(u))
                 {
@@ -440,6 +461,8 @@ namespace Bastion.UI.Combat
         void ShowVision()
         {
             if (AimMarks == null) return;
+            // Saqueadores' guards on watch with it (U28): what leaves the pointer's sight off leaves theirs too.
+            ShowPosts();
             var v = Shown;
             var a = hover != null ? Grid.UnitAt(v, hover) : null;
             var who = new List<Unit>();
@@ -509,7 +532,10 @@ namespace Bastion.UI.Combat
         /// </summary>
         (string key, List<Pos> seen, List<Pos> noticed) SightOf(GameState v, Unit a, string world)
         {
-            var key = $"{a.Id}:{world}:{a.Pos.X},{a.Pos.Y},{a.Pos.Z}:{a.Facing}";
+            // (Sitting by a camp's fire, it notices only close: U28, Rules.Sitting.)
+            var who = Unit() is Unit picked && picked.Team == Teams.Xcom ? picked : null;
+            var sitting = Rules.Sitting(v, a);
+            var key = $"{a.Id}:{world}:{a.Pos.X},{a.Pos.Y},{a.Pos.Z}:{a.Facing}:{sitting}:{who?.Id}";
             if (sights.TryGetValue(a.Id, out var was) && was.key == key) return was;
             // As far as it sees in this weather (Los.SightIn: a storm cuts it); SightTo below, tile by tile, at night too.
             var range = Los.SightIn(v, a);
@@ -522,11 +548,14 @@ namespace Bastion.UI.Combat
                 var p = new Pos { X = x, Y = y, Z = a.Pos.Z };
                 // Behind cover from it, less of it (Arturo, 5/11 #4: Los.CoverShare), and one of ours hiding there, whichever
                 // hides more (Los.ConcealShare, as the rules have it).
-                var share = Grid.UnitAt(v, p) is Unit there && there.Team == Teams.Xcom ? Los.ConcealShare(v, a, there, p) : Los.CoverShare(v, a, p, Teams.Xcom);
+                var there = Grid.UnitAt(v, p) is Unit standing && standing.Team == Teams.Xcom ? standing : null;
+                var share = there != null ? Los.ConcealShare(v, a, there, p) : Los.CoverShare(v, a, p, Teams.Xcom);
                 if (!Grid.CanStandOn(Grid.KindAt(v, p)) || !Los.InViewCone(a, p) || Los.SightOrigin(v, a.Pos, p, Los.SightTo(v, a, p) * share, Los.WindowReachOf(a.Team)) == null) continue;
                 seen.Add(p);
-                // Hidden, one of the dead notices only ahead of it, not beside nor behind (Los.InNoticeCone, Gameplay 16/11).
-                if (v.Concealed && Los.InNoticeCone(v, a, p) && Grid.Distance(a.Pos, p) <= Los.DetectionTo(v, a, p) * share) noticed.Add(p);
+                // Where it would notice one of ours, as the rules do (Rules.Notices: hidden, one of the dead only ahead of it;
+                // one sitting by a camp's fire only close, U28): the squad hidden, or one sitting, which sees far but notices
+                // near. Whoever stands there, else the picked soldier as if there (its hiding counts).
+                if ((v.Concealed || sitting) && Rules.Notices(v, a, there ?? who, p)) noticed.Add(p);
             }
             var made = (key, seen, noticed);
             sights[a.Id] = made;
@@ -638,16 +667,19 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// The pointer on one of the dead beside `u` that is still unaware (Paths.OnPatrol), a Zombi or a Corredor: whether the
-        /// Golpe silencioso takes it down, or why not («Te tiene delante…», the chainsaw); null, the shot's odds as for anyone.
+        /// The pointer on one beside `u` that is still unaware (Paths.OnPatrol), one the Golpe silencioso takes (a Zombi, a
+        /// Corredor, a Saqueador or a Cazador: Abilities.TakenDown) or the Cabecilla (U28, G23.5: its refusal said): whether
+        /// it takes it down, or why not («Te tiene delante…», the chainsaw); null, the shot's odds as for anyone.
         /// </summary>
         (string kind, string text)? QuietLine(Unit u, Unit t)
         {
-            if (t.Template != TemplateIds.Zombie && t.Template != TemplateIds.Xenoid || !Aim.InMeleeReach(State, u.Pos, t.Pos) || !Paths.OnPatrol(State, t)) return null;
+            if (!Abilities.TakenDown.Contains(t.Template) && t.Template != TemplateIds.Officer || !Aim.InMeleeReach(State, u.Pos, t.Pos) || !Paths.OnPatrol(State, t)) return null;
             if (!Abilities.AbilitiesOf(u).Contains(AbilityIds.Takedown)) return null;
             // The key's own why (the chainsaw, no actions) as it is; this one's, after the action's name.
             if (Abilities.AbilityBlocker(State, u, AbilityIds.Takedown) is string off) return ("flank", off.TrimEnd('.'));
             var no = Abilities.TakedownRefusal(State, u, t);
+            // A why that names it already (the Cabecilla's, U28) goes alone, not «Golpe silencioso · … golpe silencioso».
+            if (no != null && no.IndexOf(HudText.Takedown.Name, StringComparison.OrdinalIgnoreCase) >= 0) return ("flank", no.TrimEnd('.'));
             return no == null ? ("aim", HudText.Takedown.On(HudText.Takedown.Kills)) : ("flank", HudText.Takedown.On(no.TrimEnd('.')));
         }
 
@@ -1039,6 +1071,15 @@ namespace Bastion.UI.Combat
                 objective = (split.FirstOrDefault(x => !x.Done) ?? split.Last()).Text;
                 tip = Lore.SplitText.ObjectiveTip;
             }
+            else if (RaidersSteps(s) is List<GoalStepView> raid)
+            {
+                steps = raid;
+                objective = (raid.FirstOrDefault(x => !x.Done) ?? raid.Last()).Text;
+                tip = Lore.RaidersText.ObjectiveTip;
+            }
+            // Saqueadores with no room on its map for the camp (Mission.Raiders null, about 1 in 90): a Saqueo's objective, and
+            // Lore's line that says so (Producto, 21/11).
+            else if (NoCamp(s)) tip = Lore.RaidersText.NoCamp;
             return new MissionView
             {
                 Label = s.Run != null ? Bastion.UI.Strategy.StrategyText.Runs.NodeName(s.Run.NodeKind) : MissionName(m.Kind),
@@ -1053,6 +1094,77 @@ namespace Bastion.UI.Combat
                 Weather = s.Weather,
                 Steps = steps,
             };
+        }
+
+        /// <summary>
+        /// Saqueadores' objective in two steps (U28, G23.5; Lore's words): the stash, with its crates still shut («quedan 2 de
+        /// 3 cajas»), done once none is; and La Lata. Stealing it is up to the squad (without it, the stage is a Saqueo), so
+        /// the second can be done with the first not. Null in another fight.
+        /// </summary>
+        static List<GoalStepView> RaidersSteps(GameState s)
+        {
+            var camp = s.Mission.Raiders;
+            if (camp == null || camp.Crates.Count == 0) return null;
+            var left = StashLeft(s).Count;
+            return new List<GoalStepView>
+            {
+                new GoalStepView { Text = Lore.RaidersText.Stash(left, camp.Crates.Count), Done = left == 0 },
+                new GoalStepView { Text = Lore.RaidersText.Leave, Done = s.Mission.EvacDone == true },
+            };
+        }
+
+        /// <summary>Saqueadores on a map with no room for its camp (Mission.Raiders null): played as a Saqueo (U28).</summary>
+        static bool NoCamp(GameState s) => s.Run?.NodeKind == NodeKinds.Raiders && s.Mission.Raiders == null;
+
+        /// <summary>Saqueadores' crates still shut (U28): the stash's (MissionState.Raiders) not searched yet; none in another fight.</summary>
+        static List<Pos> StashLeft(GameState s) =>
+            (s.Mission.Raiders?.Crates ?? new List<int>()).Select(n => Grid.PosOf(s, n)).Where(p => !Looting.WasSearched(s, p)).ToList();
+
+        /// <summary>
+        /// How Saqueadores' guards on watch show where they look (U28, two looks for Producto's cuadro): «abanico», a short
+        /// fan at each one's feet; «vista», the tiles where each would notice one of ours, as the pointer's enemy's sight.
+        /// </summary>
+        public static string PostsLook = "abanico";
+
+        /// <summary>What is on the ground now for the guards (ShowPosts): their keys.</summary>
+        string postsKey;
+
+        /// <summary>
+        /// Saqueadores' guards on watch (U28; Gameplay's Ai.KeepPost: at the fire or by the stash they look one way, and what
+        /// is behind them they don't see): where each one in sight looks, on the ground (PostsLook), while its camp sleeps
+        /// (Paths.OnPatrol); the round's too, which looks where it walks. Once the camp woke, none: they look all about. Not
+        /// over the shoulder, nor aiming (its target's marks), nor in a film or once over.
+        /// </summary>
+        void ShowPosts()
+        {
+            if (AimMarks == null) return;
+            var v = Shown;
+            var guards = v.Mission.Raiders == null || v.Outcome != null || Film || shoulder || mode == Mode.Target ? new List<Unit>()
+                : v.Units.Where(a => a.Alive && a.Guard != null && a.Team == Teams.Alien && a.Facing != null && Marked(a) && Paths.OnPatrol(v, a)).ToList();
+            var fan = PostsLook != "vista";
+            var world = fan || guards.Count == 0 ? "" : SightWorld(v);
+            var parts = fan ? null : guards.Select(a => SightOf(v, a, world)).ToList();
+            var key = fan ? string.Join("|", guards.Select(a => $"{a.Id}:{a.Pos.X},{a.Pos.Y},{a.Pos.Z}:{a.Facing}")) : string.Join("|", parts.Select(x => x.key)) + (v.Concealed ? ":c" : "");
+            if (key == postsKey) return;
+            postsKey = key;
+            if (guards.Count == 0)
+            {
+                AimMarks.ShowPosts(null, null, null);
+                return;
+            }
+            if (fan)
+            {
+                AimMarks.ShowPosts(v, guards.Select(a => (a.Pos, a.Facing.Value)).ToList(), null);
+                return;
+            }
+            // Where they would notice one of ours: hidden or sitting by the fire, as each notices (SightOf's, the rules'); seen,
+            // as far as each sees. Each tile once.
+            var tiles = new List<Pos>();
+            var taken = new HashSet<(int, int, int)>();
+            for (var i = 0; i < parts.Count; i++)
+                foreach (var p in v.Concealed || Rules.Sitting(v, guards[i]) ? parts[i].noticed : parts[i].seen)
+                    if (taken.Add((p.X, p.Y, p.Z))) tiles.Add(p);
+            AimMarks.ShowPosts(v, null, tiles);
         }
 
         /// <summary>
@@ -1495,6 +1607,8 @@ namespace Bastion.UI.Combat
                 Hud.Log(Lore.LivingTip, FeudColor);
             }
             if (s.Mission.Night == true) Hud.Log(string.Join(" ", Lore.NightText.Rules), "#2a4a7a");
+            // Saqueadores with no camp (U28): said once, as it starts.
+            if (NoCamp(s)) Hud.Log(Lore.RaidersText.NoCamp, "#b4bec6");
         }
 
         /// <summary>

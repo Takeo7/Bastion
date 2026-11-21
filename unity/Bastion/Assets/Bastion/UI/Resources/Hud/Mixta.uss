@@ -360,6 +360,15 @@ Button:disabled {
     color: #6fe8bc;
 }
 
+/* Saqueadores' guards (U28): their camp asleep, a calm sand; woken, sight's red. */
+.tag--unaware {
+    color: #d8ccb0;
+}
+
+.tag--awake {
+    color: #ff6b5a;
+}
+
 .tag--in-play {
     color: var(--t-accent);
 }

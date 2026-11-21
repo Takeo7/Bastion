@@ -162,7 +162,7 @@ namespace Bastion.Engine.Tests
         public void TheGolpeSilenciosoDoesntTakeHim()
         {
             var (s, toro, soldier) = Arena(3, 5);
-            Assert.Equal("Solo contra Zombis y Corredores.", Abilities.TakedownRefusal(s, soldier, toro));
+            Assert.Equal("Solo contra Zombis, Corredores, Saqueadores y Cazadores.", Abilities.TakedownRefusal(s, soldier, toro));
         }
 
         // ------------------------------------------------------------------ his stage

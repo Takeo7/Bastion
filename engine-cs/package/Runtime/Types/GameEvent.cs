@@ -577,6 +577,34 @@ namespace Bastion.Engine
         public string By { get; set; } = "";
     }
 
+    /// <summary>G23.6 Evacuación: `by` of the squad has seen the civilian `unit` (CivilianSpot.Found): shown, and walking to La Lata.</summary>
+    public sealed class CivilianFoundEvent : GameEvent
+    {
+        public override string T => "civilianFound";
+        public string Unit { get; set; } = "";
+        public string By { get; set; } = "";
+    }
+
+    /// <summary>
+    /// G23.6: panic took the civilian `unit` at the sight of `dead` (Arturo, cuadro 100: «Random entre los 3»): `kind`, what it
+    /// does this step (PanicKinds).
+    /// </summary>
+    public sealed class CivilianPanickedEvent : GameEvent
+    {
+        public override string T => "civilianPanicked";
+        public string Unit { get; set; } = "";
+        public string Kind { get; set; } = ""; // PanicKinds
+        public string? Dead { get; set; }
+    }
+
+    /// <summary>G23.6: the civilian `unit` hid in a building in panic: hidden again, to be found in `area` (CivilianSpot).</summary>
+    public sealed class CivilianHidEvent : GameEvent
+    {
+        public override string T => "civilianHid";
+        public string Unit { get; set; } = "";
+        public SearchArea Area { get; set; } = new SearchArea();
+    }
+
     /// <summary>Flare: reinforcements will land here at the end of the next alien turn.</summary>
     public sealed class ReinforcementsIncomingEvent : GameEvent
     {

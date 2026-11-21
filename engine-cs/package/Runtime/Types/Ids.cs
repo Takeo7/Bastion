@@ -56,6 +56,25 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> All = new[] { Relay, Vip };
     }
 
+    /// <summary>G23.6 Evacuación: what panic makes a civilian do in its step (CivilianPanickedEvent; cuadro 100, at random).</summary>
+    public static class PanicKinds
+    {
+        /// <summary>It cowers where it is, and doesn't walk.</summary>
+        public const string Cower = "cower";
+        /// <summary>It turns and walks away from the dead it saw.</summary>
+        public const string Away = "away";
+        /// <summary>It runs into the nearest building and hides: to be found again.</summary>
+        public const string Hide = "hide";
+
+        public static readonly IReadOnlyList<string> All = new[] { Cower, Away, Hide };
+    }
+
+    /// <summary>G23.6 Evacuación: the civilians, who walk to La Lata by themselves (Unit.Automaton, Automaton.Civilian).</summary>
+    public static class CivilianIds
+    {
+        public const string Civilian = "civilian";
+    }
+
     /// <summary>The base's defences that are units (docs/FASE12.md §11.4): the turret, which shoots on its own.</summary>
     public static class DefenceIds
     {
@@ -72,6 +91,17 @@ namespace Bastion.Engine
         public const string Military = "military";
         /// <summary>A hospital gown: the dead in plain clothes that start inside a clinic or a hospital (Setup; Arturo, 9/11).</summary>
         public const string Patient = "patient";
+    }
+
+    /// <summary>G23.5 Saqueadores: where one of the living keeping the camp is posted (Unit.Guard).</summary>
+    public static class GuardPosts
+    {
+        /// <summary>By the camp's fire, on a chair looking out.</summary>
+        public const string Fire = "fire";
+        /// <summary>Standing by the stash, where there are more of them than chairs.</summary>
+        public const string Stash = "stash";
+        /// <summary>Walking round the camp's fence.</summary>
+        public const string Round = "round";
     }
 
     public static class TemplateIds
@@ -97,11 +127,13 @@ namespace Bastion.Engine
         public const string Vip = ObjectiveIds.Vip;
         // DefenceId.
         public const string Turret = DefenceIds.Turret;
+        // G23.6.
+        public const string Civilian = CivilianIds.Civilian;
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             Assault, Grenadier, Sharpshooter, Specialist, Rookie, Trooper, Officer, Xenoid, Lancer, Mec, Sectoid, Zombie,
-            Bloater, Relay, Vip, Turret, Brute,
+            Bloater, Relay, Vip, Turret, Brute, Civilian,
         };
     }
 

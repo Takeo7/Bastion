@@ -37,6 +37,22 @@ namespace Bastion.UI.Combat
         public int Epoch { get; private set; }
 
         /// <summary>
+        /// Lab only (CombatLab's BASTION_LAB_CAMARA_QUIETA; Arte's strips of a guard getting up, U28, 20/11): while set, the
+        /// game's own moves of the camera are left undone (Focus, the zooms, the shake, the shot over the shoulder), and it
+        /// stays where it is; a toque's «look=» still moves it (LabLook). Never set in the game.
+        /// </summary>
+        public bool Still;
+
+        /// <summary>The lab's «look=»: to `p`, Still or not.</summary>
+        public void LabLook(Vector3 p)
+        {
+            var was = Still;
+            Still = false;
+            Focus(p);
+            Still = was;
+        }
+
+        /// <summary>
         /// For measuring only (Arte's ShadowFit, BASTION_MEDIR): BASTION_CAMARA=&lt;tiles&gt; holds the camera at that distance
         /// (33.5, the farthest), with no zoom of the player's or of an action's nor the shot over the shoulder; where it
         /// looks goes on moving as always. Unset, nothing changes.
@@ -165,7 +181,7 @@ namespace Bastion.UI.Combat
         /// <summary>To `p` on the spring (or at once); it lets go if the player moves the camera meanwhile.</summary>
         public void Focus(Vector3 p, bool instant = false)
         {
-            if (Overhead) return;
+            if (Overhead || Still) return;
             desiredTarget = Clamp(new Vector3(p.x, Mathf.Max(0, p.y), p.z));
             springing = !instant;
             if (!instant) return;
@@ -350,7 +366,7 @@ namespace Bastion.UI.Combat
         /// <summary>Closer for an action (metres away, never further than the player had it); RestoreZoom goes back.</summary>
         public void CinematicZoom(float metres)
         {
-            if (Overhead) return;
+            if (Overhead || Still) return;
             if (savedDistance == null) savedDistance = desiredDistance;
             desiredDistance = Mathf.Clamp(Mathf.Min(metres, savedDistance.Value), MinDistance, MaxDistance);
             zoomSpring = true;
@@ -364,7 +380,7 @@ namespace Bastion.UI.Combat
         /// </summary>
         public void FrameZoom(Vector3 centre, System.Collections.Generic.IList<Vector3> points, float room = 0.72f, bool closer = false)
         {
-            if (Overhead) return;
+            if (Overhead || Still) return;
             if (savedDistance == null) savedDistance = desiredDistance;
             // The camera's axes at the turn it is going to and the rig's pitch (Place).
             var rad = desiredYaw * Mathf.Deg2Rad;
@@ -392,7 +408,7 @@ namespace Bastion.UI.Combat
 
         public void RestoreZoom()
         {
-            if (Overhead || savedDistance == null) return;
+            if (Overhead || Still || savedDistance == null) return;
             desiredDistance = savedDistance.Value;
             savedDistance = null;
             zoomSpring = true;
@@ -402,6 +418,7 @@ namespace Bastion.UI.Combat
         /// <summary>A shake of `strength` metres for `seconds` (an explosion, a heavy gun).</summary>
         public void Shake(float strength, float seconds)
         {
+            if (Still) return;
             shakeStrength = Mathf.Max(shakeStrength, strength);
             shakeTime = Mathf.Max(shakeTime, seconds);
         }
@@ -413,7 +430,7 @@ namespace Bastion.UI.Combat
         /// </summary>
         public void CloseShot(Vector3 pos, Vector3 look)
         {
-            if (Overhead) return;
+            if (Overhead || Still) return;
             closeFrom = close != null && closeness > 0.05f ? ShownClose() : ((Vector3, Vector3)?)null;
             swap = closeFrom != null ? 0 : 1;
             close = (pos, look);

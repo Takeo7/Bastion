@@ -208,7 +208,7 @@ namespace Bastion.UI.Combat
                 var z = xy.Length == 3 && int.TryParse(xy[2], out var storey) ? storey : 0;
                 var tile = new Bastion.Engine.Pos { X = x, Y = y, Z = z };
                 if (what == "hover") control.Hover(tile);
-                else if (what == "look") control.Rig?.Focus(Board.TileToWorld(control.State, tile));
+                else if (what == "look") control.Rig?.LabLook(Board.TileToWorld(control.State, tile));
                 else control.ClickAt(tile);
                 return true;
             }

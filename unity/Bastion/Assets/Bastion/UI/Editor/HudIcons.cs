@@ -171,6 +171,12 @@ namespace Bastion.UI.EditorTools
             // Separados (U27): two of Military Combat's busts apart (u27/separados.swift; Arturo, cuadro 96, over Dark
             // Fantasy's flag and two arrows meeting). Also the other group's arrow at the screen's edge.
             ("node:split", "n-separados-dos"),
+            // Saqueadores (U28): Modern Menus' skull and crossbones (Arturo, cuadro 104, over Military Combat's rifle twice
+            // crossed and a tent of ours, which the Camping's site badge already is). Also over the stash's crates still shut.
+            ("node:raiders", "ICON_ModernMenus_Death_05_Clean"),
+            // Evacuación (G23.6): PROVISIONAL, Military Combat's helicopter, only so that NodeIconsCheck is quiet while its
+            // engine goes in, off the maps (Producto, 21/11); its own goes to Arturo's cuadro with the stage's UI.
+            ("node:evacuation", "ICON_MilitaryCombat_Map_Helicopter_01_Clean"),
             // The runs' base tabs: Almacén a backpack, Mejoras the workshop's tools (Salir is the Escuadra's La Lata).
             ("tab:stash", Backpack), ("tab:upgrades", "ICON_Apocalpyse_Inventory_Crafting_01"),
         };

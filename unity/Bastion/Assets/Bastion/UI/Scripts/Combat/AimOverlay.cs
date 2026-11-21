@@ -42,6 +42,8 @@ namespace Bastion.UI.Combat
         MeshFilter range;
         MeshFilter spots;
         MeshFilter vision;
+        /// <summary>Saqueadores' guards on watch (U28): where each looks, under the pointer's enemy's sight.</summary>
+        MeshFilter posts;
         bool marked;
 
         /// <summary>A noise's disc or ring spreading: its radius (m), when it starts, how long, how bright at most.</summary>
@@ -120,6 +122,7 @@ namespace Bastion.UI.Combat
             range = Layer("Alcance de lanzar", 3104, true);
             spots = Layer("A mano", 3108, true);
             vision = Layer("Lo que ve", 3096, false);
+            posts = Layer("Hacia dónde miran", 3095, false);
             plans = Layer("Planes", 3109, true);
             charges = Layer("Embestida", 3110, true);
         }
@@ -467,6 +470,61 @@ namespace Bastion.UI.Combat
                 MoveOverlay.Border(build, s, OuterOnly(seen), red, many ? 0.14f : 0.18f, 0.6f);
             }
             vision.sharedMesh = build.Build(vision.sharedMesh);
+        }
+
+        /// <summary>How far a guard's fan reaches (U28, «abanico»), in tiles: a sign of where it looks, not of how far it sees.</summary>
+        public const float FanReach = 3f;
+
+        /// <summary>
+        /// Saqueadores' guards on watch (U28; Gameplay's Ai.KeepPost: what is behind them they don't see), in sight's red as
+        /// ShowVision: each one's fan (`fans`: its tile and its facing, the engine's radians), as wide as the enemies see
+        /// (Los.ViewCone) and FanReach long, strongest at its feet; or the tiles where they would notice one of ours
+        /// (`watched`), washed and bordered as one enemy's sight is. Both empty or null, none. Apart from the pointer's sight
+        /// and from what is armed (Clear leaves it).
+        /// </summary>
+        public void ShowPosts(GameState s, IList<(Pos at, double facing)> fans, IList<Pos> watched)
+        {
+            build.Clear();
+            var red = MoveOverlay.Hex(0xf0503c);
+            Color32 Alpha(byte a) => new Color32(red.r, red.g, red.b, a);
+            if (s != null && fans != null)
+                foreach (var (at, facing) in fans)
+                {
+                    var c = Board.TileToWorld(s, at);
+                    c.y += 0.02f * T;
+                    // The grid's y runs south and the world's z north: the engine's angle (atan2 of dy, dx) the other way round.
+                    var half = Los.ViewCone / 2f * Mathf.Deg2Rad;
+                    var a0 = (float)-facing - half;
+                    var a1 = (float)-facing + half;
+                    var r = FanReach * T;
+                    const int segments = 24;
+                    for (var k = 0; k < segments; k++)
+                    {
+                        var t0 = Mathf.Lerp(a0, a1, (float)k / segments);
+                        var t1 = Mathf.Lerp(a0, a1, (float)(k + 1) / segments);
+                        var d0 = new Vector3(Mathf.Cos(t0), 0, Mathf.Sin(t0));
+                        var d1 = new Vector3(Mathf.Cos(t1), 0, Mathf.Sin(t1));
+                        // From its feet out: strong, half way fainter, gone at the rim but for its line.
+                        var inner = 0.25f * T;
+                        build.Quad(c + d0 * inner, c + d1 * inner, c + d1 * (0.55f * r), c + d0 * (0.55f * r), Alpha(0x60), Alpha(0x60), Alpha(0x30), Alpha(0x30));
+                        build.Quad(c + d0 * (0.55f * r), c + d1 * (0.55f * r), c + d1 * r, c + d0 * r, Alpha(0x30), Alpha(0x30), Alpha(0x0c), Alpha(0x0c));
+                    }
+                    build.Arc(c, r - 0.06f * T, r, a0, a1, segments, Alpha(0xb0));
+                    var e0 = new Vector3(Mathf.Cos(a0), 0, Mathf.Sin(a0));
+                    var e1 = new Vector3(Mathf.Cos(a1), 0, Mathf.Sin(a1));
+                    build.Line(c + e0 * (0.25f * T), c + e0 * r, 2f, Alpha(0x90));
+                    build.Line(c + e1 * (0.25f * T), c + e1 * r, 2f, Alpha(0x90));
+                }
+            if (s != null && watched != null && watched.Count > 0)
+            {
+                foreach (var t in watched)
+                {
+                    var a = Board.Corner(t.X, t.Y, Board.TileToWorld(s, t).y + 0.014f * T);
+                    build.Flat(a.x, a.z, a.x + T, a.z - T, a.y, Alpha(0x1e));
+                }
+                MoveOverlay.Border(build, s, OuterOnly(watched), red, 0.16f, 0.6f);
+            }
+            posts.sharedMesh = build.Build(posts.sharedMesh);
         }
 
         /// <summary>A patch seen apart smaller than this has no line round it (Ana, 7/11 #16: the square between the bollards).</summary>

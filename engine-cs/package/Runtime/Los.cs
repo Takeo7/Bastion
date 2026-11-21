@@ -403,7 +403,8 @@ namespace Bastion.Engine
             {
                 if (!a.Alive || !Content.HostileTo(a, u) || a.Objective || a.Captive) continue;
                 if (Content.Templates[a.Template].Sight <= 0) continue;
-                var range = (s.Concealed ? DetectionTo(s, a, at) : SightTo(s, a, at)) * ConcealShare(s, a, u, at);
+                // The rules' own reach (Rules.NoticeRange: one sitting by a camp's fire sees close; UI, 21/11).
+                var range = Rules.NoticeRange(s, a, at, u);
                 // The squad's, as the rules notice them (InNoticeCone: hidden, not by one of the dead it is behind).
                 var cone = u.Team == Teams.Xcom ? InNoticeCone(s, a, at) : InViewCone(a, at);
                 if (cone && SightOrigin(s, a.Pos, at, range, WindowReachOf(a.Team)) != null) out_.Add(a);
@@ -458,11 +459,13 @@ namespace Bastion.Engine
         /// Whether `viewer` has a soldier of the squad on `p` in its field of view, to notice it (Rules: Noticer, SpottedFrom,
         /// Perceivers; Watchers): InViewCone, but while the squad is hidden one of the dead doesn't notice whoever is close
         /// beside or behind it, out of its cone (AWARE_RANGE doesn't count): only ahead of it (AheadOf). Arturo, 16/11, the
-        /// Golpe silencioso: «por detrás de un zombi que no te ha visto». Once the squad is found, InViewCone, as before.
+        /// Golpe silencioso: «por detrás de un zombi que no te ha visto». The living too while still unaware (their group not
+        /// woken: Paths.OnPatrol), since the Golpe silencioso takes the Saqueador and the Cazador (cuadro 99; Red's R15, 20/11:
+        /// a step beside one woke the camp). Once the squad is found, InViewCone, as before.
         /// </summary>
         public static bool InNoticeCone(GameState s, Unit viewer, Pos p, Pos? from = null, double? facing = null)
         {
-            return s.Concealed && Content.Templates[viewer.Template].Undead ? AheadOf(viewer, p, from, facing) : InViewCone(viewer, p, from, facing);
+            return s.Concealed && (Content.Templates[viewer.Template].Undead || Paths.OnPatrol(s, viewer)) ? AheadOf(viewer, p, from, facing) : InViewCone(viewer, p, from, facing);
         }
 
         /// <summary>The way from `a` to `b`, as a facing (radians); null when they are the same tile.</summary>

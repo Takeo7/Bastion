@@ -325,6 +325,8 @@ namespace Bastion.UI.Hud
             public const string AgainPlan = "Toca otra vez para planear el camino.";
             /// <summary>The first tap where the squad would be seen: the second moves.</summary>
             public const string Concealed = "Desde ahí os ven: se rompe la ocultación. Toca otra vez para mover.";
+            /// <summary>The same, seen on the way there (U28: Producto, 21/11; till Lore's words).</summary>
+            public const string ConcealedWay = "Por el camino os ven: se rompe la ocultación. Toca otra vez para mover.";
             public const string Door = "Puerta · toca otra vez: abrir (no gasta acciones)";
             public static string Boards(string what) => $"{what} · toca otra vez: quitar las tablas";
             public static string Open(string name, string verb) => $"{name} · toca otra vez: {verb}";

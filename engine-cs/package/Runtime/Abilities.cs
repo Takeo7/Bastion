@@ -423,21 +423,26 @@ namespace Bastion.Engine
         /// <summary>
         /// Golpe silencioso (Arturo, 16/11: with a blade, «por detrás de un zombi que no te ha visto», it always kills, and
         /// silently): why `u` can't take `t` down, or null if it can. Only one of the dead alongside it already, no step (the
-        /// blade's reach, Aim.InMeleeReach), a Zombi or a Corredor (not the Hinchado, the Acorazado nor the Chillón),
-        /// still unaware (its pod not woken: Paths.OnPatrol), and not seeing `u` now: `u` out of its cone proper, behind or
-        /// beside it (Los.AheadOf: close by doesn't count here), or out of its sight (Los.CanSee). The chainsaw, never
-        /// (AbilityBlocker).
+        /// blade's reach, Aim.InMeleeReach), a Zombi or a Corredor (not the Hinchado, the Acorazado nor the Chillón), or
+        /// of the living a Saqueador or a Cazador, never the Cabecilla (Arturo, cuadro 99, 20/11: G23.5 Saqueadores; the
+        /// Cuervos of a Rescate are the same people), still unaware (its pod not woken: Paths.OnPatrol), and not seeing `u`
+        /// now: `u` out of its cone proper, behind or beside it (Los.AheadOf: close by doesn't count here), or out of its
+        /// sight (Los.CanSee). The chainsaw, never (AbilityBlocker).
         /// </summary>
         public static string? TakedownRefusal(GameState s, Unit u, Unit? t)
         {
             if (t == null || !Hostile(u, t)) return "Objetivo fuera de alcance o sin línea de visión.";
             if (!Aim.InMeleeReach(s, u.Pos, t.Pos)) return "Tiene que estar a tu lado.";
-            if (t.Template != TemplateIds.Zombie && t.Template != TemplateIds.Xenoid) return "Solo contra Zombis y Corredores.";
+            if (t.Template == TemplateIds.Officer) return "Contra el Cabecilla no hay golpe silencioso.";
+            if (!TakenDown.Contains(t.Template)) return "Solo contra Zombis, Corredores, Saqueadores y Cazadores.";
             if (!Aim.TeamSees(s, u.Team, t)) return "Objetivo fuera de alcance o sin línea de visión.";
             if (!Paths.OnPatrol(s, t)) return "Ya está alerta.";
             if (Los.AheadOf(t, u.Pos) && Los.CanSee(s, t, u)) return "Te tiene delante: ponte detrás o a un lado.";
             return null;
         }
+
+        /// <summary>Who a Golpe silencioso can take: the Zombi, the Corredor, the Saqueador and the Cazador (TakedownRefusal).</summary>
+        public static readonly IReadOnlyCollection<string> TakenDown = new HashSet<string> { TemplateIds.Zombie, TemplateIds.Xenoid, TemplateIds.Trooper, TemplateIds.Lancer };
 
         /// <summary>Whom `u` can take down now (Golpe silencioso: TakedownRefusal).</summary>
         public static List<Unit> TakedownTargets(GameState s, Unit u)

@@ -21,9 +21,11 @@ namespace Bastion.Engine
             ["Nido"] = "Sitio donde se juntan los zombis. Hace crecer la Marea; quemarlo la hace retroceder.",
             ["Sirena"] = "Mientras suena, atrae a todos los zombis de la zona. Puede ser un coche patrulla, una ambulancia o la alarma de una nave.",
             ["Ruido"] = "Cada acción hace ruido. Un disparo se oye a entre 12 y 22 casillas, según el arma; una granada, a 26; una motosierra, a 20; un registro, a 2. Los enemigos van a ver qué ha sido. El ruido no te descubre: te descubre que te vean.",
-            // Gameplay, 16/11 (0.12.26): the extra movement and the dead's cone while hidden (Paths.ConcealedBonus, Los.InNoticeCone).
-            ["Ocultación"] = $"Salvo en un Asedio, la escuadra empieza cada misión oculta: los enemigos no saben que estáis ahí. Mientras dura, cada soldado tiene {Content.ConcealedMobility} puntos de movimiento más, y un zombi solo nota a quien tiene delante: por detrás o por un lado, no te nota aunque estés pegado a él. Se rompe cuando un enemigo ve a un soldado o cuando atacáis, salvo con el golpe silencioso. Entonces cada soldado pierde {Content.ConcealedMobility} de los puntos de movimiento que le queden.",
-            ["Golpe silencioso"] = "Mata siempre, sin ruido y sin romper la ocultación, a un Zombi o un Corredor que tengas al lado, si aún no está alerta y no te tiene delante. No sirve con la motosierra.",
+            // Gameplay, 16/11 (0.12.26): the extra movement and the dead's cone while hidden (Paths.ConcealedBonus, Los.InNoticeCone);
+            // the unaware living's too since G23.5 (Gameplay, 21/11).
+            ["Ocultación"] = $"Salvo en un Asedio, la escuadra empieza cada misión oculta: los enemigos no saben que estáis ahí. Mientras dura, cada soldado tiene {Content.ConcealedMobility} puntos de movimiento más, y un zombi, o un vivo que aún no está alerta, solo nota a quien tiene delante: por detrás o por un lado, no te nota aunque estés pegado a él. Se rompe cuando un enemigo ve a un soldado o cuando atacáis, salvo con el golpe silencioso. Entonces cada soldado pierde {Content.ConcealedMobility} de los puntos de movimiento que le queden.",
+            // Of the living too since G23.5 (Arturo, cuadro 99): the Saqueador and the Cazador, never the Cabecilla.
+            ["Golpe silencioso"] = "Mata siempre, sin ruido y sin romper la ocultación, a un Zombi, un Corredor, un Saqueador o un Cazador que tengas al lado, si aún no está alerta y no te tiene delante. No sirve contra el Cabecilla ni con la motosierra.",
             // The expeditions' boss of chapter 1 (H6).
             ["El Toro"] = "El jefe del capítulo 1: un muerto enorme que embiste y tumba. Matarlo supera el capítulo.",
             ["En el suelo"] = "Tras una embestida, el soldado queda en el suelo hasta vuestro turno: −20 de defensa y sin vigilancia. Levantarse le cuesta una acción.",

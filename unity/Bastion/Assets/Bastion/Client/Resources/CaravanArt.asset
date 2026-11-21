@@ -25,6 +25,15 @@ MonoBehaviour:
   - SM_Bld_Military_Tent_01
   - SM_Bld_Quarantine_Tent_01
   - SM_Prop_Cooler_01
+  - SM_Prop_Sandbag_Wall_02
+  - SM_Prop_Pallet_01
+  - SM_Prop_Crate_Open_03
+  - SM_Prop_Barricade_01
+  - SM_Prop_Barricade_04
+  - SM_Prop_Barricade_Metal_01
+  - SM_Prop_Barricade_Corrugated_01
+  - SM_Prop_Barricade_Pallet_01
+  - SM_Prop_Tire_Pile_01
   models:
   - {fileID: 1718806199345174, guid: 15302bd74a0fa344c8fee77ad7a46e50, type: 3}
   - {fileID: 1350038655643344, guid: 2f076649d2f4b764fb20940474ccde13, type: 3}
@@ -38,3 +47,12 @@ MonoBehaviour:
   - {fileID: 1701099956834092, guid: 2490389000c4d66458dc1948a5f79bdb, type: 3}
   - {fileID: 1223674719005576, guid: d0521494728afa040a7ee397dac54d07, type: 3}
   - {fileID: 1698631261183650, guid: 64ec8930c2042bf43ba1fb401a50c560, type: 3}
+  - {fileID: 1854156221946524, guid: c6e2118821f0b1042af2c1ee257826fd, type: 3}
+  - {fileID: 1730107154310758, guid: f58e16dcf462d6249bbb763142ddd84e, type: 3}
+  - {fileID: 1197583953158864, guid: 9f3c9c8dbc8dab543a0a3c632669458d, type: 3}
+  - {fileID: 1627071915366092, guid: b092211bc2fc70a44b2d0923759d5c16, type: 3}
+  - {fileID: 1065272090484000, guid: 153407ee883a9814aab1f6ec6f77586c, type: 3}
+  - {fileID: 1669182515032868, guid: 1c6a0003d08b2404dabb0e9836a67b6b, type: 3}
+  - {fileID: 1913680498485106, guid: d1749d9c90146d646990a20586c88c11, type: 3}
+  - {fileID: 1179834075840106, guid: 8a91fe8b8c8c44546a97a9cea53bef38, type: 3}
+  - {fileID: 1327414462953822, guid: 346855a62eb2ac047bad52a7b7e47549, type: 3}

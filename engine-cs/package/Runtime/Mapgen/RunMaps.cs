@@ -1229,6 +1229,13 @@ namespace Bastion.Engine
                 var a = T(at);
                 var b = T(Add(at, Grid.Dirs4[facing]));
                 var f = Math.Max(0, FindIndex(Grid.Dirs4, (d) => d.X == b.X - a.X && d.Y == b.Y - a.Y));
+                // A fence's corner (G23.5): its first outer side the one the other follows, as the turn left them (a mirror swaps them).
+                if (kind == CampDetailKinds.BarricadeCorner)
+                {
+                    var o = T(Add(at, Grid.Dirs4[(facing + 1) % 4]));
+                    var g = Math.Max(0, FindIndex(Grid.Dirs4, (d) => d.X == o.X - a.X && d.Y == o.Y - a.Y));
+                    if ((f + 1) % 4 != g) f = g;
+                }
                 // A piece over more than one tile: from the first of them in the map's frame, as the turn left it.
                 var across = Grid.Dirs4[(facing + 1) % 4];
                 var end = T(V(at.X + (length - 1) * Math.Abs(across.X), at.Y + (length - 1) * Math.Abs(across.Y)));
@@ -1625,6 +1632,288 @@ namespace Bastion.Engine
                 }
             }
             return out_;
+        }
+
+        // ------------------------------------------------------ the raiders' camp (G23.5)
+
+        /// <summary>The raiders' camp, fence in: 13 along, 11 across (Arte's lab of 20/11).</summary>
+        public const int CampLong = 13, CampShort = 11;
+        /// <summary>
+        /// The camp's middle at least this far from where the squad comes in (out of sight of it: the living see 18), as near
+        /// CampNear as can be, and this far from the country's ways out (where La Lata will be); with no room so, the ways out
+        /// CampFromMouthsLast.
+        /// </summary>
+        public const int CampFromSquad = 24, CampNear = 30, CampFromMouths = 16, CampFromMouthsLast = 10;
+
+        /// <summary>
+        /// G23.5 Saqueadores (SAQUEADORES.md): a camp of the living in a clearing of the wilds or a service area. Of the spots
+        /// on flat open ground, away from the edges, the buildings and the track, far enough from where the squad comes in
+        /// (CampFromSquad) and from the ways out (CampFromMouths, where La Lata will be), the one with least to clear and
+        /// nearest CampNear from the squad, drawn on `rng` among those alike. Cleared (trees, rocks, hedges) with a
+        /// ring of two round it for its round; its fence `low` on its edge (CampDetailKinds.Barricade, BarricadeCorner) with
+        /// two or three gaps of two; inside, its fire (`low`, CampDetailKinds.FirePit, a night light) in the middle, three
+        /// chairs round it looking out (where its guards sit), a dome tent and a long one (`low`) in two corners, a sleeping
+        /// bag or two, and its stash: three crates (`low`, CampDetailKinds.StashCrate) apart from each other and from the
+        /// fire. The camping's site and marks (CampingSite), its bounds the camp's. False with no room: no camp.
+        /// </summary>
+        private static bool RaidersCamp(Canvas c, Rng rng)
+        {
+            var mouths = c.Mouths.Select(Centre).ToList();
+            bool Flat(Vec2 p, bool clearable) => c.In(p.X, p.Y) && c.ElevAt(p.X, p.Y) == 0 && c.GroundAt(p.X, p.Y) != Indoor
+                && (clearable ? !c.Keep[c.I(p.X, p.Y)] && c.GroundAt(p.X, p.Y) == Open : c.Get(p.X, p.Y) == TileKinds.Floor || !c.Keep[c.I(p.X, p.Y)]);
+            var options = new List<(Rect R, double Key)>();
+            foreach (var fromMouths in new[] { CampFromMouths, CampFromMouthsLast })
+            foreach (var across in new[] { false, true })
+            {
+                if (fromMouths == CampFromMouthsLast && options.Count > 0) break;
+                var w = across ? CampShort : CampLong;
+                var h = across ? CampLong : CampShort;
+                for (var y = 4; y + h + 4 <= c.Height; y++)
+                {
+                    for (var x = 4; x + w + 4 <= c.Width; x++)
+                    {
+                        var r = Rect(x, y, w, h);
+                        var mid = Centre(r);
+                        if (Dist(mid, c.Squad) < CampFromSquad || mouths.Any((m) => Dist(mid, m) < fromMouths)) continue;
+                        if (!TilesIn(r).All((p) => Flat(p, true))) continue;
+                        var ring = TilesIn(Inset(r, -2)).Where((p) => !InRect(r, p)).ToList();
+                        if (!ring.All((p) => Flat(p, false))) continue;
+                        var clear = TilesIn(Inset(r, -2)).Count((p) => c.Get(p.X, p.Y) != TileKinds.Floor || c.Decor[c.I(p.X, p.Y)] != 0);
+                        options.Add((r, clear + Math.Abs(Dist(mid, c.Squad) - CampNear) * 0.5 + rng.Next() * 3));
+                    }
+                }
+            }
+            if (options.Count == 0) return false;
+            var camp = options.OrderBy((o) => o.Key).First().R;
+            foreach (var p in TilesIn(Inset(camp, -2)))
+            {
+                var i = c.I(p.X, p.Y);
+                if (c.Get(p.X, p.Y) == TileKinds.Floor && c.Decor[i] == 0) continue;
+                if (!InRect(camp, p) && c.Keep[i]) continue;
+                c.Tiles[i] = TileKinds.Floor;
+                c.Decor[i] = 0;
+            }
+            foreach (var p in TilesIn(camp))
+            {
+                c.Ground[c.I(p.X, p.Y)] = Open;
+                c.Reserve(p.X, p.Y);
+            }
+            var marks = c.CampMarks ?? new List<(Vec2 At, string Kind, int Facing, int Length)>();
+            var parts = c.CampParts ?? new List<(Rect R, string Use)>();
+            void Mark(Vec2 at, string kind, int facing) => marks.Add((at, kind, facing, 1));
+            void Low(Vec2 p) => c.Force(p.X, p.Y, TileKinds.Low);
+            // The fence, its gaps of two on two or three sides drawn, two tiles at least from a corner.
+            var x0 = camp.X;
+            var y0 = camp.Y;
+            var x1 = camp.X + camp.W - 1;
+            var y1 = camp.Y + camp.H - 1;
+            var gaps = new HashSet<(int, int)>();
+            // One on the side facing where the squad comes in (La Lata is near there: Red's R15, 20/11, the way in and out
+            // the same), one or two more drawn.
+            var mid0 = Centre(camp);
+            var toSquad = new[] { 0, 1, 2, 3 }.OrderByDescending((k) => Grid.Dirs4[k].X * (c.Squad.X - mid0.X) + Grid.Dirs4[k].Y * (c.Squad.Y - mid0.Y)).First();
+            var sides = new List<int> { toSquad }.Concat(Shuffle(new List<int> { 0, 1, 2, 3 }.Where((k) => k != toSquad).ToList(), rng).Take(1 + rng.Int(2))).ToList();
+            foreach (var side in sides)
+            {
+                var len = side % 2 == 0 ? camp.W : camp.H;
+                var at = 2 + rng.Int(len - 5);
+                for (var k = 0; k < 2; k++)
+                {
+                    var u = at + k;
+                    gaps.Add(side == 0 ? (x0 + u, y0) : side == 2 ? (x0 + u, y1) : side == 1 ? (x1, y0 + u) : (x0, y0 + u));
+                }
+            }
+            foreach (var p in TilesIn(camp))
+            {
+                var edge = p.X == x0 || p.X == x1 || p.Y == y0 || p.Y == y1;
+                if (!edge || gaps.Contains((p.X, p.Y))) continue;
+                Low(p);
+                var corner = (p.X == x0 || p.X == x1) && (p.Y == y0 || p.Y == y1);
+                if (corner) Mark(p, CampDetailKinds.BarricadeCorner, p.Y == y0 ? (p.X == x1 ? 0 : 3) : p.X == x1 ? 1 : 2);
+                else Mark(p, CampDetailKinds.Barricade, p.Y == y0 ? 0 : p.Y == y1 ? 2 : p.X == x1 ? 1 : 3);
+            }
+            // Its fire in the middle, three chairs round it looking at it (Producto, 20/11, after Red's R15: their backs to the
+            // fence, the round and the stash's guard keep watch).
+            var fire = V(x0 + camp.W / 2, y0 + camp.H / 2);
+            Low(fire);
+            Mark(fire, CampDetailKinds.FirePit, 0);
+            foreach (var s in Shuffle(new List<int> { 0, 1, 2, 3 }, rng).Take(3)) Mark(V(fire.X + 2 * Grid.Dirs4[s].X, fire.Y + 2 * Grid.Dirs4[s].Y), CampDetailKinds.CampChair, Opposite(s));
+            parts.Add((Rect(fire.X - 2, fire.Y - 2, 5, 5), CampUses.FirePit));
+            // A dome tent and a long one in two corners of the inside, along its long side; a sleeping bag by one or both.
+            var inside = Inset(camp, 1);
+            var corners = Shuffle(new List<int> { 0, 1, 2, 3 }, rng).Take(2).ToList();
+            var taken = new HashSet<(int, int)>();
+            for (var k = 0; k < corners.Count; k++)
+            {
+                var dome = k == 0;
+                var tw = 2;
+                var th = dome ? 2 : 3;
+                var east = corners[k] == 1 || corners[k] == 2;
+                var south = corners[k] >= 2;
+                var tent = Rect(east ? inside.X + inside.W - tw : inside.X, south ? inside.Y + inside.H - th : inside.Y, tw, th);
+                foreach (var p in TilesIn(tent))
+                {
+                    Low(p);
+                    taken.Add((p.X, p.Y));
+                }
+                Mark(V(tent.X, tent.Y), dome ? CampDetailKinds.TentDome : CampDetailKinds.TentLong, 2);
+                parts.Add((tent, CampUses.Pitch));
+                var bag = V(east ? tent.X - 1 : tent.X + tw, south ? tent.Y + th - 1 : tent.Y);
+                if (rng.Int(3) != 0)
+                {
+                    Mark(bag, CampDetailKinds.SleepingBag, rng.Int(4));
+                    taken.Add((bag.X, bag.Y));
+                }
+            }
+            // The stash: three crates inside, two tiles at least from the fire and from each other, off a gap's way in and the
+            // chairs, its face to the middle.
+            bool ByGap(Vec2 p) => Grid.Dirs8.Any((d) => gaps.Contains((p.X + d.X, p.Y + d.Y)));
+            var chairs = marks.Where((m) => m.Kind == CampDetailKinds.CampChair).Select((m) => (m.At.X, m.At.Y)).ToHashSet();
+            // Three or more from each chair too: searching one makes a little noise (2 tiles), and one sitting there would get
+            // up and see (Red's R1 of 20/11: woken on the way out).
+            var spots = Shuffle(TilesIn(inside).Where((p) => !taken.Contains((p.X, p.Y)) && !chairs.Contains((p.X, p.Y)) && !ByGap(p)
+                && Math.Max(Math.Abs(p.X - fire.X), Math.Abs(p.Y - fire.Y)) >= 3 && chairs.All((ch) => Math.Max(Math.Abs(p.X - ch.X), Math.Abs(p.Y - ch.Y)) >= 3)).ToList(), rng);
+            var crates = new List<Vec2>();
+            var way = V(fire.X, fire.Y + 1);
+            foreach (var p in spots)
+            {
+                if (crates.Count >= StashCrates) break;
+                if (crates.Any((q) => Math.Max(Math.Abs(q.X - p.X), Math.Abs(q.Y - p.Y)) < 3)) continue;
+                if (ShutsIn(c, inside, crates.Append(p).ToList(), way)) continue;
+                crates.Add(p);
+            }
+            // Never fewer than StashCrates (Producto's review of 21/11): where the room inside doesn't give them so, the rest
+            // nearer (2 from the fire, the chairs and each other), off a gap's side or, last, by it.
+            if (crates.Count < StashCrates)
+            {
+                int Far(Vec2 a, Vec2 b) => Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+                var more = Shuffle(TilesIn(inside).Where((p) => !taken.Contains((p.X, p.Y)) && !chairs.Contains((p.X, p.Y)) && Far(p, fire) >= 2 && chairs.All((ch) => Far(p, V(ch.X, ch.Y)) >= 2)).ToList(), rng);
+                foreach (var byGap in new[] { false, true })
+                    foreach (var p in more)
+                    {
+                        if (crates.Count >= StashCrates) break;
+                        if ((!byGap && ByGap(p)) || crates.Any((q) => Far(q, p) < 2)) continue;
+                        if (ShutsIn(c, inside, crates.Append(p).ToList(), way)) continue;
+                        crates.Add(p);
+                    }
+            }
+            foreach (var p in crates)
+            {
+                Low(p);
+                var dx = fire.X - p.X;
+                var dy = fire.Y - p.Y;
+                Mark(p, CampDetailKinds.StashCrate, Math.Abs(dx) >= Math.Abs(dy) ? (dx > 0 ? 1 : 3) : (dy > 0 ? 2 : 0));
+            }
+            parts.Add((camp, CampUses.Raiders));
+            c.CampMarks = marks;
+            c.CampParts = parts;
+            c.Clearing ??= camp;
+            return true;
+        }
+
+        /// <summary>
+        /// G23.5 Saqueadores at the camping: La Lata in the clearing near where the squad comes in (CampEvacFrom to NearWalk's
+        /// most on foot), on open ground nothing to clear, as far from the camp (the military area) as it can be: the way out
+        /// not before it (Red's R15, 20/11). Empty with no room: the turning place's (CampingEvac).
+        /// </summary>
+        private const int CampEvacFrom = 6;
+
+        private static List<Vec2> CampingNearEvac(Canvas c)
+        {
+            var camp = (c.CampParts ?? new List<(Rect R, string Use)>()).Where((p) => p.Use == CampUses.Raiders).Select((p) => p.R).FirstOrDefault();
+            if (camp == null || c.Clearing == null) return new List<Vec2>();
+            var mid = Centre(camp);
+            var steps = StepsFrom(c, new List<Vec2> { c.Squad });
+            var room = Inset(c.Clearing, 3);
+            bool Open(Vec2 p) => TilesIn(Rect(p.X - 1, p.Y - 1, 3, 3)).All((q) => c.In(q.X, q.Y) && c.Get(q.X, q.Y) == TileKinds.Floor && !c.Keep[c.I(q.X, q.Y)] && c.ElevAt(q.X, q.Y) == 0 && c.GroundAt(q.X, q.Y) != Indoor);
+            var spots = Enumerable.Range(0, steps.Length)
+                .Where((i) => steps[i] > 0)
+                .Select((i) => (P: V(i % c.Width, i / c.Width), Steps: steps[i]))
+                .Where((t) => InRect(room, t.P) && Open(t.P) && t.Steps >= CampEvacFrom && t.Steps <= NearWalk[1])
+                .OrderByDescending((t) => (int)Dist(t.P, mid))
+                .ThenBy((t) => c.I(t.P.X, t.P.Y))
+                .Select((t) => t.P)
+                .ToList();
+            return FirstEvac(c, spots);
+        }
+
+        /// <summary>The raiders' stash: crates to search (SearchPieces.StashCrate).</summary>
+        public const int StashCrates = 3;
+
+        /// <summary>Whether `crates`, `low` where they are, would shut a floor tile of `area` off `from` (by the four ways, inside `area`).</summary>
+        private static bool ShutsIn(Canvas c, Rect area, List<Vec2> crates, Vec2 from)
+        {
+            bool Floor(Vec2 p) => InRect(area, p) && c.Get(p.X, p.Y) == TileKinds.Floor && !crates.Any((q) => q.X == p.X && q.Y == p.Y);
+            if (!Floor(from)) return true;
+            var seen = new HashSet<(int, int)> { (from.X, from.Y) };
+            var queue = new List<Vec2> { from };
+            for (var head = 0; head < queue.Count; head++)
+            {
+                foreach (var d in Grid.Dirs4)
+                {
+                    var q = V(queue[head].X + d.X, queue[head].Y + d.Y);
+                    if (!Floor(q) || !seen.Add((q.X, q.Y))) continue;
+                    queue.Add(q);
+                }
+            }
+            return TilesIn(area).Any((p) => Floor(p) && !seen.Contains((p.X, p.Y)));
+        }
+
+        /// <summary>
+        /// G23.5 Saqueadores at the camping: the camp is its military area (fenced, its gate west, its tents at its back): its
+        /// stash in three crates (`low`, CampDetailKinds.StashCrate) along the inside of its fence away from the gate, two
+        /// chairs inside the gate looking out (its guards'), the area the camp's (CampUses.Raiders). False with no area.
+        /// </summary>
+        private static bool RaidersAtCamping(Canvas c, Rng rng)
+        {
+            var area = (c.CampParts ?? new List<(Rect R, string Use)>()).Where((p) => p.Use == CampUses.Military).Select((p) => p.R).FirstOrDefault();
+            if (area == null || c.CampMarks == null) return false;
+            var zone = Inset(area, -1);
+            var marks = c.CampMarks;
+            var gate = zone.Y + 4;
+            // A second way in, a gap of two in its fence across from the tents' side (Producto, 20/11, after Red's R15: the
+            // gate is at the chairs' backs; with one way in, nobody got in unseen), where it gives onto open ground.
+            var bottom = zone.Y + zone.H - 1;
+            var mid = zone.X + zone.W / 2 - 1;
+            var back = new[] { mid, mid + 1 }.Select((x) => V(x, bottom)).ToList();
+            if (back.All((p) => c.In(p.X, p.Y + 1) && c.Get(p.X, p.Y + 1) == TileKinds.Floor && c.Get(p.X, p.Y - 1) == TileKinds.Floor))
+                foreach (var p in back)
+                {
+                    c.Force(p.X, p.Y, TileKinds.Floor);
+                    c.Decor[c.I(p.X, p.Y)] = 0;
+                }
+            bool ByBack(Vec2 p) => back.Any((q) => Math.Max(Math.Abs(q.X - p.X), Math.Abs(q.Y - p.Y)) <= 1);
+            // Its free ground: floor, not a tent's.
+            var free = TilesIn(area).Where((p) => c.Get(p.X, p.Y) == TileKinds.Floor && !ByBack(p)).ToList();
+            // The crates away from the gate, its far row first: none shutting a tile of the area in (a way cut through to it
+            // would take the crate), nor in the gate's way.
+            var inGate = V(zone.X + 1, gate);
+            var seats = new[] { gate - 1, gate + 2, gate + 3 }.Select((y) => V(zone.X + 1, y)).ToList();
+            var row = free.Where((p) => p.X >= area.X + 3 && seats.All((ch) => Math.Max(Math.Abs(p.X - ch.X), Math.Abs(p.Y - ch.Y)) >= 3)).OrderByDescending((p) => p.Y).ThenBy((p) => p.X).ToList();
+            var crates = new List<Vec2>();
+            foreach (var p in row)
+            {
+                if (crates.Count >= StashCrates) break;
+                if (crates.Any((q) => Math.Max(Math.Abs(q.X - p.X), Math.Abs(q.Y - p.Y)) < 2)) continue;
+                if (ShutsIn(c, area, crates.Append(p).ToList(), inGate)) continue;
+                crates.Add(p);
+            }
+            if (crates.Count < StashCrates) return false;
+            foreach (var p in crates)
+            {
+                c.Force(p.X, p.Y, TileKinds.Low);
+                c.Reserve(p.X, p.Y);
+                marks.Add((p, CampDetailKinds.StashCrate, 0, 1));
+            }
+            // Three chairs inside the gate, looking in (east), their backs to it (Producto, 20/11, after Red's R15; the third,
+            // 21/11: with five of them, the fifth stood by the stash too and the way in was seen, 25 % against 75 %).
+            foreach (var y in new[] { gate - 1, gate + 2, gate + 3 })
+            {
+                var p = V(zone.X + 1, y);
+                if (c.Get(p.X, p.Y) == TileKinds.Floor) marks.Add((p, CampDetailKinds.CampChair, 1, 1));
+            }
+            c.CampParts!.Add((zone, CampUses.Raiders));
+            return true;
         }
     }
 }

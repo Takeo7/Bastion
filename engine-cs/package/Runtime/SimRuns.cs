@@ -115,6 +115,55 @@ namespace Bastion.Engine
         {
             foreach (var d in S.Units.Where((x) => x.Alive && x.Down == true).ToList()) Emit(new GotUpEvent { Unit = d.Id });
         }
+
+        // ------------------------------------------------------------- Evacuación (G23.6)
+
+        /// <summary>
+        /// G23.6 Evacuación (EVACUACION.md): the civilians' step, as the squad's turn ends and before the dead's. Each one found,
+        /// alive and out of La Lata, in its order: in La Lata's zone it gets in; seeing one of the dead PanicRange or nearer,
+        /// panic takes it (cuadro 100: one of the three at random, Rules.PanicOf): it cowers, or walks away from it, or runs
+        /// into the nearest building it gets to in its step and hides there (CivilianHidEvent: its circle again; with none
+        /// within its step, it walks away). Else it walks its step (Content.CivilianMobility) to La Lata's nearest tile, and in
+        /// its zone gets in (BoardedEvent: no seat taken).
+        /// </summary>
+        public void CivilianStep()
+        {
+            foreach (var spot in (S.Mission.Civilians ?? new List<CivilianSpot>()).ToList())
+            {
+                if (Over) return;
+                var u = Grid.GetUnit(S, spot.Unit);
+                if (u == null || !u.Alive || u.Aboard == true || !spot.Found) continue;
+                if (Rules.CivilianBoards(S, u))
+                {
+                    Emit(new BoardedEvent { Unit = u.Id });
+                    continue;
+                }
+                var dead = Rules.PanicFrom(S, u);
+                var kind = dead != null ? Rules.PanicOf(spot) : null;
+                if (kind == PanicKinds.Hide && Rules.HideTile(S, u, dead!) is (Pos at, List<Pos> way))
+                {
+                    Emit(new CivilianPanickedEvent { Unit = u.Id, Kind = kind, Dead = dead!.Id });
+                    MoveAlong(u, way, 0);
+                    if (!u.Alive || Over) continue;
+                    var rng = new Rng(unchecked((uint)(spot.Seed ^ (spot.Panics * 0x2545) ^ 0x41de)));
+                    Emit(new CivilianHidEvent { Unit = u.Id, Area = Rules.CircleAround(S, u.Pos, rng) });
+                    continue;
+                }
+                if (kind != null)
+                {
+                    // Hiding with nowhere to hide in its step: away.
+                    if (kind == PanicKinds.Hide) kind = PanicKinds.Away;
+                    Emit(new CivilianPanickedEvent { Unit = u.Id, Kind = kind, Dead = dead!.Id });
+                    if (kind == PanicKinds.Cower) continue;
+                    var away = Rules.AwayFrom(S, u, dead);
+                    if (away != null) MoveAlong(u, away, 0);
+                    continue;
+                }
+                var walk = Rules.CivilianWalk(S, u);
+                if (walk != null && walk.Count > 0) MoveAlong(u, walk, 0);
+                if (u.Alive && !Over && Rules.CivilianBoards(S, u)) Emit(new BoardedEvent { Unit = u.Id });
+            }
+        }
     }
 
     public static partial class Rules
@@ -166,7 +215,7 @@ namespace Bastion.Engine
         /// </summary>
         public static bool FreeExit(MissionState m)
         {
-            return m.Kind == MissionKinds.Scavenge && m.Lair == null && string.IsNullOrEmpty(m.Boss) && m.Split == null;
+            return m.Kind == MissionKinds.Scavenge && m.Lair == null && string.IsNullOrEmpty(m.Boss) && m.Split == null && m.Civilians == null;
         }
 
         // -------------------------------------------------------------- Separados
@@ -321,6 +370,8 @@ namespace Bastion.Engine
         /// </summary>
         public static bool SurvivorShown(GameState s, Unit u)
         {
+            // G23.6: a civilian, once found (and not hidden again).
+            if (IsCivilian(u) && s.Mission.Civilians?.Find((c) => c.Unit == u.Id) is CivilianSpot spot && !spot.Found && u.Aboard != true) return false;
             return !(s.Run != null && u.Id == s.Mission.Survivor && s.Mission.SurvivorFound != true);
         }
 
@@ -338,7 +389,7 @@ namespace Bastion.Engine
         {
             var seats = s.Mission.Seats;
             // G23.3: the wounded takes no seat (Arturo, cuadro 92: «no ocupa plaza»).
-            return seats == null ? (int?)null : Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true && u.Lame != true));
+            return seats == null ? (int?)null : Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true && u.Lame != true && !IsCivilian(u)));
         }
 
         /// <summary>One of the squad that can get into La Lata: a soldier or one who joined, not a captive, the relay or a turret.</summary>
@@ -365,8 +416,10 @@ namespace Bastion.Engine
         /// </summary>
         public static bool AllAboard(GameState s)
         {
-            // G23.3: never without the wounded alive (WoundedOut), found or not.
-            return s.Run != null && s.Units.Any((u) => u.Aboard == true) && !s.Units.Any((u) => u.Alive && Boarder(u) && !BittenUncured(s, u)) && !WoundedOut(s);
+            // G23.3: never without the wounded alive (WoundedOut), found or not. G23.6: nor while a civilian found walks to it
+            // (a call to leave takes it, as ever).
+            return s.Run != null && s.Units.Any((u) => u.Aboard == true && !IsCivilian(u)) && !s.Units.Any((u) => u.Alive && Boarder(u) && !BittenUncured(s, u)) && !WoundedOut(s)
+                && !s.Units.Any((u) => u.Alive && IsCivilian(u) && !u.Captive);
         }
 
         /// <summary>
@@ -382,7 +435,7 @@ namespace Bastion.Engine
             if (free == null || s.Run == null) return zone;
             var m = s.Mission;
             if (m.HoldUntil != null && s.Turn < m.HoldUntil) return zone;
-            var shut = s.Units.Where((u) => u.Aboard == true && u.Lame != true).Select((u) => (u.Pos.X, u.Pos.Y)).ToHashSet();
+            var shut = s.Units.Where((u) => u.Aboard == true && u.Lame != true && !IsCivilian(u)).Select((u) => (u.Pos.X, u.Pos.Y)).ToHashSet();
             return zone.Where((z) => !shut.Contains((z.X, z.Y))).Take(free.Value).ToList();
         }
 
@@ -417,8 +470,201 @@ namespace Bastion.Engine
             // G23.3: the wounded takes no seat, on the floor in its zone either.
             var aboard = s.Units.Where((u) => u.Alive && u.Team == Teams.Xcom && !u.Objective && !u.Captive && u.Automaton == null && u.Lame != true && Abilities.InEvacZone(s, u.Pos)).ToList();
             // The seats taken inside (T24) first.
-            var left = Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true && u.Lame != true));
+            var left = Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true && u.Lame != true && !IsCivilian(u)));
             return aboard.Where((u) => u.CampaignId != null).Concat(aboard.Where((u) => u.CampaignId == null)).Skip(left).ToList();
+        }
+
+        // ------------------------------------------------------------- Saqueadores (G23.5)
+
+        /// <summary>
+        /// G23.5: how near one sitting by a camp's fire notices the hidden squad, in tiles (Producto, 20/11, after Red's R15: its
+        /// eyes on the fire, its back to the fence; the round's and the stash's guard keep the watch). Gameplay's census of
+        /// 20/11 (`banco/saqueadores/sigilo/`): looking out with 8, one crate or more unseen in 37–53 % of the maps of the
+        /// country and the service area and none at the camping; looking in with 8, 0–50 %; with 4, 80–90 % (and the
+        /// camping, with its second way in, all); with 3, the same.
+        /// </summary>
+        public const double FireWatch = 4;
+
+        /// <summary>
+        /// How far `watcher` notices one of the squad on `p` (Sim's, for the client's eyes too: UI, 21/11): its detection while
+        /// the squad is hidden, its sight once found; one sitting by a camp's fire, FireWatch at most (G23.5); times how much
+        /// `who` (or whoever stands on `p`) hides there, `watcher` looking from `from` (Los.ConcealShare: Esconderse, cover).
+        /// </summary>
+        public static double NoticeRange(GameState s, Unit watcher, Pos p, Unit? who = null, Pos? from = null)
+        {
+            var range = s.Concealed ? Los.DetectionTo(s, watcher, p) : Los.SightTo(s, watcher, p);
+            // G23.5: one of a camp's sitting by its fire, its eyes on it, notices the squad only close (Rules.FireWatch), hidden or
+            // not (Red's R1 of 20/11: found by the dead on its way out, the camp's sitting saw it across the camp).
+            if (Sitting(s, watcher)) range = Math.Min(range, FireWatch);
+            // One hiding there, at half of it (Esconderse); behind cover, less to the dead (Arturo, 5/11 #4): the one that hides more.
+            var there = who ?? Grid.UnitAt(s, p);
+            return there != null ? range * Los.ConcealShare(s, watcher, there, p, from) : range;
+        }
+
+        /// <summary>
+        /// Whether `watcher`, standing on `from` (its own tile if null) and facing `facing` (its own if null), notices `who` of
+        /// the squad on `p`, as the rules do (Sim's Noticer and SpottedFrom; UI, 21/11): in its notice cone (Los.InNoticeCone:
+        /// hidden, not one behind or beside one unaware), within NoticeRange, in its line of sight.
+        /// </summary>
+        public static bool Notices(GameState s, Unit watcher, Unit? who, Pos p, Pos? from = null, double? facing = null)
+        {
+            return Los.InNoticeCone(s, watcher, p, from, facing) && Los.SightOrigin(s, from ?? watcher.Pos, p, NoticeRange(s, watcher, p, who, from), Los.WindowReachOf(watcher.Team)) != null;
+        }
+
+        /// <summary>
+        /// G23.5: whether `u` sits by its camp's fire (Arte draws it so): a guard of the fire (GuardPosts.Fire), its group
+        /// unaware, nothing heard, on its chair (its group's one stop).
+        /// </summary>
+        public static bool Sitting(GameState s, Unit u)
+        {
+            if (u.Guard != GuardPosts.Fire || !u.Alive || u.Heard != null || !Paths.OnPatrol(s, u)) return false;
+            var pod = s.Pods.Find((p) => p.Id == u.PodId);
+            return pod != null && pod.Patrol.Count == 1 && Grid.SamePos(pod.Patrol[0], u.Pos);
+        }
+
+        // ------------------------------------------------------------- Evacuación (G23.6)
+
+        /// <summary>G23.6: a civilian of an Evacuación, who walks by itself and nobody orders (Automaton.Civilian).</summary>
+        public static bool IsCivilian(Unit u) => u.Automaton?.Piece == Automaton.Civilian;
+
+        /// <summary>G23.6: how near one of the dead it sees panics a civilian (EVACUACION.md: 6).</summary>
+        public const int PanicRange = 6;
+
+        /// <summary>G23.6: the civilians the squad needs aboard for the reward (Arturo, cuadro 71: «se supera con dos»); each more, CivilianBonus §.</summary>
+        public const int CiviliansNeeded = 2;
+        public const int CivilianBonus = 20;
+
+        /// <summary>G23.6: the civilians of an Evacuación aboard La Lata (in it, or gone with it from its zone).</summary>
+        public static int CiviliansAboard(GameState s) => (s.Mission.Civilians ?? new List<CivilianSpot>()).Count((c) => s.Units.FirstOrDefault((u) => u.Id == c.Unit) is Unit u && (u.Aboard == true || u.Evacuated));
+
+        /// <summary>G23.6: an Evacuación won as La Lata went (MissionEnded): CiviliansNeeded civilians in it.</summary>
+        public static bool CiviliansSafe(GameState s) => s.Mission.Civilians != null && CiviliansAboard(s) >= CiviliansNeeded;
+
+        /// <summary>
+        /// G23.6, for the warning before leaving (UI, Lore, the bot): how many civilians short of CiviliansNeeded aboard La Lata
+        /// now, or null with them there, out of an Evacuación, or with too few alive left to make it (no reward to lose).
+        /// </summary>
+        public static int? CiviliansShort(GameState s)
+        {
+            var civilians = s.Mission.Civilians;
+            if (civilians == null) return null;
+            var aboard = CiviliansAboard(s);
+            if (aboard >= CiviliansNeeded) return null;
+            var alive = civilians.Count((c) => s.Units.FirstOrDefault((u) => u.Id == c.Unit) is Unit u && (u.Alive || u.Aboard == true));
+            return alive < CiviliansNeeded ? (int?)null : CiviliansNeeded - aboard;
+        }
+
+        /// <summary>G23.6: the civilians not yet found that `u` of the squad sees from `from`, as a Rescate's survivor is seen (SurvivorSeen).</summary>
+        public static List<Unit> CiviliansSeen(GameState s, Unit u, Pos from)
+        {
+            var found = new List<Unit>();
+            if (s.Mission.Civilians == null || u.Team != Teams.Xcom || u.Captive || u.Automaton != null) return found;
+            foreach (var c in s.Mission.Civilians)
+            {
+                if (c.Found || !(s.Units.FirstOrDefault((x) => x.Id == c.Unit) is Unit v) || !v.Alive || v.Aboard == true) continue;
+                if (Buildings.Hidden(s, v.Pos, new[] { from })) continue;
+                if (Los.SightOrigin(s, from, v.Pos, Los.SightTo(s, u, v.Pos), Los.WindowReachOf(Teams.Xcom)) != null) found.Add(v);
+            }
+            return found;
+        }
+
+        /// <summary>G23.6: whether civilian `u` gets into La Lata where it stands: La Lata there and `u` in its zone (no seat taken).</summary>
+        public static bool CivilianBoards(GameState s, Unit u) => u.Alive && IsCivilian(u) && LaLataHere(s) && s.Mission.EvacZone.Any((z) => z.X == u.Pos.X && z.Y == u.Pos.Y) && u.Pos.Z == 0;
+
+        /// <summary>G23.6: the nearest of the dead civilian `u` sees, PanicRange or nearer; null with none.</summary>
+        public static Unit? PanicFrom(GameState s, Unit u)
+        {
+            return s.Units.Where((o) => o.Alive && o.Team == Teams.Alien && Content.Templates[o.Template].Undead && !o.Captive && Grid.Distance(u.Pos, o.Pos) <= PanicRange && Los.CanSee(s, u, o))
+                .OrderBy((o) => Grid.Distance(u.Pos, o.Pos)).ThenBy((o) => o.Id, StringComparer.Ordinal).FirstOrDefault();
+        }
+
+        /// <summary>G23.6 (cuadro 100: «Random entre los 3»): what panic makes `spot`'s civilian do this time, by its seed and its panics so far.</summary>
+        public static string PanicOf(CivilianSpot spot)
+        {
+            var rng = new Rng(unchecked((uint)(spot.Seed ^ (spot.Panics * 0x9e3779b1))));
+            return PanicKinds.All[rng.Int(PanicKinds.All.Count)];
+        }
+
+        /// <summary>Civilian `u`'s step from where it is, as far as its walk goes (Content.CivilianMobility): its reach and its budget.</summary>
+        private static (Reach Reach, int Budget) StepOf(GameState s, Unit u)
+        {
+            var budget = Paths.FullMoves(u);
+            return (Paths.ComputeReach(s, u, budget * 40, u.Pos, (o) => !Content.HostileTo(o, u)), budget);
+        }
+
+        /// <summary>A path's part `u` walks in `budget` (by `reach`'s costs): up to its last place to stop before the cost or somebody.</summary>
+        private static List<Pos> Stretch(GameState s, Unit u, Reach reach, List<Pos> path, int budget)
+        {
+            var end = -1;
+            for (var i = 0; i < path.Count; i++)
+            {
+                if (reach.Cost.Get(Grid.NodeOf(s, path[i]), 0) > budget) break;
+                var on = Grid.UnitAt(s, path[i]);
+                if (on != null && on != u) break;
+                if (Flights.CanStopAt(s, path[i])) end = i;
+            }
+            return path.Take(end + 1).ToList();
+        }
+
+        /// <summary>G23.6: civilian `u`'s walk this step to the nearest of La Lata's zone it can get to (null with none).</summary>
+        public static List<Pos>? CivilianWalk(GameState s, Unit u)
+        {
+            var (reach, budget) = StepOf(s, u);
+            var goal = s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).Where((p) => Grid.InBounds(s, p.X, p.Y) && reach.Cost.ContainsKey(Grid.NodeOf(s, p)))
+                .OrderBy((p) => reach.Cost[Grid.NodeOf(s, p)]).ThenBy((p) => p.Y).ThenBy((p) => p.X).FirstOrDefault();
+            if (goal == null) return null;
+            var path = Paths.BuildPath(s, u, reach, goal);
+            return path != null ? Stretch(s, u, reach, path, budget) : null;
+        }
+
+        /// <summary>G23.6: civilian `u`'s walk away from `dead` in this step: to where it can stop farthest from it (null with nowhere better).</summary>
+        public static List<Pos>? AwayFrom(GameState s, Unit u, Unit dead)
+        {
+            var (reach, budget) = StepOf(s, u);
+            Pos? best = null;
+            var far = Grid.Distance(u.Pos, dead.Pos);
+            foreach (var kv in reach.Cost.OrderBy((x) => x.Key))
+            {
+                if (kv.Value > budget) continue;
+                var p = Grid.PosOf(s, kv.Key);
+                if (!Flights.CanStopAt(s, p) || Grid.UnitAt(s, p) != null) continue;
+                var d = Grid.Distance(p, dead.Pos);
+                if (d > far) { far = d; best = p; }
+            }
+            var path = best != null ? Paths.BuildPath(s, u, reach, best) : null;
+            return path != null ? Stretch(s, u, reach, path, budget) : null;
+        }
+
+        /// <summary>
+        /// G23.6: where civilian `u` hides in panic from `dead`: the nearest tile inside a building (indoor ground, a room's floor)
+        /// it walks to in this step, not one of the dead's building, nobody on it; and its way there. Null with none.
+        /// </summary>
+        public static (Pos At, List<Pos> Way)? HideTile(GameState s, Unit u, Unit dead)
+        {
+            var (reach, budget) = StepOf(s, u);
+            bool Inside(Pos p) => p.Z == 0 && s.Ground != null && Grid.TileIndex(s, p.X, p.Y) < s.Ground.Count && s.Ground[Grid.TileIndex(s, p.X, p.Y)] == 2 && Grid.KindAt(s, p) == TileKinds.Floor;
+            var deadHouse = Inside(dead.Pos) ? Looting.RoomAt(s, dead.Pos) : null;
+            foreach (var kv in reach.Cost.Where((x) => x.Value <= budget).OrderBy((x) => x.Value).ThenBy((x) => x.Key))
+            {
+                var p = Grid.PosOf(s, kv.Key);
+                if (!Inside(p) || Grid.UnitAt(s, p) != null || !Flights.CanStopAt(s, p)) continue;
+                if (deadHouse != null && Looting.RoomAt(s, p) is LootRoom r && r.Id == deadHouse.Id) continue;
+                var path = Paths.BuildPath(s, u, reach, p);
+                if (path == null) continue;
+                var way = Stretch(s, u, reach, path, budget);
+                if (way.Count == 0 || !Grid.SamePos(way[way.Count - 1], p)) continue;
+                return (p, way);
+            }
+            return null;
+        }
+
+        /// <summary>G23.6: a search circle round `p` (as a Rescate's survivor's: they are in it, seldom at its middle), within the map.</summary>
+        public static SearchArea CircleAround(GameState s, Pos p, Rng rng)
+        {
+            var reach = (int)Math.Floor(Setup.SearchRadius / 2);
+            var x = Math.Max(0, Math.Min(s.Width - 1, p.X - reach + rng.Int(2 * reach + 1)));
+            var y = Math.Max(0, Math.Min(s.Height - 1, p.Y - reach + rng.Int(2 * reach + 1)));
+            return new SearchArea { Center = new Vec2 { X = x, Y = y }, Radius = Setup.SearchRadius };
         }
     }
 }

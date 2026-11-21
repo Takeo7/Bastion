@@ -41,6 +41,24 @@ namespace Bastion.Engine
         /// </summary>
         public static readonly IReadOnlyList<string> SplitSites = new[] { Places.City, Places.Town, Places.Estate, Places.Factory, Places.Roadside, Places.Country };
 
+        /// <summary>G23.5 Saqueadores' sites (SAQUEADORES.md): out of doors with room for the camp; the camping's in its military area.</summary>
+        public static readonly IReadOnlyList<string> RaidersSites = new[] { Places.Country, Places.Roadside, Places.Camping };
+
+        /// <summary>
+        /// G23.6 Evacuación's sites (EVACUACION.md: four buildings or more; Gameplay's probe of 20/11): a town or a city, a service area,
+        /// the plaza. Not the camping (not always four), the estate, the country nor the maps of one building.
+        /// </summary>
+        public static readonly IReadOnlyList<string> EvacuationSites = new[] { Places.City, Places.Town, Places.Roadside, Places.Plaza };
+
+        /// <summary>
+        /// The place a fight of `kind` is drawn in on the map: Saqueadores' among its sites alone (G23.5; Producto's review of
+        /// 21/11: never where its camp has no room), the rest by SiteMix. The same draws as before for every other kind.
+        /// </summary>
+        public static string SiteOf(string kind, int row, Rng rng) => kind == NodeKinds.Raiders ? rng.Pick(RaidersSites) : Weighted(rng, SiteMix);
+
+        /// <summary>G23.5 Saqueadores from this row (Arturo, cuadro 99), as La llave and the Cuervos of a Rescate.</summary>
+        public const int RaidersFrom = 3;
+
         /// <summary>
         /// A node's modifiers to draw from: Separados never with the horde awake (Producto, 20/11: till the bots measure it);
         /// an event's for the next fight (RunState.Pending), though, it takes (the player chose it).
@@ -131,7 +149,7 @@ namespace Bastion.Engine
         /// survivor is sure) nor the boss, by the map's seed; no mark on the map, nor where to look. Never in Separados
         /// (Producto, 20/11: with 2 seats one took the other group's seat in La Lata, and the reward was lost).
         /// </summary>
-        public static bool LooseSurvivor(RunNode n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Bitten && n.Kind != NodeKinds.Wounded && n.Kind != NodeKinds.Boss && n.Kind != NodeKinds.Split && n.Seed != null && SeedDraw(n.Seed.Value, 0x10e5e) % LooseOdds == 0;
+        public static bool LooseSurvivor(RunNode n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Bitten && n.Kind != NodeKinds.Wounded && n.Kind != NodeKinds.Boss && n.Kind != NodeKinds.Split && n.Kind != NodeKinds.Evacuation && n.Kind != NodeKinds.Raiders && n.Seed != null && SeedDraw(n.Seed.Value, 0x10e5e) % LooseOdds == 0;
 
         /// <summary>Rows with no service area: the first fights, made with knives only.</summary>
         public const int EarlyRows = 2;
@@ -153,7 +171,8 @@ namespace Bastion.Engine
         public static string? SpecialFor(RunNode n)
         {
             // Separados (G23.4), only out of doors and with La Lata between its two starts: as drawn (SplitSites).
-            if (n.Seed == null || n.Kind == NodeKinds.Boss || n.Kind == NodeKinds.Split) return null;
+            // Saqueadores (G23.5), where its camp has room: its sites (RaidersSites, the camping among them), never another.
+            if (n.Seed == null || n.Kind == NodeKinds.Boss || n.Kind == NodeKinds.Split || n.Kind == NodeKinds.Raiders) return null;
             // Mordido's, always (G23.2: the one map with medicine cabinets and shelves enough).
             if (n.Kind == NodeKinds.Bitten) return Places.Hospital;
             var seed = Math.Abs(n.Seed.Value);
@@ -234,7 +253,7 @@ namespace Bastion.Engine
                 n.Seed = (int)Math.Floor(rng.Next() * 2147483648.0);
                 n.Site = n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss ? Places.Factory : n.Kind == NodeKinds.Key ? Places.Police
                     // Mordido (G23.2): a town's or a city's, the hospital (SpecialFor) with its flag.
-                    : n.Kind == NodeKinds.Bitten ? Places.Town : Weighted(rng, SiteMix);
+                    : n.Kind == NodeKinds.Bitten ? Places.Town : SiteOf(n.Kind, n.Row, rng);
                 // No service area in rows 1–2 (Red, 16/11: a long walk to La Lata with knives only): the countryside, drawn
                 // as it was so the rest of the map stays the same.
                 if (n.Site == Places.Roadside && n.Row <= EarlyRows) n.Site = Places.Country;
@@ -285,7 +304,7 @@ namespace Bastion.Engine
         private static string Roll(Rng rng, bool stops, int row)
         {
             var kind = stops ? Weighted(rng, Mix) : Weighted(rng, Mix.Where((m) => !NodeKinds.IsStop(m.Kind)).ToList());
-            return kind == "special" ? rng.Pick(row >= KeyFrom ? Specials : Specials.Where((k) => k != NodeKinds.Key).ToList()) : kind;
+            return kind == "special" ? rng.Pick(Specials.Where((k) => (k != NodeKinds.Key || row >= KeyFrom) && (k != NodeKinds.Raiders || row >= RaidersFrom)).ToList()) : kind;
         }
 
         private static T Weighted<T>(Rng rng, IReadOnlyList<(T Value, int Weight)> table)

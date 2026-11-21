@@ -29,6 +29,13 @@ namespace Bastion.Net
     /// Separados (G23.4; Producto, 20/11), a Saqueo with the squad in two groups on either side of La Lata: each group goes
     /// for La Lata from the start, searching only what it stands in or beside on the way; nobody asks it to go, nor says yes
     /// to the partner's call, while the group with nobody going has one that can walk to it (SplitWaits).
+    /// Saqueadores (G23.5; Producto, 20/11), a Saqueo with a camp of the living and their stash: while the camp sleeps, the
+    /// squad goes for the stash's crates by the tiles none of its watchers would notice it on (Sim.PodsNoticing, what the
+    /// rules check on every step), stops only where none of those walking in the enemies' next turns would see it (the
+    /// round's guard, the dead), takes down the guards it gets behind, searches a crate only where nobody who hears it and
+    /// turns to it would see one of the squad, and shoots none of those unaware; with no way in unseen, or the camp awake,
+    /// it goes at it only with the guards outnumbered by RaidersEdge, and otherwise goes (RaidMode). With the stash robbed,
+    /// broken, or at RaidersLeaveTurn, La Lata.
     /// </summary>
     public static class MissionBot
     {
@@ -154,6 +161,8 @@ namespace Bastion.Net
                 if (KeyFight(s)) return KeyLeaving(s, walksOf);
                 // Separados (G23.4): La Lata from the start, each group by its side.
                 if (SplitFight(s)) return true;
+                // Saqueadores (G23.5): once the stash is robbed, or there is no going for it (RaidMode).
+                if (RaidersFight(s)) return RaidMode(s) == Raid.Go;
             }
             if (RunSaqueo(s)) return RunLeaving(s, roomOf);
             if (m.Kind == MissionKinds.Scavenge && m.EvacZone.Count > 0)
@@ -252,6 +261,10 @@ namespace Bastion.Net
             // The silent takedown (Arturo, 16/11): one of the dead beside it that hasn't seen it, killed for sure and unheard.
             var unaware = Usable(s, u, AbilityIds.Takedown) ? Abilities.TakedownTargets(s, u).OrderBy((t) => t.Id, System.StringComparer.Ordinal).FirstOrDefault() : null;
             if (unaware != null) return Ability(u, AbilityIds.Takedown, unaware.Id);
+            // Saqueadores (G23.5): a crate of the stash beside it, searched before any shot.
+            // Unseen, not where its noise gets a guard up from his chair to see one of the squad (Quietly).
+            if (RaidersFight(s) && Usable(s, u, AbilityIds.Search) && Looting.SearchableTiles(s, u).FirstOrDefault((p) => StashCrate(s, p) && (!Hush(s) || Quietly(s, u, p))) is Pos crate)
+                return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = crate };
             // A Guarida's box beside it: opened, the job done (H5).
             var lair = s.Run != null && s.Mission.Lair is Pos box && !s.Mission.ObjectiveDone && Usable(s, u, AbilityIds.Search)
                 ? Looting.SearchableTiles(s, u).FirstOrDefault((p) => Grid.SameTile(p, box)) : null;
@@ -261,8 +274,9 @@ namespace Bastion.Net
             var atBull = bull != null && !carrier ? BestShot(s, u, Close * 2, bull.Id) : null;
             if (atBull != null && atBull.Value.hit >= 25) return atBull.Value.cmd;
             // Only what is close is shot at: a shot is heard, and draws more of them (docs/FASE2.md). In a run, on the way
-            // out, only what stands beside it: it stood fighting by La Lata till the horde had it (a Saqueo, 16/11).
-            var going = s.Run != null && leaving && !Holding(s);
+            // out, only what stands beside it: it stood fighting by La Lata till the horde had it (a Saqueo, 16/11). Not with
+            // a camp of the living awake, who shoot from afar: going so, the squad fell 4 times in 5 in the camping (R15).
+            var going = s.Run != null && leaving && !Holding(s) && !(RaidersFight(s) && CampAwake(s));
             var shot = BestShot(s, u, going ? 1.5 : Close);
             var nearest = Enemies(s).Select((e) => Grid.Distance(u.Pos, e.Pos)).DefaultIfEmpty(double.MaxValue).Min();
             // Mordido (G23.2): a medicine cabinet or shelf beside it searched before any shot while the antiviral is still in
@@ -295,12 +309,26 @@ namespace Bastion.Net
             }
             // The blade alone: a step up to one of the dead, keeping an action to strike (not on a run's way out, nor out of
             // La Lata in an Asedio).
-            if (!armed && !carrier && !going && !Holding(s))
+            // (Nor in Saqueadores hidden: the walk up to them is in sight of whoever.)
+            var hush = Hush(s);
+            if (!armed && !carrier && !going && !Holding(s) && !hush)
             {
                 var close = MoveToStrike(s, u, leaving);
                 if (close != null) return close;
             }
-            var goal = (!armed && !leaving && u.Carrying == null ? GunGoal(s, u, walks) : null) ?? target;
+            var goal = (!armed && !leaving && u.Carrying == null && !hush ? GunGoal(s, u, walks) : null) ?? target;
+            // Saqueadores hidden (G23.5): only by the tiles none of the camp's watchers would notice it on; none, it waits.
+            if (goal != null && !leaving && hush)
+            {
+                var sneak = Sneak(s, u, goal, false);
+                if (sneak != null) return sneak;
+                goal = null;
+            }
+            // Going with the camp asleep and the squad hidden, so too while it can: by the camping's camp to La Lata, the
+            // round's guard saw it go by on the first turn, and the camp was on it (R15). With no hidden step, on as ever.
+            // (Found by then, too, it woke the camp hardly less, 6 times in 120 against 8, and the fight took a third longer.)
+            if (goal != null && leaving && RaidersFight(s) && s.Concealed && Guards(s).Count > 0 && !CampAwake(s) && !Abilities.InEvacZone(s, u.Pos)
+                && Sneak(s, u, goal, true) is Command away) return away;
             // La llave, after its key: never far ahead of the squad's last (Leash), so the dead come to it together.
             if (goal != null && !leaving && KeyFight(s) && Looting.KeyWhere(s) == KeyPlaces.Holder && Ahead(s, u, goal, walks, walksOf) > Leash * Paths.CostOrtho) goal = null;
             if (goal != null && !(leaving && Abilities.InEvacZone(s, u.Pos)))
@@ -323,7 +351,8 @@ namespace Bastion.Net
             if (shot != null && shot.Value.hit >= 15) return shot.Value.cmd;
             // Separados hidden (G23.4): no watch kept. Its shot at one of the dead going by gave the squad away on the first
             // turn, both groups at once (R13, 20/11: city, 2 seats, seed 1).
-            var watch = !(SplitFight(s) && s.Concealed);
+            // So too in Saqueadores (G23.5), and with the camp asleep, even with the squad found by the dead.
+            var watch = !((SplitFight(s) || RaidersFight(s)) && s.Concealed) && !Quiet(s);
             if (watch && Usable(s, u, AbilityIds.Overwatch) && nearest <= Close * 2) return Ability(u, AbilityIds.Overwatch);
             if (watch && Usable(s, u, AbilityIds.OverwatchMelee) && nearest <= Close) return Ability(u, AbilityIds.OverwatchMelee);
             if (Usable(s, u, AbilityIds.Hunker)) return Ability(u, AbilityIds.Hunker);
@@ -353,6 +382,8 @@ namespace Bastion.Net
             if (s.Run != null && m.Lair != null) return m.Lair;
             if (Bull(s) is Unit bull) return bull.Pos;
             if (KeyFight(s) && !leaving) return KeyGoal(s, u, walksOf(u)) ?? bus;
+            // Saqueadores (G23.5): a place beside a crate of the stash; none, it waits where it is.
+            if (RaidersFight(s) && !leaving) return StashGoal(s, u, walksOf);
             if (RunSaqueo(s)) return roomOf(u) ?? bus;
             return NearestEnemy(s, u, walksOf(u)) ?? bus;
         }
@@ -383,9 +414,11 @@ namespace Bastion.Net
 
         /// <summary>
         /// One of the dead `u` has reason to fight: any free one; a caged one (H9) only in a Limpieza, or when it reaches `u`
-        /// across its bars. Kept off otherwise: a shot is heard, and at its bars it bites.
+        /// across its bars. Kept off otherwise: a shot is heard, and at its bars it bites. In Saqueadores with the camp asleep
+        /// (Quiet), none still unaware: a shot gives the squad away, and at a guard wakes the camp (G23.5).
         /// </summary>
-        private static bool Worth(GameState s, Unit u, Unit e) => e.Caged != true || Hunting(s) || Rules.CagedReach(s, e).Any((p) => Grid.SamePos(p, u.Pos));
+        private static bool Worth(GameState s, Unit u, Unit e) => (e.Caged != true || Hunting(s) || Rules.CagedReach(s, e).Any((p) => Grid.SamePos(p, u.Pos)))
+            && !(Quiet(s) && Paths.OnPatrol(s, e));
 
         /// <summary>
         /// Whether all the squad not gone is in La Lata, but for any that can't walk there from where it is (walled off, no
@@ -439,9 +472,11 @@ namespace Bastion.Net
 
         /// <summary>
         /// A run's Saqueo: the normal node (Gameplay, 16/11), no objective but to search and go; and a Separados without its
-        /// two groups (one soldier, or no room on the map: G23.4), which is one.
+        /// two groups (one soldier, or no room on the map: G23.4), or a Saqueadores without its camp (no room for it: G23.5),
+        /// which are one.
         /// </summary>
-        private static bool RunSaqueo(GameState s) => (s.Run?.NodeKind == NodeKinds.Normal || (s.Run?.NodeKind == NodeKinds.Split && s.Mission.Split == null))
+        private static bool RunSaqueo(GameState s) => (s.Run?.NodeKind == NodeKinds.Normal || (s.Run?.NodeKind == NodeKinds.Split && s.Mission.Split == null)
+            || (s.Run?.NodeKind == NodeKinds.Raiders && s.Mission.Raiders == null))
             && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
 
         /// <summary>El Toro alive, in his fight (H6); null in any other.</summary>
@@ -897,6 +932,400 @@ namespace Bastion.Net
             return open.Count == 1 && behind.Any((o) => !o.Captive && walksOf(o).Cost.ContainsKey(open[0]));
         }
 
+        // ------------------------------------------------------------ Saqueadores (G23.5)
+
+        /// <summary>Saqueadores: the turn the squad goes for La Lata, the stash robbed or not.</summary>
+        public const int RaidersLeaveTurn = 16;
+
+        /// <summary>Saqueadores: the squad goes at the camp by force only this many more on its feet than the guards alive.</summary>
+        public const int RaidersEdge = 3;
+
+        /// <summary>Saqueadores: till this turn the squad waits for the dead to move off its only hidden way to the stash.</summary>
+        public const int RaidersWait = 4;
+
+        /// <summary>What the squad does in Saqueadores (RaidMode): for the stash unseen, for it by force, or La Lata.</summary>
+        private enum Raid { Sneak, Loud, Go }
+
+        /// <summary>A run's Saqueadores with its camp (MissionState.Raiders). Without it (no room on the map), a Saqueo (RunSaqueo).</summary>
+        private static bool RaidersFight(GameState s) => s.Run != null && s.Mission.Raiders != null && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
+
+        /// <summary>One of the stash's crates on `p`, still to search.</summary>
+        private static bool StashCrate(GameState s, Pos p) => s.Mission.Raiders is RaidersCamp camp && p.Z == 0 && camp.Crates.Contains(Grid.NodeOf(s, p)) && Looting.IsSearchable(s, p);
+
+        /// <summary>The stash's crates still to search.</summary>
+        private static List<Pos> StashLeft(GameState s) => (s.Mission.Raiders?.Crates ?? new List<int>()).Select((i) => Grid.PosOf(s, i)).Where((p) => Looting.IsSearchable(s, p)).ToList();
+
+        /// <summary>The camp's guards alive (Unit.Guard).</summary>
+        private static List<Unit> Guards(GameState s) => s.Units.Where((g) => g.Alive && g.Guard != null).ToList();
+
+        /// <summary>The camp woken: one of its guards is, and so all of them (Sim.CampWakes).</summary>
+        private static bool CampAwake(GameState s) => Guards(s).Any((g) => !Paths.OnPatrol(s, g));
+
+        /// <summary>Saqueadores, going for the stash unseen (Raid.Sneak): nothing but by hidden tiles (Sneak), and Quiet.</summary>
+        private static bool Hush(GameState s) => RaidersFight(s) && RaidMode(s) == Raid.Sneak;
+
+        /// <summary>
+        /// Saqueadores with the camp asleep, not going at it by force: no shot at anyone unaware, nor any its guards would hear
+        /// (CampHears), no watch. Going so, with no step left, the squad shot the round's guard six tiles off and woke the camp
+        /// (R15: campo, 2 seats, seed 105).
+        /// </summary>
+        private static bool Quiet(GameState s) => RaidersFight(s) && Guards(s).Count > 0 && !CampAwake(s) && RaidMode(s) != Raid.Loud;
+
+        /// <summary>What a state's order reckons once (RaidMode): the mode and each soldier's hidden walk.</summary>
+        private sealed class RaidPlan
+        {
+            public Raid Mode;
+            public readonly Dictionary<string, Reach> Hidden = new Dictionary<string, Reach>();
+        }
+
+        [System.ThreadStatic] private static GameState? planOf;
+        [System.ThreadStatic] private static int planSeq;
+        [System.ThreadStatic] private static RaidPlan? plan;
+
+        private static RaidPlan PlanOf(GameState s)
+        {
+            if (plan != null && ReferenceEquals(planOf, s) && planSeq == s.Seq) return plan;
+            planOf = s;
+            planSeq = s.Seq;
+            // (ModeOf fills the hidden walks it reckons in it.)
+            plan = new RaidPlan();
+            plan.Mode = ModeOf(s);
+            return plan;
+        }
+
+        private static Raid RaidMode(GameState s) => PlanOf(s).Mode;
+
+        /// <summary>
+        /// Saqueadores: La Lata with the stash robbed, broken (Routed) or at RaidersLeaveTurn. Else, the camp awake, at it by
+        /// force with the guards alive outnumbered by RaidersEdge, or La Lata; asleep, for the stash unseen while one of the
+        /// squad has a hidden way to a crate (HiddenSpot), else by force on the same terms, or La Lata («si le ven, pelear
+        /// como con los Cuervos y salir»; Gameplay, 20/11).
+        /// </summary>
+        private static Raid ModeOf(GameState s)
+        {
+            if (StashLeft(s).Count == 0 || Routed(s) || s.Turn >= RaidersLeaveTurn) return Raid.Go;
+            var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
+            // Strong: those with a gun to fire (the blade doesn't go at the living), outnumbering the guards alive by RaidersEdge.
+            var strong = squad.Count((o) => Armed(s, o)) >= Guards(s).Count + RaidersEdge;
+            // The camp awake, or with none of it left (nobody to hide from: it hid from the dead, and they had it, R15).
+            if (CampAwake(s) || Guards(s).Count == 0) return strong ? Raid.Loud : Raid.Go;
+            // A hidden way, off the dead too; one kept off the camp alone, the dead in it, is waited on till RaidersWait (those
+            // asleep stay where they are: R15, the área de servicio of seed 105 waited for two groups six turns, and the
+            // patrols found it). The round's guard walks on, and Sneak keeps off him.
+            if (squad.Any((o) => Nearer(s, o, HiddenWalk(s, o, true)) != null)) return Raid.Sneak;
+            if (s.Turn < RaidersWait && squad.Any((o) => Nearer(s, o, HiddenWalk(s, o, false)) != null)) return Raid.Sneak;
+            return strong ? Raid.Loud : Raid.Go;
+        }
+
+        /// <summary>Where `u` goes for the stash, by the mode: unseen (HiddenSpot), by force (by its walk past the dead), or nowhere.</summary>
+        private static Pos? StashGoal(GameState s, Unit u, System.Func<Unit, Reach> walksOf)
+        {
+            switch (RaidMode(s))
+            {
+                case Raid.Sneak: return HiddenSpot(s, u);
+                case Raid.Loud: return SpotBeside(s, u, walksOf(u), false);
+                default: return null;
+            }
+        }
+
+        /// <summary>
+        /// The nearest place by `u`'s hidden walk (HiddenWalk) beside a crate left, or behind or beside a guard the Golpe
+        /// silencioso takes (TakedownSpot): kept off the dead too, if it can be; else kept off the camp alone, and `u` waits for
+        /// the dead to move (Sneak). Null with none.
+        /// </summary>
+        private static Pos? HiddenSpot(GameState s, Unit u) => Nearer(s, u, HiddenWalk(s, u, true)) ?? Nearer(s, u, HiddenWalk(s, u, false));
+
+        /// <summary>The nearer by `walk` of a place to search a crate from quietly (SpotBeside) and one to take a guard down from.</summary>
+        private static Pos? Nearer(GameState s, Unit u, Reach walk)
+        {
+            var crate = SpotBeside(s, u, walk, true);
+            var guard = TakedownSpot(s, u, walk);
+            if (crate == null || guard == null) return crate ?? guard;
+            return walk.Cost.Get(Grid.NodeOf(s, guard), 0) < walk.Cost.Get(Grid.NodeOf(s, crate), 0) ? guard : crate;
+        }
+
+        /// <summary>
+        /// The nearest place by `walk` from which `u` would take down a guard of the camp still unaware (Abilities.TakenDown:
+        /// a Saqueador or a Cazador, never the Cabecilla): beside him, out of his cone proper (Los.AheadOf), free and out of La
+        /// Lata. Silent, it leaves one fewer to see the squad, and to shoot at it if the camp wakes. Null with none.
+        /// </summary>
+        private static Pos? TakedownSpot(GameState s, Unit u, Reach walk)
+        {
+            Pos? best = null;
+            var bestWalk = int.MaxValue;
+            if (!Abilities.AbilitiesOf(u).Contains(AbilityIds.Takedown)) return null;
+            foreach (var g in Guards(s).Where((g) => Abilities.TakenDown.Contains(g.Template) && Paths.OnPatrol(s, g)))
+                foreach (var d in Grid.Dirs8)
+                {
+                    var q = new Pos { X = g.Pos.X + d.X, Y = g.Pos.Y + d.Y, Z = g.Pos.Z };
+                    if (!Grid.InBounds(s, q.X, q.Y) || !walk.Cost.TryGetValue(Grid.NodeOf(s, q), out var w) || w >= bestWalk) continue;
+                    if ((Grid.UnitAt(s, q) is Unit o && o != u) || !Flights.CanStopAt(s, q) || Abilities.InEvacZone(s, q)) continue;
+                    if (!Aim.InMeleeReach(s, q, g.Pos) || Los.AheadOf(g, q)) continue;
+                    best = q;
+                    bestWalk = w;
+                }
+            return best;
+        }
+
+        /// <summary>
+        /// `u`'s walk by the tiles none of the camp's posted guards would notice it on now (Watch.Fixed), past the dead; with
+        /// `dead`, by those none of the dead would notice it on nor bite it going past either (Watch.Off). The round's guard
+        /// walks on, and is kept off as he goes (Sneak).
+        /// </summary>
+        private static Reach HiddenWalk(GameState s, Unit u, bool dead)
+        {
+            var hidden = PlanOf(s).Hidden;
+            var key = dead ? u.Id + "+" : u.Id;
+            if (hidden.TryGetValue(key, out var r)) return r;
+            var w = Watched(s);
+            return hidden[key] = Paths.ComputeReach(s, u, double.MaxValue, null, (o) => o.Team != u.Team, dead ? w.Off : w.Fixed);
+        }
+
+        /// <summary>
+        /// The nearest place by `walk` beside a crate left (Looting.ReachesToSearch), free and out of La Lata; `quiet` (going
+        /// for it unseen), only where searching it gives nobody away (Quietly). Null with none.
+        /// </summary>
+        private static Pos? SpotBeside(GameState s, Unit u, Reach walk, bool quiet)
+        {
+            var left = StashLeft(s);
+            if (left.Count == 0) return null;
+            foreach (var kv in walk.Cost.OrderBy((kv) => kv.Value).ThenBy((kv) => kv.Key))
+            {
+                var at = Grid.PosOf(s, kv.Key);
+                if (at.Z != 0 || (Grid.UnitAt(s, at) is Unit o && o != u) || !Flights.CanStopAt(s, at) || Abilities.InEvacZone(s, at)) continue;
+                if (left.Any((c) => Looting.ReachesToSearch(s, at, c) && (!quiet || Quietly(s, u, c, at)))) return at;
+            }
+            return null;
+        }
+
+        /// <summary>Whether a guard of the camp still unaware would hear `u` use `ability` where it stands (Rules.SquadNoiseRadius, as Sim.MakeNoise).</summary>
+        private static bool CampHears(GameState s, Unit u, string ability)
+        {
+            var radius = Rules.SquadNoiseRadius(s, Abilities.NoiseOf(s, u, ability), u);
+            return radius > 0 && Guards(s).Any((g) => Paths.OnPatrol(s, g) && Grid.Distance(g.Pos, u.Pos) + Grid.StoreysApart(s, g.Pos, u.Pos) <= radius);
+        }
+
+        /// <summary>
+        /// Whether `u` searching `crate` from `at` (null: where it is) gives the squad away: whoever not woken hears it turns to
+        /// it (Events, NoiseEvent), and a guard by the fire is up from his chair (Rules.Sitting: no longer only Rules.FireWatch),
+        /// and notices whoever of the squad is then in his view as far as his detection goes (R15: 7 hidden squads of 60 were
+        /// found so, at the noise of their own crate, by the guard with his back to it).
+        /// </summary>
+        private static bool Quietly(GameState s, Unit u, Pos crate, Pos? at = null)
+        {
+            var radius = Rules.SquadNoiseRadius(s, Abilities.NoiseOf(s, u, AbilityIds.Search), u);
+            var hear = s.Units.Where((o) => o.Alive && o.Team != Teams.Xcom && Paths.OnPatrol(s, o) && Grid.Distance(o.Pos, crate) + Grid.StoreysApart(s, o.Pos, crate) <= radius).ToList();
+            if (hear.Count == 0) return true;
+            var spots = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && o.Id != u.Id).Select((o) => o.Pos).Append(at ?? u.Pos).ToList();
+            foreach (var g in hear)
+            {
+                var facing = Los.FacingTo(g.Pos, crate) ?? g.Facing;
+                foreach (var p in spots)
+                {
+                    var range = s.Concealed ? Los.DetectionTo(s, g, p) : Los.SightTo(s, g, p);
+                    if (Los.InNoticeCone(s, g, p, g.Pos, facing) && Los.SightOrigin(s, g.Pos, p, range, Los.WindowReachOf(g.Team)) != null) return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// The tiles one of the squad would be noticed on (Sim.PodsNoticing: what the rules check on each step of a walk and
+        /// each guard on watch at its turn): by a posted guard of the camp (Fixed); by the dead not woken, or beside one of
+        /// the dead, who bites whoever goes past (Rules.PassBite: R15, a zombie asleep bit the one going by and gave the squad
+        /// away) (Dead); by the round's guard where he stands (Round); and by whoever walks in the enemies' next two turns, on
+        /// its walk, or all round if it stands about (Ahead, WalkAhead).
+        /// </summary>
+        private sealed class Watch
+        {
+            public readonly HashSet<int> Fixed = new HashSet<int>(), Dead = new HashSet<int>(), Round = new HashSet<int>(), Ahead = new HashSet<int>();
+
+            /// <summary>Fixed and Dead, and the shut doors and windows: what a hidden way keeps off.</summary>
+            public readonly HashSet<int> Off = new HashSet<int>();
+        }
+
+        [System.ThreadStatic] private static GameState? watchOf;
+        [System.ThreadStatic] private static string? watchKey;
+        [System.ThreadStatic] private static Watch? watch;
+
+        /// <summary>
+        /// Watch, reckoned once while nothing it hangs on changes: in the squad's turn the enemies stand still, but for those
+        /// woken (they scamper), those killed, and the squad found.
+        /// </summary>
+        private static Watch Watched(GameState s)
+        {
+            var key = $"{s.Turn}|{s.ActiveTeam}|{s.Concealed}|{s.Pods.Count}|{s.Pods.Count((p) => p.Active)}|{s.Units.Count((x) => x.Alive)}|{s.Units.Count((x) => x.Alive && x.Heard != null)}";
+            if (watch != null && ReferenceEquals(watchOf, s) && watchKey == key) return watch;
+            watchOf = s;
+            watchKey = key;
+            var w = watch = new Watch();
+            var who = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).OrderBy((o) => o.Id, System.StringComparer.Ordinal).FirstOrDefault();
+            if (who == null) return w;
+            var eyes = s.Units.Where((e) => e.Alive && Paths.OnPatrol(s, e)).ToList();
+            var round = Guards(s).FirstOrDefault((g) => g.Guard == GuardPosts.Round && Paths.OnPatrol(s, g));
+            int Reach(Unit e) => (int)System.Math.Ceiling(System.Math.Max(Los.AwareRange, s.Concealed ? Content.Templates[e.Template].Detection : Content.Templates[e.Template].Sight)) + 1;
+            var tiles = new HashSet<int>();
+            var levels = s.Levels?.Count ?? 0;
+            foreach (var e in eyes)
+            {
+                var r = Reach(e);
+                for (var z = 0; z <= levels; z++)
+                    for (var y = System.Math.Max(0, e.Pos.Y - r); y <= System.Math.Min(s.Height - 1, e.Pos.Y + r); y++)
+                        for (var x = System.Math.Max(0, e.Pos.X - r); x <= System.Math.Min(s.Width - 1, e.Pos.X + r); x++)
+                            tiles.Add(Grid.NodeOf(s, new Pos { X = x, Y = y, Z = z }));
+            }
+            var sim = new Sim(s, new Rng(0), new List<int>());
+            var camp = new HashSet<string>(Guards(s).Where((g) => g.PodId != null).Select((g) => g.PodId!));
+            foreach (var n in tiles)
+            {
+                var p = Grid.PosOf(s, n);
+                if (!Flights.CanStopAt(s, p) && !Grid.CanStandOn(Grid.KindAt(s, p))) continue;
+                var pods = sim.PodsNoticing(p, who);
+                if (pods.Any((id) => camp.Contains(id) && id != round?.PodId)) w.Fixed.Add(n);
+                if (pods.Any((id) => !camp.Contains(id))) w.Dead.Add(n);
+                if (round != null && pods.Contains(round.PodId!)) w.Round.Add(n);
+            }
+            foreach (var o in s.Units.Where((o) => o.Alive && o.Team != Teams.Xcom && Content.Templates[o.Template].Undead))
+                foreach (var d in Grid.Dirs8)
+                {
+                    var p = new Pos { X = o.Pos.X + d.X, Y = o.Pos.Y + d.Y, Z = o.Pos.Z };
+                    if (Grid.InBounds(s, p.X, p.Y) && Rules.PassBite(s, o, who, p)) w.Dead.Add(Grid.NodeOf(s, p));
+                }
+            w.Off.UnionWith(w.Fixed);
+            w.Off.UnionWith(w.Dead);
+            // A shut door or a window gone through is heard (Content.Noise.Door, Breach: six tiles and more), and whoever
+            // hears it comes to look (R15: the camping's camp, its guards up from their chairs).
+            for (var z = 0; z <= levels; z++)
+                for (var y = 0; y < s.Height; y++)
+                    for (var x = 0; x < s.Width; x++)
+                    {
+                        var p = new Pos { X = x, Y = y, Z = z };
+                        if (Grid.KindAt(s, p) is TileKinds.Door or TileKinds.Window) w.Off.Add(Grid.NodeOf(s, p));
+                    }
+            // Whoever walks in the enemies' next turns, and what each would notice on the way (Ahead): the round's guard round the
+            // fence; one gone to look where it heard something (Ai.PatrolPod); the dead on their rounds; the dead standing
+            // about, who turn their heads (Ai.LookRound), all round. Of the dead, only those near enough to the squad to matter.
+            // (R15: with the round's guard alone, of 60 hidden squads the dead on their rounds found 25.)
+            var squadAt = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).Select((o) => o.Pos).ToList();
+            foreach (var e in eyes)
+            {
+                var pod = s.Pods.Find((p) => p.Id == e.PodId);
+                if (pod == null) continue;
+                var near = squadAt.Any((p) => Grid.Distance(p, e.Pos) <= 2.0 * Paths.FullMoves(e) / Paths.CostOrtho + Reach(e) + 2);
+                if (!near) continue;
+                var r = Reach(e);
+                List<(Pos At, double? Facing)> walk;
+                // Two turns' walk: with one, the squad stopped nearer, and the dead on their rounds found it more often (R15: 21
+                // hidden squads of 60 against 16).
+                var budget = 2 * Paths.FullMoves(e);
+                if (e.Heard != null) walk = WalkAhead(s, e, new List<Pos> { Grid.ToPos(e.Heard) }, 0, budget);
+                else if (e.Guard is GuardPosts.Fire or GuardPosts.Stash) continue;
+                else walk = WalkAhead(s, e, pod.Patrol, pod.PatrolIndex, budget);
+                // Nowhere to walk (no round, or at its one stop): it stands about and turns its head any way (Ai.LookRound).
+                if (walk.Count == 0)
+                {
+                    for (var y = System.Math.Max(0, e.Pos.Y - r); y <= System.Math.Min(s.Height - 1, e.Pos.Y + r); y++)
+                        for (var x = System.Math.Max(0, e.Pos.X - r); x <= System.Math.Min(s.Width - 1, e.Pos.X + r); x++)
+                        {
+                            var p = new Pos { X = x, Y = y, Z = e.Pos.Z };
+                            var range = s.Concealed ? Los.DetectionTo(s, e, p) : Los.SightTo(s, e, p);
+                            if (Los.SightOrigin(s, e.Pos, p, range, Los.WindowReachOf(e.Team)) != null) w.Ahead.Add(Grid.NodeOf(s, p));
+                        }
+                    continue;
+                }
+                var seen = new HashSet<(int, double?)>();
+                foreach (var (at, facing) in walk)
+                {
+                    if (!seen.Add((Grid.NodeOf(s, at), facing))) continue;
+                    for (var y = System.Math.Max(0, at.Y - r); y <= System.Math.Min(s.Height - 1, at.Y + r); y++)
+                        for (var x = System.Math.Max(0, at.X - r); x <= System.Math.Min(s.Width - 1, at.X + r); x++)
+                        {
+                            var p = new Pos { X = x, Y = y, Z = at.Z };
+                            var n = Grid.NodeOf(s, p);
+                            if (w.Ahead.Contains(n) || !Los.InNoticeCone(s, e, p, at, facing)) continue;
+                            var range = s.Concealed ? Los.DetectionTo(s, e, p) : Los.SightTo(s, e, p);
+                            if (Los.SightOrigin(s, at, p, range, Los.WindowReachOf(e.Team)) != null) w.Ahead.Add(n);
+                        }
+                }
+            }
+            return w;
+        }
+
+        /// <summary>
+        /// Where `g` walks within `budget` (Ai.PatrolPod: to the stop it goes for, `stops` from `first` on, the next once within
+        /// 2 of it): every place on any of the shortest ways there (the rules' own picks one of them, and R15's first guess at
+        /// which was wrong: the camping's round went south first, not east, and saw the squad), each with the ways it may face
+        /// walking onto it.
+        /// </summary>
+        private static List<(Pos At, double? Facing)> WalkAhead(GameState s, Unit g, IReadOnlyList<Pos> stops, int first, double budget)
+        {
+            var steps = new List<(Pos, double?)>();
+            var n = stops.Count;
+            if (n == 0) return steps;
+            var at = new List<Pos> { g.Pos };
+            var index = first % n;
+            for (var leg = 0; leg <= n && budget >= Paths.CostOrtho && at.Count > 0; leg++)
+            {
+                var corner = Grid.ToPos(stops[index]);
+                index = (index + 1) % n;
+                if (at.Any((p) => Grid.Distance(p, corner) <= 2)) continue;
+                var from = at.OrderBy((p) => Grid.Distance(p, corner)).First();
+                var there = Paths.ComputeReach(s, g, double.MaxValue, from, (o) => true);
+                var back = Paths.ComputeReach(s, g, double.MaxValue, corner, (o) => true);
+                if (!there.Cost.TryGetValue(Grid.NodeOf(s, corner), out var total)) break;
+                var ends = new List<Pos>();
+                var spent = 0;
+                foreach (var kv in there.Cost)
+                {
+                    if (kv.Value == 0 || kv.Value > budget || !back.Cost.TryGetValue(kv.Key, out var left) || kv.Value + left != total) continue;
+                    var p = Grid.PosOf(s, kv.Key);
+                    // Each way he may come onto it: from a place before it on a shortest way.
+                    foreach (var d in Grid.Dirs4)
+                    {
+                        var q = new Pos { X = p.X - d.X, Y = p.Y - d.Y, Z = p.Z };
+                        if (Grid.InBounds(s, q.X, q.Y) && there.Cost.TryGetValue(Grid.NodeOf(s, q), out var c) && c < kv.Value && back.Cost.TryGetValue(Grid.NodeOf(s, q), out var l) && c + l == total)
+                            steps.Add((p, Los.FacingTo(q, p)));
+                    }
+                    if (kv.Value > spent) { spent = kv.Value; ends.Clear(); }
+                    if (kv.Value == spent) ends.Add(p);
+                }
+                budget -= spent;
+                at = ends;
+                if (spent == 0) break;
+            }
+            return steps;
+        }
+
+        /// <summary>
+        /// Saqueadores hidden: a stretch toward `goal` by the hidden walk, along which the rules' walk (Paths.BuildPath) steps
+        /// on no tile anyone not woken would notice it on now nor beside one of the dead (Watch.Off, Round), to a place the
+        /// round's guard won't see on his walk either (Ahead); off a place he will, wherever is hidden. `bus`: `goal` is La
+        /// Lata, any of whose places is as good, and inside it nobody sees it. Null: none nearer by half a tile (the dead in
+        /// the way: it waits for them to move).
+        /// </summary>
+        private static Command? Sneak(GameState s, Unit u, Pos goal, bool bus)
+        {
+            var stride = Stride(s, u);
+            if (stride < Paths.CostOrtho) return null;
+            var w = Watched(s);
+            bool Seen(int n) => w.Off.Contains(n) || w.Round.Contains(n);
+            bool Unsafe(int n) => Seen(n) || w.Ahead.Contains(n);
+            var back = Paths.ComputeReach(s, u, double.MaxValue, goal, (o) => o.Team != u.Team, w.Off);
+            const double Off = 1e9;
+            double Left(Pos p) => bus && Abilities.InEvacZone(s, p) ? 0 : back.Cost.TryGetValue(Grid.NodeOf(s, p), out var c) ? c : Off;
+            var stay = Left(u.Pos) + (Unsafe(Grid.NodeOf(s, u.Pos)) ? 2 * Off : 0);
+            var reach = Paths.ComputeReach(s, u, stride);
+            var stops = Paths.Destinations(s, u, reach)
+                .Where((o) => (bus ? Abilities.InEvacZone(s, o.Pos) || !Unsafe(Grid.NodeOf(s, o.Pos)) : !Unsafe(Grid.NodeOf(s, o.Pos)) && !Abilities.InEvacZone(s, o.Pos)) && Left(o.Pos) < stay - Paths.CostOrtho / 2.0)
+                .OrderBy((o) => Left(o.Pos)).ThenBy((o) => o.Cost).ThenBy((o) => Grid.NodeOf(s, o.Pos));
+            foreach (var o in stops)
+            {
+                var path = Paths.BuildPath(s, u, reach, o.Pos);
+                if (path != null && !path.Any((p) => Seen(Grid.NodeOf(s, p)))) return new MoveCommand { Unit = u.Id, To = o.Pos };
+            }
+            return null;
+        }
+
         // ------------------------------------------------------------ La llave (G23.1)
 
         /// <summary>A run's La llave: the police station's armoury locked, its key on one of the dead in uniform.</summary>
@@ -1107,6 +1536,10 @@ namespace Bastion.Net
             foreach (var a in new[] { AbilityIds.Shoot, AbilityIds.Pistol, AbilityIds.Slash })
             {
                 if (!abilities.Contains(a) || !Usable(s, u, a)) continue;
+                // Saqueadores with the camp asleep (Quiet): nothing its guards would hear (Gameplay, 21/11: of 149 camps woken
+                // as the squad went, in 112 the horde's trickle had found it first, it shot near the camp, and the guards by the
+                // fire, up at the noise, saw it). The blade is heard a tile off.
+                if (Quiet(s) && CampHears(s, u, a)) continue;
                 foreach (var t in Abilities.AbilityTargets(s, u, a))
                 {
                     if (Grid.Distance(u.Pos, t.Pos) > within || (at != null && t.Id != at) || !Worth(s, u, t)) continue;

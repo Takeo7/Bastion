@@ -70,6 +70,8 @@ namespace Bastion.Engine
             [SearchPieces.MedicalCabinet] = new SearchSpot("el armario de medicinas", new string[0], masculine: true),
             [SearchPieces.MedicalShelf] = new SearchSpot("el estante de medicinas", new string[0], masculine: true, open: false),
             [SearchPieces.MedicalCart] = new SearchSpot("el carro de curas", new string[0], masculine: true, open: false),
+            // Saqueadores' stash (G23.5, cuadro 98: orange crates on pallets; Looting.RollPiece): what the Cuervos took from others.
+            [SearchPieces.StashCrate] = new SearchSpot("la caja del alijo", new[] { "latas de conserva y botellas de agua", "garrafas de gasolina", "tabaco, alcohol y pilas", "herramientas, cuerda y lonas" }),
         };
 
         /// <summary>What isn't in SearchSpots reads as a box.</summary>
@@ -288,6 +290,9 @@ namespace Bastion.Engine
                     return "Registra un estante de medicinas que tengas al lado. Puede haber una medicina o un botiquín, o nada. Hace un poco de ruido.";
                 case SearchPieces.MedicalCart:
                     return "Registra un carro de curas que tengas al lado. Puede haber una medicina, o nada. Hace un poco de ruido.";
+                // G23.5: a long gun with a magazine, or twice a box's supplies and a medicine (provisional, Gameplay's bench).
+                case SearchPieces.StashCrate:
+                    return "Abre una caja del alijo que tengas al lado. Da siempre algo: un arma larga con un cargador, o suministros y una medicina. Hace un poco de ruido.";
                 default:
                     return "Abre una caja marcada que tengas al lado. Da siempre lo suyo: un arma, una o dos medicinas, dos cargadores o de 3 a 5 raciones. Hace un poco de ruido.";
             }

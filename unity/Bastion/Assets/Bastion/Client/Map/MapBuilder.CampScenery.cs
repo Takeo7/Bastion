@@ -99,6 +99,35 @@ namespace Bastion.Client.Map
             return blocks;
         }
 
+        /// <summary>BASTION_ALIJO_COMO=full|searched (a lab's, in the editor): every crate of the stash so, whatever the state says.</summary>
+        static readonly string StashAs = Application.isEditor ? System.Environment.GetEnvironmentVariable("BASTION_ALIJO_COMO") : null;
+
+        /// <summary>How much of its own colour a stash's crate gives off by night (BASTION_ALIJO_BRILLO, a lab's, over it).</summary>
+        static readonly float StashLit = Application.isEditor && float.TryParse(System.Environment.GetEnvironmentVariable("BASTION_ALIJO_BRILLO"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float lit) ? lit : 0.3f;
+        static readonly Dictionary<Material, Material> stashGlows = new Dictionary<Material, Material>();
+
+        /// <summary>`from`'s texture on a glowing material (Kit/Glowing), giving off StashLit of it; null without either.</summary>
+        static Material StashGlow(Material from)
+        {
+            if (from == null || StashLit <= 0) return null;
+            if (stashGlows.TryGetValue(from, out var made) && made != null) return made;
+            // (Synty's shader names its atlas its own way: the first texture it has.)
+            Texture texture = null;
+            foreach (string name in from.GetTexturePropertyNames())
+                if ((texture = from.GetTexture(name)) != null) break;
+            made = KitMaterials.New(KitMaterials.Glowing, from.name + " (alijo)");
+            if (made == null || texture == null) return null;
+            made.SetTexture("_BaseMap", texture);
+            made.SetColor("_BaseColor", Color.white);
+            made.SetTexture("_EmissionMap", texture);
+            made.SetColor("_EmissionColor", Color.white * StashLit);
+            made.SetFloat("_Smoothness", from.HasProperty("_Smoothness") ? from.GetFloat("_Smoothness") : 0.2f);
+            return stashGlows[from] = made;
+        }
+
+        /// <summary>A stash crate's state (PieceOf: none before the engine names it a piece).</summary>
+        Piece StashOf(InteriorDetail d) => StashAs == "full" ? Piece.Full : StashAs == "searched" ? Piece.Searched : PieceOf(d.Z, d.Y * s.Width + d.X);
+
         /// <summary>What CampScenery draws from, hashed: each mark, and what its tiles (a tent's, its block's) are now.</summary>
         long CampKey(InteriorSite site)
         {
@@ -111,6 +140,8 @@ namespace Bastion.Client.Map
                 unchecked
                 {
                     h = h * 31 + (d.Y * s.Width + d.X) * 17 + d.Kind.GetHashCode();
+                    // (A stash's crate, searched or not: its lid.)
+                    if (d.Kind == CampDetailKinds.StashCrate) h = h * 31 + (int)StashOf(d);
                     if (r == null) h = h * 31 + (tiles[d.Y * s.Width + d.X]?.GetHashCode() ?? 1);
                     else
                         foreach (var p in r.Value.allPositionsWithin)
@@ -239,6 +270,81 @@ namespace Bastion.Client.Map
                         // (MapArt's has its door at its back: a town's stands any way round.)
                         var o = Place(props[0], "portaloo", new Vector3((d.X + 0.5f) * T, 0, -(d.Y + 0.5f) * T), YawOf(d.Facing) + 180 + (R(0) - 0.5f) * 6);
                         if (o != null) campScenery.Add(o);
+                        break;
+                    }
+                    case CampDetailKinds.Barricade:
+                    case CampDetailKinds.BarricadeCorner:
+                    {
+                        // The raiders' fence (G23.5; Gameplay's contract of 20/11; Arturo, cuadro 98: «mezcla»): runs of
+                        // sandbags and runs of scrap, three tiles or so each, along the tile's outer side; a corner's, sandbags
+                        // across it. Gone with its cover.
+                        if (tile != TileKinds.Low) break;
+                        bool corner = d.Kind == CampDetailKinds.BarricadeCorner;
+                        if (corner || MapArt.Hash((d.X + d.Y) / 3, d.Facing, 197) < 0.5f)
+                        {
+                            var (o, size) = Whole("SM_Prop_Sandbag_Wall_02", d.X + 0.5f, d.Y + 0.5f, YawOf(d.Facing) + (corner ? 45 : 0) + (R(0) < 0.5f ? 180 : 0) + (R(3) - 0.5f) * 8);
+                            if (o != null) o.transform.localScale = Vector3.one * ((corner ? 1.2f : 1.08f) * T / Mathf.Max(size.x, size.z, 0.01f));
+                            break;
+                        }
+                        // Scrap, to read as cover from the game's camera over grass: a panel of boards or sheet a tile wide,
+                        // paler than the pack's, a pallet leant behind it and tyres at its foot outside.
+                        var outward = Bastion.Engine.Grid.Dirs4[((d.Facing % 4) + 4) % 4];
+                        float px = d.X + 0.5f, pz = d.Y + 0.5f, face = YawOf(d.Facing);
+                        void Scrap(string model, float off, float turn, float wide, float tall, Color tint)
+                        {
+                            var (o, size) = Whole(model, px + outward.X * off, pz + outward.Y * off, face + turn);
+                            if (o == null) return;
+                            float k = wide * T / Mathf.Max(size.x, size.z, 0.01f);
+                            o.transform.localScale = new Vector3(k, tall > 0 ? Mathf.Min(k * 1.3f, tall / Mathf.Max(size.y, 0.01f)) : k, k);
+                            if (tint == Color.white) return;
+                            var block = new MaterialPropertyBlock();
+                            foreach (var r in o.GetComponentsInChildren<Renderer>())
+                            {
+                                r.GetPropertyBlock(block);
+                                block.SetColor("_BaseColor", tint);
+                                r.SetPropertyBlock(block);
+                            }
+                        }
+                        string[] panels = { "SM_Prop_Barricade_01", "SM_Prop_Barricade_04", "SM_Prop_Barricade_Metal_01", "SM_Prop_Barricade_Corrugated_01" };
+                        var pale = new Color(1.45f, 1.38f, 1.25f);
+                        Scrap(panels[Mathf.Min(panels.Length - 1, (int)(R(5) * panels.Length))], 0.08f, (R(0) < 0.5f ? 180 : 0) + (R(3) - 0.5f) * 10, 1.1f, 1.2f, pale);
+                        if (R(6) < 0.5f) Scrap("SM_Prop_Barricade_Pallet_01", -0.12f, (R(6) - 0.25f) * 32, 0.95f, 1.05f, pale);
+                        if (R(7) < 0.65f) Scrap("SM_Prop_Tire_Pile_01", 0.34f, R(8) * 360, 0.6f, 0, Color.white);
+                        break;
+                    }
+                    case CampDetailKinds.StashCrate:
+                    {
+                        // The stash's crates, to be found from the game's camera: Apocalypse's orange one on a pallet. Shut
+                        // while it holds something; searched (or empty from the start, as G19's furniture), its lid thrown
+                        // on the ground beside it.
+                        if (tile != TileKinds.Low) break;
+                        float turn = YawOf(d.Facing) + (R(3) - 0.5f) * 24;
+                        var (pallet, palletSize) = Whole("SM_Prop_Pallet_01", d.X + 0.5f, d.Y + 0.5f, turn + (R(0) < 0.5f ? 90 : 0));
+                        float lift = 0;
+                        if (pallet != null)
+                        {
+                            float k = 0.92f * T / Mathf.Max(palletSize.x, palletSize.z, 0.01f);
+                            pallet.transform.localScale = Vector3.one * k;
+                            lift = palletSize.y * k;
+                        }
+                        var (crate, crateSize) = Whole("SM_Prop_Crate_Open_03", d.X + 0.5f, d.Y + 0.5f, turn, lift);
+                        if (crate == null) break;
+                        crate.transform.localScale = Vector3.one * (0.8f * T / Mathf.Max(crateSize.x, crateSize.z, 0.01f));
+                        // By night, its own orange a little lit (Producto, 20/11: out of the fire's light it was near black,
+                        // and found only by UI's mark): no light of ours, which the rules wouldn't know of.
+                        if (s.Mission?.Night == true)
+                            foreach (var r in crate.GetComponentsInChildren<Renderer>())
+                                if (StashGlow(r.sharedMaterial) is Material lit) r.sharedMaterial = lit;
+                        var state = StashOf(d);
+                        if (state != Piece.Empty && state != Piece.Searched) break;
+                        var lid = crate.GetComponentsInChildren<Transform>().FirstOrDefault(part => part.name.Contains("Lid"));
+                        if (lid == null) break;
+                        lid.SetParent(crate.transform.parent, true);
+                        lid.rotation = Quaternion.Euler(0, 35, 0) * lid.rotation;
+                        var f = Bastion.Engine.Grid.Dirs4[((d.Facing % 4) + 4) % 4];
+                        var box = BoundsIn(lid.gameObject, props[0]);
+                        lid.position += new Vector3(f.X * 0.55f * T, 0.02f - box.min.y, -f.Y * 0.55f * T);
+                        campScenery.Add(lid.gameObject);
                         break;
                     }
                     case CampDetailKinds.CorpseCamper:
