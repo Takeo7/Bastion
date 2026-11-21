@@ -611,8 +611,18 @@ namespace Bastion.Engine
 
         /// <summary>G23.6 Evacuación's civilians (cuadro 71: four), each in a building of its own of this many ground tiles at least.</summary>
         public const int Civilians = 4, CivilianFewest = 3, CivilianHouse = 9;
-        /// <summary>A civilian's building this far from La Lata on foot, in tiles (EVACUACION.md: none at its door, none a chapter off).</summary>
-        public const int CivilianNear = 15, CivilianFar = 60;
+        /// <summary>
+        /// A civilian's building this far from La Lata on foot, in tiles (EVACUACION.md: none at its door, none a chapter off). 15–60
+        /// till Gameplay's R1 of 21/11 with Red's bot: nearer, the reward by seats 0/13/27/43 % went up (banco/evacuacion).
+        /// </summary>
+        public const int CivilianNear = 8, CivilianFar = 35, CivilianFarthest = 60;
+        /// <summary>The dead's groups at least this far from each civilian's tile at the start, as off the squad's (DeadOffTheGroups; R1 of 21/11).</summary>
+        public const int CivilianDeadGap = 10;
+        /// <summary>
+        /// Evacuación's horde (the trickle and the waves) only from this turn (R1 of 21/11: it came at turn 3 and killed 58 % of
+        /// the civilians that died, and most of the squad that fell with 4 seats or more).
+        /// </summary>
+        public const int CivilianHordeFrom = 8;
         /// <summary>A civilian's tile at least this far from where the squad starts (not found from the start).</summary>
         public const int CivilianFromSquad = 12;
         /// <summary>The tiles of a building drawn to hide a civilian on, each tried for its walk to La Lata, before giving the building up.</summary>
@@ -640,15 +650,16 @@ namespace Bastion.Engine
                 && Grid.UnitAt(s, new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 }) == null && !zone.Contains(i);
             // Each building's floor that walks to La Lata in its band, as the civilian would walk from there: a tile of it
             // drawn, up to CivilianTries of them.
-            bool InBand(int i)
+            // A tile's walk to La Lata, in tiles (null: none).
+            int? WalkOf(int i)
             {
                 walker.Pos = new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 };
                 var reach = Paths.ComputeReach(s, walker, 1_000_000, ignore: (_) => true).Cost;
                 walker.Pos = home;
                 var walk = zone.Where((z) => reach.ContainsKey(z)).Select((z) => reach[z]).DefaultIfEmpty(int.MaxValue).Min();
-                return walk != int.MaxValue && walk >= CivilianNear * Paths.CostOrtho && walk <= CivilianFar * Paths.CostOrtho;
+                return walk == int.MaxValue ? null : (int?)(walk / Paths.CostOrtho);
             }
-            var houses = new List<(List<int> Floor, double X, double Y)>();
+            var all = new List<(List<int> Floor, double X, double Y, int Walk)>();
             foreach (var tiles in Buildings.GroundTiles(s).Where((t) => t.Count >= CivilianHouse))
             {
                 var floor = tiles.Where(Free).Where((i) => squad.All((u) => Math.Max(Math.Abs(u.Pos.X - i % s.Width), Math.Abs(u.Pos.Y - i / s.Width)) >= CivilianFromSquad)).OrderBy((i) => i).ToList();
@@ -657,11 +668,15 @@ namespace Bastion.Engine
                 {
                     var i = floor.Where((x) => !tried.Contains(x)).ElementAt(rng.Int(floor.Count - tried.Count));
                     tried.Add(i);
-                    if (!InBand(i)) continue;
-                    houses.Add((new List<int> { i }, floor.Average((x) => x % s.Width), floor.Average((x) => x / s.Width)));
+                    var walk = WalkOf(i);
+                    if (walk == null || walk < CivilianNear || walk > CivilianFarthest) continue;
+                    all.Add((new List<int> { i }, floor.Average((x) => x % s.Width), floor.Average((x) => x / s.Width), walk.Value));
                     break;
                 }
             }
+            // Near (CivilianFar, R1 of 21/11) where the map has Civilians buildings so near; else as far as before (a service area).
+            var near = all.Where((h) => h.Walk <= CivilianFar).ToList();
+            var houses = (near.Count >= Civilians ? near : all).Select((h) => (h.Floor, h.X, h.Y)).ToList();
             if (houses.Count < CivilianFewest) return;
             var taken = new List<(List<int> Floor, double X, double Y)> { houses[rng.Int(houses.Count)] };
             while (taken.Count < Civilians && taken.Count < houses.Count)
@@ -687,6 +702,13 @@ namespace Bastion.Engine
                 spots.Add(new CivilianSpot { Unit = u.Id, Area = Rules.CircleAround(s, pos, rng), Seed = unchecked(seed * 31 + k * 7919) });
             }
             s.Mission.Civilians = spots;
+            // The dead's groups off each civilian and off the squad (R1 of 21/11), by the rules of the usual start, drawn by their own seed.
+            walker.Pos = bus;
+            var fromBus = Paths.ComputeReach(s, walker, 1_000_000, ignore: (_) => true).Cost.Where((kv) => kv.Key < area).ToDictionary((kv) => kv.Key, (kv) => kv.Value);
+            walker.Pos = home;
+            var groups = s.Units.Where(Rules.IsCivilian).Select((u) => new List<Unit> { u }).ToList();
+            groups.Add(squad);
+            DeadOffTheGroups(s, groups, fromBus, new Rng(unchecked((uint)seed ^ 0xc1ea)), CivilianDeadGap);
         }
 
         // ---------------------------------------------------------------- Guarida

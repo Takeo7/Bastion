@@ -435,6 +435,8 @@ namespace Bastion.Engine
             u.Gear = new List<string>(m.Gear);
             // A run's soldier (H3): its pack and its kit, its own copy.
             if (m.Pack != null) u.Pack = Gears.CloneGrid(m.Pack);
+            // Arco y ballesta (cuadro 102): a run's soldier counts the arrows in its pack.
+            RunPack.SyncArrows(u);
             if (m.Kit != null) u.Kit = Gears.ClonePlaces(m.Kit);
             return u;
         }

@@ -28,7 +28,15 @@ namespace Bastion.Engine
         /// <summary>G23.2: Mordido's antiviral (MissionState.Antiviral); no type; never home from the fight.</summary>
         public const string Antiviral = "antiviral";
 
-        public static readonly IReadOnlyList<string> All = new[] { Weapon, Item, Mod, Vest, Mags, Medicine, Supplies, Key, Antiviral };
+        /// <summary>
+        /// Arco y ballesta (cuadro 102): the arrows, one ammunition for both (WeaponDef.Arrows), 10 to a cell; no type. A
+        /// run's soldier counts those in its pack (Unit.Arrows); one that hits stays in the body (Unit.ArrowsIn).
+        /// </summary>
+        public const string Arrows = "arrows";
+        /// <summary>G23 Las cargas (cuadro 109): a charge to set at a point of the nest (AbilityIds.PlaceCharge); no type; never home from the fight.</summary>
+        public const string Charge = "charge";
+
+        public static readonly IReadOnlyList<string> All = new[] { Weapon, Item, Mod, Vest, Mags, Medicine, Supplies, Key, Antiviral, Arrows, Charge };
     }
 
     /// <summary>The vests (Content.Vests): armour is a thing now, not a level of the Taller.</summary>

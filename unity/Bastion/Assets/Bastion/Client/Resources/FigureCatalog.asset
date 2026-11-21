@@ -304,6 +304,8 @@ MonoBehaviour:
   - roarLowMasc
   - runFemn
   - runMasc
+  - scaredBack
+  - scaredWalk
   - shiftLFemn
   - shiftLMasc
   - shiftRFemn
@@ -334,6 +336,7 @@ MonoBehaviour:
   - stretchShouldersMasc
   - swingArmsFemn
   - swingArmsMasc
+  - terrified
   - thoughtfulFemn
   - thoughtfulLFemn
   - thoughtfulLMasc
@@ -507,6 +510,8 @@ MonoBehaviour:
   - {fileID: 8464049353885366500, guid: 06a1b81439ad25c4bb7992d22f697358, type: 3}
   - {fileID: 4763494864668633848, guid: 4dcfcd030150f2e408b985ae4c109387, type: 3}
   - {fileID: 1827226128182048838, guid: 6c670ea8c84cf324980a21b4b9b927a0, type: 3}
+  - {fileID: -203655887218126122, guid: fa3c2c28c81844883a4e83fb2f06c465, type: 3}
+  - {fileID: -203655887218126122, guid: d13bd4804d489475181e2f756ad2c92d, type: 3}
   - {fileID: -6416625868437695143, guid: 55307a12c9ac7084e9e07dd1c0f06762, type: 3}
   - {fileID: 5732164399822826405, guid: 3438383b793e6d04193fa748d8958f89, type: 3}
   - {fileID: -3433787669968371123, guid: e5be944333f82e54f8dbe54906989905, type: 3}
@@ -537,6 +542,7 @@ MonoBehaviour:
   - {fileID: -1931401109167306697, guid: acd75449db0d5b24b8ce24595ea7cbb5, type: 3}
   - {fileID: -3258184619500585524, guid: acc1521d2da5e8b4295b0ff59a0f0fd4, type: 3}
   - {fileID: -6016346281153975916, guid: e115da8b0bb419e45b9e16c1759bce05, type: 3}
+  - {fileID: -203655887218126122, guid: 06a5d5ad7f2cf43bdaf53c7e85a832f5, type: 3}
   - {fileID: 91636813307781400, guid: 9f8e3d64a806c324499c0b08b7d4a403, type: 3}
   - {fileID: 7570127044761214616, guid: 9aa48da9f3452d545b413056ff572716, type: 3}
   - {fileID: -137062656967768163, guid: 0328796399b375d4d8af43dde6ae3633, type: 3}
@@ -558,6 +564,7 @@ MonoBehaviour:
   - apocalypse:SM_Item_Stick_01
   - apocalypse:SM_Prop_Pan_01
   - apocalypse:SM_Wep_Baton_01
+  - apocalypse:SM_Wep_CrossBow_01
   - apocalypse:SM_Wep_Crowbar_01
   - apocalypse:SM_Wep_Katana_01
   - apocalypse:SM_Wep_Shotgun_01
@@ -582,10 +589,14 @@ MonoBehaviour:
   - SM_Wep_SniperRifle_01
   - SM_Wep_SniperRifle_02
   - SM_Wep_SubMGun_01
+  - Wep_Arrow_Modern_01
+  - Wep_Quiver_01
+  - Wep_RecurveBow_01
   weapons:
   - {fileID: 1246845882456928, guid: 6cf91da3d004a0b4096c83c7a865dfec, type: 3}
   - {fileID: 1335890822894770, guid: 0056b36596874344d8f4adb07dab8d83, type: 3}
   - {fileID: 1402644178857166, guid: 4deca74d46c275b40b3255680aa23aff, type: 3}
+  - {fileID: 1884461504653410, guid: ccd191fcb9ab4364c8eac9e2dc2b3bf1, type: 3}
   - {fileID: 1750927141268108, guid: 8775c006a5395ff488d9315934a2a901, type: 3}
   - {fileID: 1104172259794306, guid: c93dc5e6b62380f499e6ec8328bc0160, type: 3}
   - {fileID: 1105646471333690, guid: a2458a3a2318bb64ea864a87f6558170, type: 3}
@@ -610,6 +621,9 @@ MonoBehaviour:
   - {fileID: 1658074229854742, guid: adc01ffa88b3d6744a5eb21a731f6c23, type: 3}
   - {fileID: 1886666021998926, guid: 3027fd935d242c541a7114d06d974130, type: 3}
   - {fileID: 1025874851918808, guid: e22ad038422a02c49b86a09ff69dedfc, type: 3}
+  - {fileID: 2067132778363569989, guid: 5396aefe82021e141b0ad4b82e9e9f5b, type: 3}
+  - {fileID: 2420711332073477388, guid: e3bb82baa30051b42a0c8f9558f3a1b1, type: 3}
+  - {fileID: 7026693026539742034, guid: 044e592295947d84c8489bcf8fea2fd9, type: 3}
   characterNames:
   - SM_Chr_Zombie_Jock_Male_01
   - SM_Chr_Zombie_Cheerleader_Female_01
@@ -852,6 +866,8 @@ MonoBehaviour:
   - 4.1199975
   - 0.70000005
   - 0.70000005
+  - 3.8666668
+  - 1.6666667
   - 3.719998
   - 3.7533312
   - 3.4533315
@@ -882,6 +898,7 @@ MonoBehaviour:
   - 3.0866652
   - 4.819997
   - 4.819997
+  - 19.720045
   - 0.12
   - 0.12
   - 0.12

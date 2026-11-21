@@ -233,7 +233,8 @@ namespace Bastion.Net
         /// One move of `slot`'s soldiers' kit, if there's one to make: an empty place filled from the soldier's own pack or,
         /// on the base, from the stash; on the base, then, what the pack carries for no use (weapons, vests, belt things, mods
         /// it doesn't wear) and the supplies (Red, 17/11: the upgrades are paid from the stash's) put in the stash, and a pile
-        /// of magazines and one of medicines from the stash into a pack without any. A Trade is paid with what the run finds.
+        /// of magazines and one of medicines from the stash into a pack without any, and one of arrows into the pack of one with a
+        /// bow or a crossbow (cuadro 102; another's, to the stash). A Trade is paid with what the run finds.
         /// Null if nothing is to move.
         /// </summary>
         private static CampaignCommand? KitOrder(CampaignState c, int slot, IReadOnlyList<int> here)
@@ -253,17 +254,19 @@ namespace Bastion.Net
                     }
                 }
             if (!atBase || c.Stash == null) return null;
-            bool Kept(Gear g) => g.Kind == GearKinds.Medicine || g.Kind == GearKinds.Mags;
+            // The arrows as the magazines, for one with a bow or a crossbow in the hands only (cuadro 102, Gameplay 21/11).
+            bool Archer(CampaignSoldier s) => Gears.InSlot(s.Kit!, KitSlots.Primary) is Gear g && Content.GearWeapon(g) is FoundWeaponDef d && Content.Weapons[d.Weapon].Arrows;
+            bool Kept(CampaignSoldier s, Gear g) => g.Kind == GearKinds.Medicine || g.Kind == GearKinds.Mags || (g.Kind == GearKinds.Arrows && Archer(s));
             foreach (var s in mine)
-                foreach (var g in s.Kit!.Pack.Items.Select((p) => p.Gear).Where((g) => !Kept(g)).ToList())
+                foreach (var g in s.Kit!.Pack.Items.Select((p) => p.Gear).Where((g) => !Kept(s, g)).ToList())
                 {
                     // Supplies onto a pile of them with room first, so the stash's few rows hold them.
                     var spot = c.Stash.Items.FirstOrDefault((p) => Gears.SamePile(p.Gear, g) && Gears.Room(p.Gear) > 0) ?? Gears.FirstFit(c.Stash, g);
                     var order = spot != null ? Try(new MoveGearCommand { Gear = g.Id, To = GearPlaces.Stash, Slot = KitSlots.Pack, X = spot.X, Y = spot.Y, Turned = spot.Turned }) : null;
                     if (order != null) return order;
                 }
-            foreach (var kind in new[] { GearKinds.Mags, GearKinds.Medicine })
-                foreach (var s in mine.Where((s) => !s.Kit!.Pack.Items.Any((p) => p.Gear.Kind == kind)))
+            foreach (var kind in new[] { GearKinds.Mags, GearKinds.Medicine, GearKinds.Arrows })
+                foreach (var s in mine.Where((s) => !s.Kit!.Pack.Items.Any((p) => p.Gear.Kind == kind) && (kind != GearKinds.Arrows || Archer(s))))
                 {
                     var g = stash.FirstOrDefault((x) => x.Kind == kind);
                     var spot = g != null ? Gears.FirstFit(s.Kit!.Pack, g) : null;

@@ -24,6 +24,8 @@ namespace Bastion.Engine
         public string? Type { get; set; }
         public int Price { get; set; }
         public int Weight { get; set; }
+        /// <summary>How many of it make one ware (the arrows' bundle); absent, one.</summary>
+        public int Count { get; set; } = 1;
     }
 
     /// <summary>
@@ -109,6 +111,9 @@ namespace Bastion.Engine
             [FoundWeaponIds.Rake] = (3, 1),
             [FoundWeaponIds.Stick] = (3, 1),
             [FoundWeaponIds.Chainsaw] = (3, 1),
+            // Arco y ballesta (cuadro 101): the recurve as long as a rifle, the crossbow shorter.
+            [FoundWeaponIds.Bow] = (4, 1),
+            [FoundWeaponIds.Crossbow] = (3, 1),
         };
 
         /// <summary>Cells a gear takes lying unturned, width × height: weapons by WeaponSizes, vests 2×2, anything else 1×1.</summary>
@@ -130,6 +135,9 @@ namespace Bastion.Engine
                 case GearKinds.Mags:
                 case GearKinds.Item:
                     return 5;
+                // Arco y ballesta (cuadro 102): 10 arrows a cell.
+                case GearKinds.Arrows:
+                    return ArrowsPile;
                 case GearKinds.Mod:
                     return 3;
                 default:
@@ -155,6 +163,8 @@ namespace Bastion.Engine
                 case GearKinds.Supplies:
                 case GearKinds.Key:
                 case GearKinds.Antiviral:
+                case GearKinds.Arrows:
+                case GearKinds.Charge:
                     return type == null;
                 default:
                     return false;
@@ -200,7 +210,8 @@ namespace Bastion.Engine
         /// <summary>Whether mods go on a weapon gear: only the firearms for the hands, as in the Armería (Supplies.cs ModBlocker).</summary>
         public static bool TakesMods(Gear g)
         {
-            return GearWeapon(g)?.Slot == FoundWeaponSlots.Primary;
+            // Arco y ballesta: nothing on them (ARCO-Y-BALLESTA.md: «sin mejoras»; not firearms, RunTexts.ModsOnGuns).
+            return GearWeapon(g) is FoundWeaponDef d && d.Slot == FoundWeaponSlots.Primary && !Weapons[d.Weapon].Arrows;
         }
 
         // ------------------------------------------------------------ the upgrades
@@ -243,6 +254,11 @@ namespace Bastion.Engine
             new TradeWareDef { Kind = GearKinds.Vest, Type = VestIds.Vest, Price = 60, Weight = 2 },
             new TradeWareDef { Kind = GearKinds.Mags, Type = null, Price = 15, Weight = 3 },
             new TradeWareDef { Kind = GearKinds.Medicine, Type = null, Price = 15, Weight = 3 },
+            // Arco y ballesta (cuadro 105): the arrows as the magazines, a bundle as a box gives them (Looting.BoxArrows); the
+            // two weapons as the good ones.
+            new TradeWareDef { Kind = GearKinds.Arrows, Type = null, Price = 15, Weight = 3, Count = Looting.BoxArrows },
+            new TradeWareDef { Kind = GearKinds.Weapon, Type = FoundWeaponIds.Crossbow, Price = 100, Weight = 1 },
+            new TradeWareDef { Kind = GearKinds.Weapon, Type = FoundWeaponIds.Bow, Price = 60, Weight = 1 },
         };
 
         /// <summary>Wares a Trade has.</summary>

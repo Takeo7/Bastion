@@ -490,6 +490,8 @@ namespace Bastion.UI.Combat
                 Toast(id == AbilityIds.SetDown ? Abilities.AbilityBlocker(State, u, id) : id == AbilityIds.Search ? "No hay nada que abrir ni registrar a tu lado." : id == AbilityIds.Pry ? "No hay ninguna ventana ni puerta tapiada a tu lado." : "No hay ninguna puerta a tu lado.");
                 return;
             }
+            // Heard by one unaware in sight (R16): asked once.
+            if (id == AbilityIds.Search && HeldForNoise(u, tile)) return;
             Send(new AbilityCommand { Unit = u.Id, Ability = id, Tile = tile });
             CancelMode();
         }
@@ -507,6 +509,7 @@ namespace Bastion.UI.Combat
                 Toast(CommandLock());
                 return;
             }
+            if (id == AbilityIds.Search && HeldForNoise(u, tile)) return;
             Send(new AbilityCommand { Unit = u.Id, Ability = id, Tile = tile });
             CancelMode();
         }

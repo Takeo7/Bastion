@@ -41,6 +41,10 @@ namespace Bastion.Client.Units
         public string fbx;
         public bool melee;
         public bool pistol;
+        /// <summary>A bow (Arturo, cuadro 103: Synty's recurve): in the left hand on the rig's own prop bone, in the pack's own clips, its string drawn by the right (UnitViews.Bow).</summary>
+        public bool bow;
+        /// <summary>A crossbow: loaded by its string drawn back with the left hand, no clip (UnitViews.Bow's Cock).</summary>
+        public bool cocked;
         public float[] fore;
         public float size;
         public float sight;
@@ -244,6 +248,9 @@ namespace Bastion.Client.Units
             ["sawnOff"] = new[] { "shotgun" },
             ["scopedRifle"] = new[] { "sniper2" },
             ["lightMachineGun"] = new[] { "machineGun2" },
+            // (The quiet ones, Arturo's cuadros 101–105: Apocalypse's crossbow, in the hands as a long gun.)
+            ["crossbow"] = new[] { "crossbow" },
+            ["bow"] = new[] { "bow" },
         };
 
         /// <summary>The weapon a template carries at a weapon tier (1–3; syntyManifest.ts UNIT_WEAPONS); null, none.</summary>

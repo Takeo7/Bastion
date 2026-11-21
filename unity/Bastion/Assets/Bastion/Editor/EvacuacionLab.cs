@@ -105,5 +105,125 @@ namespace Bastion.EditorTools
             MapSpace.Aim(camera, MapSpace.TileToWorld(state, new Pos { X = ox + 6, Y = oy + 4 }), F("BASTION_DIST", 24), F("BASTION_GIRO", 45));
             Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, false));
         }
+    
+        /// <summary>
+        /// The civilians' fear (Arturo's Mixamo clips of 21/11), each candidate on a civilian of its own, a row apart, one of
+        /// the dead beside those that cower: BASTION_MIEDO=andar (scaredWalk, scaredWalkQuick and scaredBack, walked five
+        /// tiles at BASTION_PASO m/s each, «0.9,1.6,0.6») or quieto (terrified, cowerCrouch). BASTION_VISTA=lado|juego,
+        /// BASTION_DIST. -shotPlay.
+        /// </summary>
+        public static void Miedo()
+        {
+            new GameObject("Shot camera").AddComponent<Camera>().farClipPlane = 800;
+            void Started(UnityEditor.PlayModeStateChange change)
+            {
+                if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
+                UnityEditor.EditorApplication.playModeStateChanged -= Started;
+                BuildFear();
+            }
+            UnityEditor.EditorApplication.playModeStateChanged += Started;
+        }
+
+        static void BuildFear()
+        {
+            var state = MapLab.Generated("wilds", 3, "elimination");
+            int ox = state.Width / 2 - 7, oy = state.Height / 2 - 5;
+            for (int y = 0; y < 10; y++)
+                for (int x = 0; x < 15; x++)
+                {
+                    int i = (oy + y) * state.Width + ox + x;
+                    state.Tiles[i] = TileKinds.Floor;
+                    if (state.Decor != null && i < state.Decor.Count) state.Decor[i] = 0;
+                }
+            state.Lights?.RemoveAll(l => l.Tile.X >= ox && l.Tile.X < ox + 15 && l.Tile.Y >= oy && l.Tile.Y < oy + 10);
+            state.Fires?.Clear();
+            state.Concealed = false;
+            bool walk = Env("BASTION_MIEDO", "andar") == "andar";
+            var clips = walk ? new[] { "scaredWalk", "scaredBack" } : new[] { "terrified" };
+            // BASTION_SOLO=clip: that one alone, the camera on it (and with it as it walks).
+            string solo = Environment.GetEnvironmentVariable("BASTION_SOLO");
+            if (solo != null)
+            {
+                walk = solo.StartsWith("scared");
+                clips = new[] { solo };
+            }
+            var paces = Env("BASTION_PASO", "1.6,0.6").Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+            state.Units.Clear();
+            for (int k = 0; k < clips.Length; k++)
+            {
+                var u = Setup.MakeUnit("c" + k, TemplateIds.Civilian, "Civil " + k, null, walk ? new Pos { X = ox + 4, Y = oy + 2 + k * 2 } : new Pos { X = ox + 4 + k * 4, Y = oy + 4 }, null);
+                // (East, or south to the camera; the one backing away walks east facing west.)
+                u.Facing = walk ? (clips[k] == "scaredBack" ? Math.PI : 0) : Math.PI / 2;
+                state.Units.Add(u);
+                if (!walk) state.Units.Add(Setup.MakeUnit("z" + k, TemplateIds.Zombie, "z" + k, null, new Pos { X = ox + 6 + k * 4, Y = oy + 4 }, null));
+            }
+            Environment.SetEnvironmentVariable("BASTION_POSE", string.Join(";", clips.Select((c, k) => $"c{k}={c}")));
+            Bastion.Client.NightLights.StateForLab = state;
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, false));
+            MapLab.Map(state, "miedo");
+            var units = new GameObject("Unidades").AddComponent<UnitViews>();
+            units.Sync(state);
+            foreach (var u in state.Units) units.Reveal(u.Id);
+            units.MasksNow();
+            var mover = units.gameObject.AddComponent<MiedoMover>();
+            mover.units = units;
+            mover.ids = clips.Select((c, k) => "c" + k).ToArray();
+            mover.paces = walk ? paces : new float[0];
+            foreach (var c in clips) Debug.Log(FormattableString.Invariant($"[miedo] {c}: {(FigureCatalog.Load()?.Clip(c) is AnimationClip clip ? clip.length.ToString("0.00") + " s" : "none")}"));
+
+            var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            float F(string name, float or) => float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : or;
+            var at = MapSpace.TileToWorld(state, new Pos { X = ox + 6, Y = oy + 4 }) + new Vector3(MapSpace.Tile * 0.5f, 0.9f, 0);
+            if (Env("BASTION_VISTA", "lado") == "juego") MapSpace.Aim(camera, at, F("BASTION_DIST", 24), 0);
+            else
+            {
+                var from = at + new Vector3(0, 2.2f, -F("BASTION_DIST", 13));
+                camera.fieldOfView = 30;
+                camera.transform.SetPositionAndRotation(from, Quaternion.LookRotation(at - from));
+            }
+            if (solo != null && Env("BASTION_VISTA", "lado") != "juego")
+            {
+                var feet = Figures.FeetOf("c0");
+                var off = new Vector3(walk ? 0 : MapSpace.Tile, 1.6f, -F("BASTION_DIST", 7));
+                camera.fieldOfView = 30;
+                mover.camera = camera;
+                mover.offset = off;
+                mover.aim = new Vector3(walk ? 0 : MapSpace.Tile, 0.9f, 0);
+            }
+            else if (solo != null) MapSpace.Aim(camera, MapSpace.TileToWorld(state, new Pos { X = ox + 6, Y = oy + 2 }), F("BASTION_DIST", 24), 0);
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, false));
+        }
+    }
+
+    /// <summary>EvacuacionLab.Miedo's: each civilian's row of clips stepped, and those that walk moved east at their pace, five tiles.</summary>
+    public sealed class MiedoMover : MonoBehaviour
+    {
+        public UnitViews units;
+        public string[] ids;
+        public float[] paces;
+        public Camera camera;
+        public Vector3 offset, aim;
+        float[] gone;
+
+        void LateUpdate()
+        {
+            if (camera == null || Figures.FeetOf(ids[0]) is not Transform feet) return;
+            camera.transform.SetPositionAndRotation(feet.position + offset, Quaternion.LookRotation(aim - offset));
+        }
+
+        void Update()
+        {
+            gone ??= new float[ids.Length];
+            for (int k = 0; k < ids.Length; k++)
+            {
+                units.LabStep(ids[k]);
+                if (k >= paces.Length || Time.timeSinceLevelLoad < 1) continue;
+                var feet = Figures.FeetOf(ids[k]);
+                if (feet == null || gone[k] >= 5 * MapSpace.Tile) continue;
+                float step = paces[k] * Time.deltaTime;
+                gone[k] += step;
+                feet.position += Vector3.right * step;
+            }
+        }
     }
 }

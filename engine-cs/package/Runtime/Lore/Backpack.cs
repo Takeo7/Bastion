@@ -23,6 +23,7 @@ namespace Bastion.Engine
             if (loot.Parts.GetValueOrDefault() != 0) parts.Add(PartsCount(loot.Parts!.Value));
             if (!string.IsNullOrEmpty(loot.Weapon)) parts.Add(Content.FoundWeapons[loot.Weapon!].Find);
             if (loot.Mags.GetValueOrDefault() != 0) parts.Add(loot.Mags == 1 ? "un cargador" : MagsCount(loot.Mags!.Value));
+            if (loot.Arrows.GetValueOrDefault() != 0) parts.Add(loot.Arrows == 1 ? "una flecha" : ArrowsText.Count(loot.Arrows!.Value));
             var name = JoinAnd(parts);
             return name.Length > 0 ? name : "nada";
         }

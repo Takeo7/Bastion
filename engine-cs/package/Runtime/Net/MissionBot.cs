@@ -36,6 +36,11 @@ namespace Bastion.Net
     /// turns to it would see one of the squad, and shoots none of those unaware; with no way in unseen, or the camp awake,
     /// it goes at it only with the guards outnumbered by RaidersEdge, and otherwise goes (RaidMode). With the stash robbed,
     /// broken, or at RaidersLeaveTurn, La Lata.
+    /// Evacuación (G23.6; Gameplay, 21/11), a Saqueo with four civilians hidden in buildings, each in its circle: the squad
+    /// goes for the nearest still hidden, shoots first whatever of the dead nears one found walking to La Lata, and goes
+    /// with two aboard, or with no more to get aboard; nobody asks La Lata to go, nor says yes to the partner's call, while
+    /// one found walks to it and fewer than two are aboard (EvacWaits). The civilians are of the squad to the dead but
+    /// nobody's (Rules.IsCivilian): never ordered, nor counted in it (Squad).
     /// </summary>
     public static class MissionBot
     {
@@ -68,9 +73,9 @@ namespace Bastion.Net
         public static Command? Next(GameState s, int slot, IReadOnlyList<int> connected)
         {
             if (s.Outcome != null || s.ActiveTeam != Teams.Xcom) return null;
-            // The partner calls La Lata: yes; in Separados, no while a group still to come can (G23.4). One's own call waits
-            // for the partner.
-            if (s.EvacCall != null) return s.EvacCall.By != slot ? new EvacAnswerCommand { Accept = !SplitWaits(s) } : null;
+            // The partner calls La Lata: yes; in Separados, no while a group still to come can (G23.4); in Evacuación, while a
+            // civilian found walks to it short of two aboard (G23.6). One's own call waits for the partner.
+            if (s.EvacCall != null) return s.EvacCall.By != slot ? new EvacAnswerCommand { Accept = !SplitWaits(s) && !EvacWaits(s) } : null;
             var holds = s.Command == slot || s.Command == null || !connected.Contains(s.Command.Value);
             if (!holds || s.Ready[slot]) return null;
             // Inside La Lata (T24, Gameplay 18/11), with nobody left outside that can get to it: one of them asks it to go
@@ -80,7 +85,7 @@ namespace Bastion.Net
             // El herido alive and out with the squad's living all in La Lata, which won't go without them and isn't a wipe
             // (G23.3): one gets down, the nearest tile to them, to go for them (R1, 19/11: fábrica, cuchillos, semilla 16,
             // one in La Lata for 2900 turns).
-            if (s.Run != null && Rules.WoundedOut(s) && Rules.WoundedOf(s) is Unit hurt && !Grid.Combatants(s, Teams.Xcom).Any((o) => !o.Evacuated && o.Lame != true))
+            if (s.Run != null && Rules.WoundedOut(s) && Rules.WoundedOf(s) is Unit hurt && !Squad(s).Any((o) => !o.Evacuated && o.Lame != true))
             {
                 var tile = Rules.AlightTiles(s).OrderBy((p) => Grid.Distance(p, hurt.Pos)).ThenBy((p) => Grid.NodeOf(s, p)).FirstOrDefault();
                 var down = s.Units.Where((u) => u.Aboard == true && u.Lame != true && Rules.AlightRefusal(s, u, slot, connected, tile) == null)
@@ -88,7 +93,7 @@ namespace Bastion.Net
                 if (down != null) return new AbilityCommand { Unit = down.Id, Ability = AbilityIds.Alight, Tile = tile };
             }
             // Movement left counts too: the turn doesn't end by itself while there is some (Arturo, 5/11 #14).
-            var able = Grid.Combatants(s, Teams.Xcom).Where((u) => !u.Evacuated && Paths.HasTurnLeft(u) && Content.CommandsFor(slot, u.Owner, connected)).ToList();
+            var able = Squad(s).Where((u) => !u.Evacuated && Paths.HasTurnLeft(u) && Content.CommandsFor(slot, u.Owner, connected)).ToList();
             if (able.Count == 0) return new EndTurnCommand { Ready = true };
             // Each soldier's walks, past the dead too (they don't block it here): the way to its goal, the nearest of them by
             // the walk, and in a Saqueo whether any is left to walk to.
@@ -163,12 +168,14 @@ namespace Bastion.Net
                 if (SplitFight(s)) return true;
                 // Saqueadores (G23.5): once the stash is robbed, or there is no going for it (RaidMode).
                 if (RaidersFight(s)) return RaidMode(s) == Raid.Go;
+                // Evacuación (G23.6): with two civilians aboard, or no more to get aboard (EvacLeaving).
+                if (EvacFight(s)) return EvacLeaving(s);
             }
             if (RunSaqueo(s)) return RunLeaving(s, roomOf);
             if (m.Kind == MissionKinds.Scavenge && m.EvacZone.Count > 0)
             {
                 var enemies = Enemies(s).Select((e) => Grid.NodeOf(s, e.Pos)).ToList();
-                return !Grid.Combatants(s, Teams.Xcom).Any((o) => !o.Evacuated && enemies.Any((n) => walksOf(o).Cost.TryGetValue(n, out _)));
+                return !Squad(s).Any((o) => !o.Evacuated && enemies.Any((n) => walksOf(o).Cost.TryGetValue(n, out _)));
             }
             return m.Kind != MissionKinds.Elimination && m.ObjectiveDone;
         }
@@ -265,6 +272,11 @@ namespace Bastion.Net
             // Unseen, not where its noise gets a guard up from his chair to see one of the squad (Quietly).
             if (RaidersFight(s) && Usable(s, u, AbilityIds.Search) && Looting.SearchableTiles(s, u).FirstOrDefault((p) => StashCrate(s, p) && (!Hush(s) || Quietly(s, u, p))) is Pos crate)
                 return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = crate };
+            // Arco y ballesta (cuadro 102): a body beside it with arrows in it, searched (they go back to the pack), with none of
+            // the dead near to make it wait; hidden, only where nobody would hear it and turn to see the squad.
+            if (s.Run != null && Content.FiresArrows(u) && Usable(s, u, AbilityIds.Search) && !Enemies(s).Any((e) => e.Caged != true && !Paths.OnPatrol(s, e) && Grid.Distance(u.Pos, e.Pos) <= Close)
+                && Looting.SearchableTiles(s, u).FirstOrDefault((p) => ArrowBody(s, p) && (!Hush(s) || Quietly(s, u, p))) is Pos quiver)
+                return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = quiver };
             // A Guarida's box beside it: opened, the job done (H5).
             var lair = s.Run != null && s.Mission.Lair is Pos box && !s.Mission.ObjectiveDone && Usable(s, u, AbilityIds.Search)
                 ? Looting.SearchableTiles(s, u).FirstOrDefault((p) => Grid.SameTile(p, box)) : null;
@@ -292,6 +304,10 @@ namespace Bastion.Net
             if (KeyFight(s) && Usable(s, u, AbilityIds.Search)
                 && Looting.SearchableTiles(s, u).FirstOrDefault((p) => (UniformBody(s, p) && Looting.KeyWhere(s) == KeyPlaces.Holder) || (!leaving && Looting.KeyWhere(s) == KeyPlaces.Used && InArmory(s, p))) is Pos body)
                 return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = body };
+            // Evacuación (G23.6): whatever of the dead nears a civilian walking to La Lata (it panics them), at any fair odds
+            // and farther than the rest.
+            if (EvacFight(s) && !carrier && Walkers(s) is List<Unit> walking && walking.Count > 0
+                && BestShot(s, u, Close * 2, null, (e) => walking.Any((c) => Grid.Distance(c.Pos, e.Pos) <= Rules.PanicRange + 2)) is (Command, int) cover && cover.hit >= 15) return cover.cmd;
             if (shot != null && !carrier && shot.Value.hit >= 30) return shot.Value.cmd;
             // A run's Saqueo, before going: the room it stands in, then a box, a boot or a body beside it. Separados on the way
             // to La Lata, the same, never a step aside for one (G23.4: the walk is movement, the search an action).
@@ -317,6 +333,8 @@ namespace Bastion.Net
                 if (close != null) return close;
             }
             var goal = (!armed && !leaving && u.Carrying == null && !hush ? GunGoal(s, u, walks) : null) ?? target;
+            // With few arrows left, a body with some a few steps off, nobody near (ArrowGoal).
+            if (!leaving && !hush && u.Carrying == null && ArrowGoal(s, u, walks) is Pos arrows) goal = arrows;
             // Saqueadores hidden (G23.5): only by the tiles none of the camp's watchers would notice it on; none, it waits.
             if (goal != null && !leaving && hush)
             {
@@ -361,6 +379,12 @@ namespace Bastion.Net
 
         private static IEnumerable<Unit> Enemies(GameState s) => Grid.Combatants(s, Teams.Alien);
 
+        /// <summary>
+        /// The squad on the field: of the squad's side, but not an Evacuación's civilians (G23.6: of it to the dead, nobody's,
+        /// never ordered: Rules.IsCivilian). Counted with them, the hidden ones kept La Lata waiting for ever.
+        /// </summary>
+        private static List<Unit> Squad(GameState s) => Grid.Combatants(s, Teams.Xcom).Where((u) => !Rules.IsCivilian(u)).ToList();
+
         /// <summary>Where `u` goes: La Lata (leaving, or carrying the item), the item, the radio, the one to free, the alarm, or the nearest enemy by the walk.</summary>
         private static Pos? Goal(GameState s, Unit u, bool leaving, System.Func<Unit, Reach> walksOf, System.Func<Unit, Pos?> roomOf)
         {
@@ -384,6 +408,8 @@ namespace Bastion.Net
             if (KeyFight(s) && !leaving) return KeyGoal(s, u, walksOf(u)) ?? bus;
             // Saqueadores (G23.5): a place beside a crate of the stash; none, it waits where it is.
             if (RaidersFight(s) && !leaving) return StashGoal(s, u, walksOf);
+            // Evacuación (G23.6): the nearest civilian still hidden, by their circle; then one found walking, alongside them.
+            if (EvacFight(s) && !leaving) return EvacGoal(s, u, walksOf(u)) ?? bus;
             if (RunSaqueo(s)) return roomOf(u) ?? bus;
             return NearestEnemy(s, u, walksOf(u)) ?? bus;
         }
@@ -414,11 +440,40 @@ namespace Bastion.Net
 
         /// <summary>
         /// One of the dead `u` has reason to fight: any free one; a caged one (H9) only in a Limpieza, or when it reaches `u`
-        /// across its bars. Kept off otherwise: a shot is heard, and at its bars it bites. In Saqueadores with the camp asleep
-        /// (Quiet), none still unaware: a shot gives the squad away, and at a guard wakes the camp (G23.5).
+        /// across its bars. Kept off otherwise: a shot is heard, and at its bars it bites. (In Saqueadores with the camp
+        /// asleep, none still unaware but by a silent kill: BestShot, SilentShot.)
         /// </summary>
-        private static bool Worth(GameState s, Unit u, Unit e) => (e.Caged != true || Hunting(s) || Rules.CagedReach(s, e).Any((p) => Grid.SamePos(p, u.Pos)))
-            && !(Quiet(s) && Paths.OnPatrol(s, e));
+        private static bool Worth(GameState s, Unit u, Unit e) => e.Caged != true || Hunting(s) || Rules.CagedReach(s, e).Any((p) => Grid.SamePos(p, u.Pos));
+
+        /// <summary>
+        /// Arco y ballesta: a silent shot is taken when it kills this likely or likelier (KillOdds): one that misses or only
+        /// wounds gives the squad away, and wakes the target's group (Rules.Attack). Taken at a coin's odds, as a rookie's
+        /// from afar are (a hit 45 to 60 times in 100 from 10 to 17 tiles off), it woke the camp more (83 % against 62 %) and
+        /// robbed less (the three crates 50 % against 73 %; Red, 21/11, banco-arco).
+        /// </summary>
+        public const double SilentOdds = 0.8;
+
+        /// <summary>
+        /// Arco y ballesta (cuadro 102): `u`'s `ability` at `t`, unaware, would kill it unseen and keep the squad hidden
+        /// (Rules.SilentKill: arrows, and nobody else notices `u`), SilentOdds or likelier (KillOdds).
+        /// </summary>
+        private static bool SilentShot(GameState s, Unit u, Unit t, string ability, ShotPreview p)
+        {
+            return ability == AbilityIds.Shoot && Rules.SilentKill(s, u, t) && KillOdds(u, t, ability, p) >= SilentOdds;
+        }
+
+        /// <summary>
+        /// The odds `u`'s `ability` kills `t`, as `p` sees it: its crit, graze and plain hit bands (Aim.ResolveShot), each
+        /// killing as many of its damages as reach `t`'s hp (Aim.ShotDamage after its armour), each damage as likely.
+        /// </summary>
+        private static double KillOdds(Unit u, Unit t, string ability, ShotPreview p)
+        {
+            var damage = Aim.ShotDamage(u, ability, t, p);
+            double Kills(DamageRange? r) => r == null || r.Max < t.Hp ? 0 : r.Min >= t.Hp ? 1 : (r.Max - t.Hp + 1) / (double)(r.Max - r.Min + 1);
+            var crit = System.Math.Min(p.Crit, p.Hit);
+            var graze = System.Math.Min(p.Graze, p.Hit - crit);
+            return (crit * Kills(damage.Crit) + graze * Kills(damage.Graze) + (p.Hit - crit - graze) * Kills(damage.Hit)) / 100.0;
+        }
 
         /// <summary>
         /// Whether all the squad not gone is in La Lata, but for any that can't walk there from where it is (walled off, no
@@ -430,9 +485,11 @@ namespace Bastion.Net
             if (Rules.WoundedOut(s)) return false;
             // Separados: not while the group with nobody going has one that can walk to it, past the dead too (G23.4).
             if (SplitWaits(s)) return false;
+            // Evacuación: not while a civilian found walks to it, short of two aboard (G23.6).
+            if (EvacWaits(s)) return false;
             var bus = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
             // (Mordido's bitten not cured never gets in: none to wait for, G23.2.)
-            foreach (var o in Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos) && !Rules.BittenUncured(s, o)))
+            foreach (var o in Squad(s).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos) && !Rules.BittenUncured(s, o)))
             {
                 var reach = Paths.ComputeReach(s, o, double.MaxValue);
                 if (bus.Any((n) => reach.Cost.TryGetValue(n, out _))) return false;
@@ -446,7 +503,7 @@ namespace Bastion.Net
         /// </summary>
         private static Command? MakeRoom(GameState s, Unit u)
         {
-            var outside = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos)).ToList();
+            var outside = Squad(s).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos)).ToList();
             if (outside.Count == 0 || Paths.MoveBudget(s, u) <= 0) return null;
             double Away(Pos p) => outside.Min((o) => Grid.Distance(p, o.Pos));
             var reach = Paths.ComputeReach(s, u, Stride(s, u));
@@ -472,11 +529,11 @@ namespace Bastion.Net
 
         /// <summary>
         /// A run's Saqueo: the normal node (Gameplay, 16/11), no objective but to search and go; and a Separados without its
-        /// two groups (one soldier, or no room on the map: G23.4), or a Saqueadores without its camp (no room for it: G23.5),
-        /// which are one.
+        /// two groups (one soldier, or no room on the map: G23.4), a Saqueadores without its camp (no room for it: G23.5), or
+        /// an Evacuación without its civilians (too few buildings for them: G23.6), which are one.
         /// </summary>
         private static bool RunSaqueo(GameState s) => (s.Run?.NodeKind == NodeKinds.Normal || (s.Run?.NodeKind == NodeKinds.Split && s.Mission.Split == null)
-            || (s.Run?.NodeKind == NodeKinds.Raiders && s.Mission.Raiders == null))
+            || (s.Run?.NodeKind == NodeKinds.Raiders && s.Mission.Raiders == null) || (s.Run?.NodeKind == NodeKinds.Evacuation && s.Mission.Civilians == null))
             && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
 
         /// <summary>El Toro alive, in his fight (H6); null in any other.</summary>
@@ -494,7 +551,7 @@ namespace Bastion.Net
         /// </summary>
         private static bool Routed(GameState s)
         {
-            var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
+            var squad = Squad(s).Where((o) => !o.Evacuated).ToList();
             return squad.Count <= 1 || squad.All((o) => o.Hp * 2 <= o.MaxHp);
         }
 
@@ -518,7 +575,7 @@ namespace Bastion.Net
         private static bool RunLeaving(GameState s, System.Func<Unit, Pos?> roomOf)
         {
             if (s.Turn >= RunLeaveTurn || (s.RoomsSearched?.Count ?? 0) >= RoomsWanted) return true;
-            var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
+            var squad = Squad(s).Where((o) => !o.Evacuated).ToList();
             if (squad.Any((o) => o.Hp * 2 <= o.MaxHp)) return true;
             var near = Enemies(s).Count((e) => e.Caged != true && Aim.TeamSees(s, Teams.Xcom, e) && squad.Any((o) => Grid.Distance(o.Pos, e.Pos) <= ThreatNear));
             return near >= ThreatMany || squad.All((o) => roomOf(o) == null);
@@ -550,12 +607,16 @@ namespace Bastion.Net
 
         /// <summary>
         /// Whether `u` has something to fire: a gun, and in a run rounds in it or a magazine to reload (Unit.mags, the pack's:
-        /// Gameplay, 16/11); empty with none, it goes to the blade.
+        /// Gameplay, 16/11), or with a bow or a crossbow, arrows (Unit.Arrows); empty with none, it goes to the blade.
         /// </summary>
         private static bool Armed(GameState s, Unit u)
         {
             if (!Content.HasGun(u)) return false;
-            return s.Run == null || u.Ammo > 0 || (u.Mags ?? 0) > 0 || (u.PistolAmmo ?? 0) > 0;
+            if (s.Run == null) return true;
+            // Arco y ballesta (cuadro 102): the bow's shots and the crossbow's reloads are its arrows (Unit.Arrows); the bow's
+            // Ammo says nothing (Clip 0).
+            if (Content.FiresArrows(u)) return u.Ammo > 0 || (u.Arrows ?? 0) > 0 || (u.PistolAmmo ?? 0) > 0;
+            return u.Ammo > 0 || (u.Mags ?? 0) > 0 || (u.PistolAmmo ?? 0) > 0;
         }
 
         /// <summary>
@@ -623,7 +684,7 @@ namespace Bastion.Net
             found.AddRange((s.FloorGear ?? new List<DroppedGear>()).Where((d) => IsGunGear(d.Gear) && Walked(d.Pos)).Select((d) => d.Pos));
             if (found.Count == 0) return null;
             double Near(Unit x) => found.Min((p) => Grid.Distance(x.Pos, p));
-            var going = Grid.Combatants(s, Teams.Xcom).Where((x) => !x.Evacuated && !Armed(s, x) && PackedGun(x) == null && x.Pack?.Items.Any((p) => IsGunGear(p.Gear)) != true && s.Mission.Item?.Carrier != x.Id)
+            var going = Squad(s).Where((x) => !x.Evacuated && !Armed(s, x) && PackedGun(x) == null && x.Pack?.Items.Any((p) => IsGunGear(p.Gear)) != true && s.Mission.Item?.Carrier != x.Id)
                 .OrderBy(Near).ThenBy((x) => x.Id, System.StringComparer.Ordinal).Take(found.Count);
             if (!going.Any((x) => x.Id == u.Id)) return null;
             return found.OrderBy((p) => Grid.Distance(u.Pos, p)).First();
@@ -674,6 +735,10 @@ namespace Bastion.Net
         /// </remarks>
         private static Command? MoveToward(GameState s, Unit u, Pos goal, double cost, bool bus, Reach walks, bool reckless = false)
         {
+            // To one of the other side's own place, the way round it, not through it (the walks go past the dead): through
+            // a window, the way went over the zombie behind it to the far side of the house, and the recruit stood under the
+            // window for ever (Gameplay's R2 of 21/11, seed 393: a Limpieza, the blade alone).
+            if (!bus && Grid.UnitAt(s, goal) is Unit there && there.Team != u.Team) walks = Paths.ComputeReach(s, u, double.MaxValue, null, (o) => o.Team != u.Team && o != there);
             var reach = Paths.ComputeReach(s, u, cost);
             // Where it ends up matters as much as how near: beside the dead it is bitten in their turn. Those of a group still
             // asleep, only while searching a Saqueo or on the way to a Guarida's box or El Toro: on the way to an objective or
@@ -733,6 +798,39 @@ namespace Bastion.Net
             return new MoveCommand { Unit = u.Id, To = best.Pos };
         }
 
+        // ------------------------------------------------------------ Arco y ballesta (cuadros 101–106)
+
+        /// <summary>Arco y ballesta: with this many arrows or fewer, one with a bow or a crossbow goes for those in a body near.</summary>
+        public const int ArrowsLow = 3;
+
+        /// <summary>Arco y ballesta: how far (tiles of walk) it goes for a body's arrows.</summary>
+        public const int ArrowWalk = 8;
+
+        /// <summary>A body on `p` still to search with arrows in it (Looting.BodyArrows: those that hit it; a Cazador's own).</summary>
+        private static bool ArrowBody(GameState s, Pos p) => Looting.BodyAt(s, p) is Unit b && Looting.BodyArrows(b) > 0 && Looting.IsSearchable(s, p);
+
+        /// <summary>
+        /// Arco y ballesta: where `u`, with a bow or a crossbow and ArrowsLow arrows or fewer, goes for more: the nearest place
+        /// by `walks` beside a body with some (ArrowBody), within ArrowWalk, with none of the dead awake within Close of it.
+        /// Null otherwise.
+        /// </summary>
+        private static Pos? ArrowGoal(GameState s, Unit u, Reach walks)
+        {
+            if (s.Run == null || !Content.FiresArrows(u) || (u.Arrows ?? 0) > ArrowsLow) return null;
+            var awake = Enemies(s).Where((e) => e.Caged != true && !Paths.OnPatrol(s, e)).ToList();
+            Pos? best = null;
+            var bestWalk = ArrowWalk * Paths.CostOrtho + 1;
+            foreach (var b in s.Units.Where((b) => !b.Alive && ArrowBody(s, b.Pos)))
+            {
+                if (awake.Any((e) => Grid.Distance(e.Pos, b.Pos) <= Close)) continue;
+                var w = WalkTo(s, walks, b.Pos);
+                if (w >= bestWalk) continue;
+                best = b.Pos;
+                bestWalk = w;
+            }
+            return best;
+        }
+
         // ------------------------------------------------------------ Mordido (G23.2)
 
         /// <summary>Mordido: past this many of the count left, with the antiviral not in hand, the squad goes without the bitten.</summary>
@@ -782,7 +880,7 @@ namespace Bastion.Net
             // alone where they were found, the dead had them while the squad searched upstairs: R11, 19/11).
             if (u.Id == bitten.Id)
             {
-                var mates = Grid.Combatants(s, Teams.Xcom).Where((o) => o.Id != u.Id && !o.Evacuated).ToList();
+                var mates = Squad(s).Where((o) => o.Id != u.Id && !o.Evacuated).ToList();
                 var holder = mates.FirstOrDefault((o) => Looting.AntiviralOf(o) != null);
                 if (holder != null) return holder.Pos;
                 return mates.OrderBy((o) => WalkTo(s, walks, o.Pos)).ThenBy((o) => o.Id, System.StringComparer.Ordinal).Select((o) => (Pos?)o.Pos).FirstOrDefault() ?? u.Pos;
@@ -1004,7 +1102,7 @@ namespace Bastion.Net
         private static Raid ModeOf(GameState s)
         {
             if (StashLeft(s).Count == 0 || Routed(s) || s.Turn >= RaidersLeaveTurn) return Raid.Go;
-            var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
+            var squad = Squad(s).Where((o) => !o.Evacuated).ToList();
             // Strong: those with a gun to fire (the blade doesn't go at the living), outnumbering the guards alive by RaidersEdge.
             var strong = squad.Count((o) => Armed(s, o)) >= Guards(s).Count + RaidersEdge;
             // The camp awake, or with none of it left (nobody to hide from: it hid from the dead, and they had it, R15).
@@ -1116,7 +1214,7 @@ namespace Bastion.Net
             var radius = Rules.SquadNoiseRadius(s, Abilities.NoiseOf(s, u, AbilityIds.Search), u);
             var hear = s.Units.Where((o) => o.Alive && o.Team != Teams.Xcom && Paths.OnPatrol(s, o) && Grid.Distance(o.Pos, crate) + Grid.StoreysApart(s, o.Pos, crate) <= radius).ToList();
             if (hear.Count == 0) return true;
-            var spots = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && o.Id != u.Id).Select((o) => o.Pos).Append(at ?? u.Pos).ToList();
+            var spots = Squad(s).Where((o) => !o.Evacuated && o.Id != u.Id).Select((o) => o.Pos).Append(at ?? u.Pos).ToList();
             foreach (var g in hear)
             {
                 var facing = Los.FacingTo(g.Pos, crate) ?? g.Facing;
@@ -1159,7 +1257,7 @@ namespace Bastion.Net
             watchOf = s;
             watchKey = key;
             var w = watch = new Watch();
-            var who = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).OrderBy((o) => o.Id, System.StringComparer.Ordinal).FirstOrDefault();
+            var who = Squad(s).Where((o) => !o.Evacuated).OrderBy((o) => o.Id, System.StringComparer.Ordinal).FirstOrDefault();
             if (who == null) return w;
             var eyes = s.Units.Where((e) => e.Alive && Paths.OnPatrol(s, e)).ToList();
             var round = Guards(s).FirstOrDefault((g) => g.Guard == GuardPosts.Round && Paths.OnPatrol(s, g));
@@ -1206,7 +1304,7 @@ namespace Bastion.Net
             // fence; one gone to look where it heard something (Ai.PatrolPod); the dead on their rounds; the dead standing
             // about, who turn their heads (Ai.LookRound), all round. Of the dead, only those near enough to the squad to matter.
             // (R15: with the round's guard alone, of 60 hidden squads the dead on their rounds found 25.)
-            var squadAt = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).Select((o) => o.Pos).ToList();
+            var squadAt = Squad(s).Where((o) => !o.Evacuated).Select((o) => o.Pos).ToList();
             foreach (var e in eyes)
             {
                 var pod = s.Pods.Find((p) => p.Id == e.PodId);
@@ -1326,6 +1424,99 @@ namespace Bastion.Net
             return null;
         }
 
+        // ------------------------------------------------------------ Evacuación (G23.6)
+
+        /// <summary>Evacuación: the turn the squad goes for La Lata, with the civilians aboard or not.</summary>
+        public const int EvacLeaveTurn = 20;
+
+        /// <summary>A run's Evacuación with its civilians (MissionState.Civilians). Without them (too few buildings), a Saqueo (RunSaqueo).</summary>
+        private static bool EvacFight(GameState s) => s.Run != null && s.Mission.Civilians != null && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
+
+        /// <summary>Evacuación: each civilian alive and not aboard, with their spot (hidden, with its circle, or found).</summary>
+        private static List<(Unit Unit, CivilianSpot Spot)> Civilians(GameState s) => (s.Mission.Civilians ?? new List<CivilianSpot>())
+            .Select((c) => (Unit: s.Units.FirstOrDefault((u) => u.Id == c.Unit), Spot: c)).Where((c) => c.Unit != null && c.Unit.Alive && c.Unit.Aboard != true && !c.Unit.Evacuated)
+            .Select((c) => (c.Unit!, c.Spot)).ToList();
+
+        /// <summary>Evacuación: the civilians found and walking to La Lata (Sim.CivilianStep), alive and not aboard.</summary>
+        private static List<Unit> Walkers(GameState s) => Civilians(s).Where((c) => c.Spot.Found).Select((c) => c.Unit).ToList();
+
+        /// <summary>
+        /// Evacuación: the squad goes broken or hurt (EvacBroken: one of it fallen, or half of it at half health; staying on,
+        /// it fell in half the fights with four seats, R17), at EvacLeaveTurn, with two civilians aboard (Rules.CiviliansSafe: the
+        /// reward; Gameplay, 21/11: «pedir salir con dos o más»), or with no more to get aboard (Rules.CiviliansShort null: too
+        /// few left alive).
+        /// </summary>
+        private static bool EvacLeaving(GameState s) => EvacBroken(s) || s.Turn >= EvacLeaveTurn || Rules.CiviliansSafe(s) || Rules.CiviliansShort(s) == null;
+
+        /// <summary>
+        /// Evacuación: the squad broken or hurt, those in La Lata counted (Routed and Hurt count those out of it only, and with
+        /// three in and one out it was «broken»): one of it fallen, one or none left, or half of it at half health or less.
+        /// </summary>
+        private static bool EvacBroken(GameState s)
+        {
+            var squad = s.Units.Where((u) => u.Team == Teams.Xcom && u.CampaignId != null && !Rules.IsCivilian(u)).ToList();
+            if (squad.Count((u) => !u.Alive && u.Aboard != true && !u.Evacuated) >= KeyFallen) return true;
+            var up = squad.Where((u) => u.Alive || u.Aboard == true || u.Evacuated).ToList();
+            return up.Count <= 1 || up.Count((u) => u.Hp * 2 <= u.MaxHp) * 2 >= up.Count;
+        }
+
+        /// <summary>
+        /// Evacuación: La Lata going now would leave a civilian found and walking to it (they get in by themselves, a step a
+        /// turn) short of two aboard, and the squad isn't going for good (EvacLeaving, but for those two). Only while one of
+        /// them has a way to it (Rules.CivilianWalk).
+        /// </summary>
+        private static bool EvacWaits(GameState s)
+        {
+            if (!EvacFight(s) || EvacBroken(s) || s.Turn >= EvacLeaveTurn || Rules.CiviliansSafe(s)) return false;
+            return Walkers(s).Any((c) => Rules.CivilianWalk(s, c) != null);
+        }
+
+        /// <summary>Evacuación: how far ahead of a civilian walking to La Lata the squad goes, along their way (they walk 5 a turn).</summary>
+        public const int EscortAhead = 7;
+
+        /// <summary>
+        /// Where the squad escorts civilian `c` walking to La Lata from: EscortAhead tiles on along their way there (La Lata's
+        /// open tile nearest them by the walk, the squad gone round), clearing it and out of this turn's walk. Round them, the
+        /// squad stood in their way, and they never moved (R17: the town of seed 101, the four of it fell waiting).
+        /// </summary>
+        private static Pos? EscortSpot(GameState s, Unit c)
+        {
+            var way = CivilianWay(s, c);
+            // Near La Lata, nobody in their way: at its door the squad kept one 3 tiles off for 10 turns (R17, the mall).
+            return way.Count <= EscortAhead + (int)Content.CivilianMobility ? null : Grid.PosOf(s, way[EscortAhead]);
+        }
+
+        /// <summary>Civilian `c`'s way to La Lata's open tile nearest them by the walk, the squad gone round (empty: none, or there).</summary>
+        private static List<int> CivilianWay(GameState s, Unit c)
+        {
+            var reach = Paths.ComputeReach(s, c, double.MaxValue, null, (o) => o.Team == Teams.Xcom && !Rules.IsCivilian(o));
+            var end = WayTo(s, reach, s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).FirstOrDefault() ?? c.Pos, true);
+            return end == null ? new List<int>() : Way(s, reach, end);
+        }
+
+        /// <summary>
+        /// Where `u` goes in Evacuación, the same civilian for all of the squad, which keeps together (each its own nearest,
+        /// it went four ways and fell, R17): one found walking to La Lata first, the nearest to the squad, alongside them till
+        /// they are in (the dead near them shot first: Choose); with none, the one still hidden nearest La Lata, by their
+        /// circle's middle, and within it where they are (there one sees them). Null with neither.
+        /// </summary>
+        private static Pos? EvacGoal(GameState s, Unit u, Reach walks)
+        {
+            var squad = Squad(s).Where((o) => !o.Evacuated).ToList();
+            double Near(Pos p) => squad.Count == 0 ? 0 : squad.Min((o) => Grid.Distance(o.Pos, p));
+            var escort = Walkers(s).OrderBy((c) => Near(c.Pos)).ThenBy((c) => c.Id, System.StringComparer.Ordinal).Select((c) => EscortSpot(s, c)).FirstOrDefault((p) => p != null);
+            if (escort != null) return escort;
+            var bus = s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).ToList();
+            double FromBus(Pos p) => bus.Count == 0 ? 0 : bus.Min((z) => Grid.Distance(z, p));
+            Pos Middle((Unit Unit, CivilianSpot Spot) c) => c.Spot.Area is SearchArea a ? new Pos { X = (int)a.Center.X, Y = (int)a.Center.Y, Z = 0 } : c.Unit.Pos;
+            var hidden = Civilians(s).Where((c) => !c.Spot.Found).OrderBy((c) => FromBus(Middle(c))).ThenBy((c) => c.Unit.Id, System.StringComparer.Ordinal).FirstOrDefault();
+            // Nobody hidden, and those walking near La Lata: where it stands, out of their way.
+            if (hidden.Unit == null) return null;
+            var middle = Middle(hidden);
+            var radius = hidden.Spot.Area?.Radius ?? 0;
+            return Grid.Distance(u.Pos, middle) <= radius ? hidden.Unit.Pos : middle;
+        }
+
         // ------------------------------------------------------------ La llave (G23.1)
 
         /// <summary>A run's La llave: the police station's armoury locked, its key on one of the dead in uniform.</summary>
@@ -1368,7 +1559,7 @@ namespace Bastion.Net
                 {
                     // The bodies first, then those still on their feet: the one nearest to the squad, the same for all of
                     // it (each its own nearest, the one ahead went for it alone and fell: R10, 19/11).
-                    var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
+                    var squad = Squad(s).Where((o) => !o.Evacuated).ToList();
                     Pos? Nearest(IEnumerable<Pos> spots) => spots.Select((p) => (At: p, Walk: squad.Select((o) => WalkTo(s, o.Id == u.Id ? walks : Paths.ComputeReach(s, o, double.MaxValue, null, (x) => x.Team != o.Team), p)).DefaultIfEmpty(int.MaxValue).Min()))
                         .Where((x) => x.Walk < int.MaxValue).OrderBy((x) => x.Walk).ThenBy((x) => Grid.NodeOf(s, x.At)).Select((x) => (Pos?)x.At).FirstOrDefault();
                     return Nearest(s.Units.Where((b) => !b.Alive && b.Team == Teams.Alien && InUniform(b) && UniformBody(s, b.Pos)).Select((b) => b.Pos))
@@ -1408,7 +1599,7 @@ namespace Bastion.Net
         {
             var mine = WalkTo(s, walks, goal);
             if (mine == int.MaxValue) return 0;
-            var rest = Grid.Combatants(s, Teams.Xcom).Where((o) => o.Id != u.Id && !o.Evacuated).Select((o) => WalkTo(s, walksOf(o), goal)).Where((w) => w < int.MaxValue).ToList();
+            var rest = Squad(s).Where((o) => o.Id != u.Id && !o.Evacuated).Select((o) => WalkTo(s, walksOf(o), goal)).Where((w) => w < int.MaxValue).ToList();
             return rest.Count == 0 ? 0 : rest.Max() - mine;
         }
 
@@ -1418,7 +1609,7 @@ namespace Bastion.Net
         private static bool UniformNear(GameState s, System.Func<Unit, Reach> walksOf)
         {
             var bodies = s.Units.Where((b) => !b.Alive && b.Team == Teams.Alien && InUniform(b) && UniformBody(s, b.Pos)).Select((b) => b.Pos).ToList();
-            return bodies.Count > 0 && Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).Any((o) => bodies.Any((p) => WalkTo(s, walksOf(o), p) <= KeyGrab * Paths.CostOrtho));
+            return bodies.Count > 0 && Squad(s).Where((o) => !o.Evacuated).Any((o) => bodies.Any((p) => WalkTo(s, walksOf(o), p) <= KeyGrab * Paths.CostOrtho));
         }
 
         /// <summary>The squad hurt (La llave, before its armoury is open): one of it fallen, or half of it at half health or less.</summary>
@@ -1460,7 +1651,7 @@ namespace Bastion.Net
             // Hurt, it goes; but for a body in uniform a few steps off (KeyGrab), which may hold the key: of 12 fights whose
             // holder fell, 7 went home with its body unsearched there (R10, 19/11).
             if (Hurt(s) && !UniformNear(s, walksOf)) return true;
-            var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
+            var squad = Squad(s).Where((o) => !o.Evacuated).ToList();
             return where == KeyPlaces.Holder && !squad.Any((o) => KeyGoal(s, o, walksOf(o)) != null);
         }
 
@@ -1488,13 +1679,19 @@ namespace Bastion.Net
 
         /// <summary>
         /// Where the way to `goal` ends in `walks`: the goal, or the place beside it nearest by the walk if it can't be stood
-        /// on (a radio, a car's boot); for La Lata, its place nearest by the walk. Null if none can be walked to.
+        /// on (a radio, a car's boot) or one of the other side stands on it (the walks go past them), a place to stop on; for
+        /// La Lata, its place nearest by the walk. Null if none can be walked to.
         /// </summary>
+        /// <remarks>
+        /// To one of the dead's own place, the way through a window ended on it: nowhere on it to stop, and the recruit alone
+        /// with the blade stood under the window for ever, in a Limpieza of 40 turns (Gameplay's R2 of 21/11, seed 393).
+        /// </remarks>
         private static Pos? WayTo(GameState s, Reach walks, Pos goal, bool bus)
         {
+            var taken = Grid.UnitAt(s, goal) is Unit there && there.Team != Teams.Xcom;
             var ends = bus ? Rules.OpenTiles(s).Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 })
-                : walks.Cost.TryGetValue(Grid.NodeOf(s, goal), out _) ? new[] { goal }
-                : Grid.Dirs8.Select((d) => new Pos { X = goal.X + d.X, Y = goal.Y + d.Y, Z = goal.Z });
+                : !taken && walks.Cost.TryGetValue(Grid.NodeOf(s, goal), out _) ? new[] { goal }
+                : Grid.Dirs8.Select((d) => new Pos { X = goal.X + d.X, Y = goal.Y + d.Y, Z = goal.Z }).Where((p) => !taken || (Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p)));
             Pos? best = null;
             var bestWalk = int.MaxValue;
             foreach (var p in ends)
@@ -1528,8 +1725,8 @@ namespace Bastion.Net
             return null;
         }
 
-        /// <summary>The likeliest attack `u` has now (rifle, pistol or the blade) at an enemy `within` tiles (only `at`, if given), and how likely.</summary>
-        private static (Command cmd, int hit)? BestShot(GameState s, Unit u, double within, string? at = null)
+        /// <summary>The likeliest attack `u` has now (rifle, pistol or the blade) at an enemy `within` tiles (only `at`, or `which`, if given), and how likely.</summary>
+        private static (Command cmd, int hit)? BestShot(GameState s, Unit u, double within, string? at = null, System.Func<Unit, bool>? which = null)
         {
             (Command cmd, int hit)? best = null;
             var abilities = Abilities.AbilitiesOf(u);
@@ -1542,8 +1739,10 @@ namespace Bastion.Net
                 if (Quiet(s) && CampHears(s, u, a)) continue;
                 foreach (var t in Abilities.AbilityTargets(s, u, a))
                 {
-                    if (Grid.Distance(u.Pos, t.Pos) > within || (at != null && t.Id != at) || !Worth(s, u, t)) continue;
+                    if (Grid.Distance(u.Pos, t.Pos) > within || (at != null && t.Id != at) || (which != null && !which(t)) || !Worth(s, u, t)) continue;
                     var p = Aim.PreviewShot(s, u, t, new ShotOptions { Ability = a });
+                    // One unaware while the camp sleeps (Quiet): only a silent kill (SilentShot).
+                    if (p != null && Quiet(s) && Paths.OnPatrol(s, t) && !SilentShot(s, u, t, a, p)) continue;
                     if (p != null && (best == null || p.Hit > best.Value.hit)) best = (Ability(u, a, t.Id), p.Hit);
                 }
             }

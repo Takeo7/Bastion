@@ -754,6 +754,66 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
+        /// Those in sight still unaware (Paths.OnPatrol) that would hear `u` search `tile` (R16 of Red, Saqueadores: the stash's
+        /// guard turns to the noise and sees the one searching; Producto, 21/11): as the rules' MakeNoise, within the search's
+        /// noise (Abilities.NoiseOf, Rules.SquadNoiseRadius) of the tile, a storey between them a tile more. Only while the
+        /// squad is hidden, as the move's eyes. None, empty.
+        /// </summary>
+        List<Unit> HearSearch(Unit u, Pos tile)
+        {
+            var s = State;
+            var none = new List<Unit>();
+            if (u == null || tile == null || !s.Concealed) return none;
+            var noise = Abilities.NoiseOf(s, u, AbilityIds.Search);
+            if (noise <= 0) return none;
+            var radius = Rules.SquadNoiseRadius(s, noise, u);
+            return s.Units.Where(o => o.Alive && o.Team == Teams.Alien && !o.Objective && string.IsNullOrEmpty(o.ControlledBy) && Visible(o) && Paths.OnPatrol(s, o)
+                && Grid.Distance(o.Pos, tile) + Grid.StoreysApart(s, o.Pos, tile) <= radius).ToList();
+        }
+
+        /// <summary>
+        /// Who would hear it, in words (Lore's: «un Saqueador», «El Toro»; several, «2 enemigos»; the line: «Os oye un Saqueador:
+        /// mirará hacia aquí»). Null, nobody.
+        /// </summary>
+        static string HeardLine(List<Unit> who)
+        {
+            if (who == null || who.Count == 0) return null;
+            return who.Count > 1 ? HudText.Heard.Several(who.Count) : HudText.Heard.One(OneOf(who[0]));
+        }
+
+        /// <summary>One enemy by its kind, with Lore's article: «un Saqueador», «un Zombi», but «El Toro».</summary>
+        static string OneOf(Unit who)
+        {
+            var name = Content.Templates[who.Template].Name;
+            return name.StartsWith("El ") ? name : "un " + name;
+        }
+
+        /// <summary>The search last warned of (its soldier and tile), whose second click goes ahead.</summary>
+        string searchWarn;
+
+        /// <summary>
+        /// Searching `tile` heard by one in sight still unaware (HearSearch): the first time, said and not done (as the move
+        /// that gives the squad away: ConcealWarning); the second, done. True while it holds it back.
+        /// </summary>
+        bool HeldForNoise(Unit u, Pos tile)
+        {
+            var line = HeardLine(HearSearch(u, tile));
+            var key = $"{u.Id}|{tile.X},{tile.Y},{tile.Z}";
+            if (line == null || searchWarn == key)
+            {
+                if (searchWarn != null) Hud?.ClearToast(searchToast);
+                searchWarn = null;
+                return false;
+            }
+            searchWarn = key;
+            searchToast = HudText.Heard.Ask(line, SearchVerb(Looting.SearchSpot(State, tile)), GameInput.Touch);
+            Toast(searchToast);
+            return true;
+        }
+
+        string searchToast;
+
+        /// <summary>
         /// How much of `u`'s movement left it keeps if the squad is found (Gameplay, 16/11: hidden, each soldier walks
         /// Content.ConcealedMobility tiles more, Paths.ConcealedBonus, and loses them from what is left as the squad is
         /// seen): all of it in the open.
@@ -1473,8 +1533,11 @@ namespace Bastion.UI.Combat
                     // The box or the furniture outlined and the rucksack over it, lit where a click opens it (Arturo, 7/11:
                     // not a tile on the floor); words only for why not and for the finger.
                     searchNext = new List<(Pos, bool)> { (hover, near && blocked == null) };
+                    // Who would hear it, the squad hidden (R16 of Red: Saqueadores' stash guard turns to it): said under it.
+                    var hearing = near && blocked == null ? HeardLine(HearSearch(u, hover)) : null;
                     if (blocked != null) Note(hover, $"{name} · {blocked.TrimEnd('.').ToLowerInvariant()}");
-                    else if (GameInput.Touch && near) Note(hover, HudText.Touch.Open(name, verb));
+                    else if (GameInput.Touch && near) Note(hover, HudText.Touch.Open(name, verb), hearing);
+                    else if (hearing != null) Note(hover, $"{name} · {char.ToLowerInvariant(hearing[0])}{hearing.Substring(1)}");
                     return;
                 }
             }
@@ -1504,8 +1567,7 @@ namespace Bastion.UI.Combat
             var heard = path != null && AbilityTexts.MoveNoise(State, u, path, dest.Run) != null;
             // Into the hidden squad's extra: that it is lost if they are seen (Gameplay, 16/11).
             // Who would see it on the way (U28; Lore's words): «Por el camino os ve un Saqueador», «… os ve El Toro».
-            var seenOnWay = onWay.HasValue && Content.Templates[onWay.Value.by.Template].Name is string who
-                ? $"Por el camino os ve {(who.StartsWith("El ") ? who : "un " + who)}" : null;
+            var seenOnWay = onWay.HasValue ? $"Por el camino os ve {OneOf(onWay.Value.by)}" : null;
             NoteWith(hover, heard ? "noise" : null, BoardNote(u, hover), seenOnWay, charged ? HudText.Boss.InLine : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
         }
 

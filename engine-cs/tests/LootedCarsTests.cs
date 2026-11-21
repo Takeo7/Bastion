@@ -58,7 +58,9 @@ namespace Bastion.Engine.Tests
             var rolls = Enumerable.Range(1, N).Select((seed) => Looting.RollBox(Looting.CarBoot, new Rng(seed), true, true)).ToList();
             Assert.All(rolls, (l) => Assert.NotNull(l));
             Assert.InRange(rolls.Count((l) => l!.Weapon != null) / (double)N, 0.08, 0.10);
-            Assert.InRange(rolls.Count((l) => l!.Mags != null) / (double)N, 0.15, 0.17);
+            // Magazines, or in a run one time in four a bundle of arrows instead (Looting.ArrowsOdds, cuadro 102).
+            Assert.InRange(rolls.Count((l) => l!.Mags != null || l!.Arrows != null) / (double)N, 0.15, 0.17);
+            Assert.InRange(rolls.Count((l) => l!.Arrows != null) / (double)rolls.Count((l) => l!.Mags != null || l!.Arrows != null), 0.22, 0.28);
             Assert.InRange(rolls.Count((l) => l!.Supplies != null) / (double)N, 0.32, 0.36);
         }
 

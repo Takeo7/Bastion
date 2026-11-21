@@ -197,8 +197,10 @@ namespace Bastion.Engine
             // Object.values(FOUND_WEAPONS): in the order of its keys, FoundWeaponIds.All's. The pistol only where they are
             // counted (MissionState.Pistols; Arturo, 1/11): anywhere else everyone carries one already.
             var all = FoundWeaponIds.All.Where((id) => pistols || id != FoundWeaponIds.Pistol).Select((id) => Content.FoundWeapons[id]).ToList();
-            var roll = rng.Int(all.Sum((w) => w.Weight));
-            var def = all.First((w) => (roll -= w.Weight) < 0);
+            // Arco y ballesta (cuadro 105), rare and only in the runs (where pistols are counted): RunsBowWeight each.
+            int Weight(FoundWeaponDef w) => pistols && RunsBows.Contains(w.Id) ? RunsBowWeight : w.Weight;
+            var roll = rng.Int(all.Sum(Weight));
+            var def = all.First((w) => (roll -= Weight(w)) < 0);
             var loot = new Loot { Weapon = def.Id, Condition = rng.Range(FoundCondition[0], FoundCondition[1]) };
             if (def.Mod != null) loot.Mods = new List<string> { def.Mod };
             return loot;
@@ -206,6 +208,27 @@ namespace Bastion.Engine
 
         /// <summary>The condition a weapon is found in.</summary>
         private static readonly IReadOnlyList<int> FoundCondition = new[] { 40, 90 };
+
+        /// <summary>
+        /// Arco y ballesta (cuadro 105: «raros en cajas»): the weapons only a run finds, and how often, against the rest
+        /// (the lowest there is, the scoped rifle's); never in the campaign of before (their FoundWeaponDef.Weight is 0).
+        /// </summary>
+        public static readonly IReadOnlyList<string> RunsBows = new[] { FoundWeaponIds.Crossbow, FoundWeaponIds.Bow };
+        public const int RunsBowWeight = 1;
+
+        /// <summary>
+        /// Arco y ballesta (cuadro 102: «raras en las cajas de munición»): in a run, one magazine find in ArrowsOdds is a bundle of
+        /// BoxArrows arrows instead (Ammo).
+        /// </summary>
+        public const int ArrowsOdds = 4;
+        public const int BoxArrows = 5;
+
+        /// <summary>A magazine find (`count` of them), for a searcher who counts them; in a run, now and then arrows instead.</summary>
+        private static Loot? Ammo(Rng rng, bool mags, bool pistols, int count)
+        {
+            if (!mags) return null;
+            return pistols && rng.Int(ArrowsOdds) == 0 ? new Loot { Arrows = BoxArrows } : new Loot { Mags = count };
+        }
 
         /// <summary>Which improvement turns up.</summary>
         private static Loot FoundMod(Rng rng)
@@ -251,7 +274,7 @@ namespace Bastion.Engine
             if (roll < (edge += t.Parts)) return new Loot { Parts = rng.Range(PartsFind[0], PartsFind[1]) };
             if (roll < (edge += t.Weapon)) return FoundWeapon(rng, pistols);
             if (roll < (edge += t.Mod * modTimes)) return FoundMod(rng);
-            if (roll < (edge += t.Mags)) return mags ? new Loot { Mags = 1 } : null;
+            if (roll < (edge += t.Mags)) return Ammo(rng, mags, pistols, 1);
             return null;
         }
 
@@ -279,14 +302,33 @@ namespace Bastion.Engine
         {
             [TemplateIds.Trooper] = FoundWeaponIds.AssaultRifle,
             [TemplateIds.Officer] = FoundWeaponIds.AssaultRifle,
-            [TemplateIds.Lancer] = FoundWeaponIds.PumpShotgun,
+            // Cuadro 105 (Arturo, 21/11: «Los lleva el Cazador»): its crossbow, and CazadorArrows besides (BodyArrows).
+            [TemplateIds.Lancer] = FoundWeaponIds.Crossbow,
         };
 
         /// <summary>
         /// What searching `body` turns up (Arturo, 2/11): a living enemy's gun, always; on one of the dead, a gun one time in
-        /// four if it wore a uniform (a policeman's pistol; a soldier's, now and then a rifle) and hardly ever otherwise.
+        /// four if it wore a uniform (a policeman's pistol; a soldier's, now and then a rifle) and hardly ever otherwise. And
+        /// the arrows it has, any body (BodyArrows).
         /// </summary>
         public static Loot? RollBody(Unit body, Rng rng, bool pistols)
+        {
+            var loot = RollCarried(body, rng, pistols);
+            var arrows = BodyArrows(body);
+            if (arrows <= 0) return loot;
+            loot ??= new Loot();
+            loot.Arrows = arrows;
+            return loot;
+        }
+
+        /// <summary>
+        /// Arco y ballesta (cuadros 102, 105): the arrows searching `body` gives back: those stuck in it (Unit.ArrowsIn, the
+        /// squad's that hit), and a Cazador's own, Content.CazadorArrows.
+        /// </summary>
+        public static int BodyArrows(Unit body) => (body.ArrowsIn ?? 0) + (body.Template == TemplateIds.Lancer ? Content.CazadorArrows : 0);
+
+        /// <summary>The gun a body carried (RollBody), if any.</summary>
+        private static Loot? RollCarried(Unit body, Rng rng, bool pistols)
         {
             if (CarriedGuns.TryGetValue(body.Template, out var gun)) return new Loot { Weapon = gun, Condition = rng.Range(FoundCondition[0], FoundCondition[1]) };
             var uniform = body.Outfit == Outfits.Police || body.Outfit == Outfits.Military;
@@ -316,7 +358,7 @@ namespace Bastion.Engine
                 case DecorKinds.LootMedical:
                     return new Loot { Medicines = rng.Range(1, 2) };
                 case DecorKinds.LootAmmo:
-                    return mags ? new Loot { Mags = 2 } : null;
+                    return Ammo(rng, mags, pistols, 2);
                 case DecorKinds.LootFood:
                     return new Loot { Food = rng.Range(3, 5) };
                 default:
@@ -700,7 +742,7 @@ namespace Bastion.Engine
         /// </summary>
         private static string? PileKey(Loot l)
         {
-            if (!string.IsNullOrEmpty(l.Weapon) || !string.IsNullOrEmpty(l.WeaponId) || l.Condition != null || l.Mods != null || l.Mags.GetValueOrDefault() != 0) return null;
+            if (!string.IsNullOrEmpty(l.Weapon) || !string.IsNullOrEmpty(l.WeaponId) || l.Condition != null || l.Mods != null || l.Mags.GetValueOrDefault() != 0 || l.Arrows.GetValueOrDefault() != 0) return null;
             var keys = new List<string>();
             if (l.Supplies.GetValueOrDefault() != 0) keys.Add("supplies");
             if (l.Medicines.GetValueOrDefault() != 0) keys.Add("medicines");

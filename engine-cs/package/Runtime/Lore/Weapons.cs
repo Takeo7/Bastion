@@ -114,6 +114,11 @@ namespace Bastion.Engine
                     return "Hace poco daño, pero llega más lejos.";
                 case WeaponIds.Stick:
                     return "El que menos daño hace, pero casi nunca falla.";
+                // Arco y ballesta (cuadros 102 and 103): arrows from the pack, and the kill unseen keeps the squad hidden.
+                case WeaponIds.Crossbow:
+                    return "Mucho daño, y mejor de lejos. Tras cada tiro se recarga, con una acción y una flecha. Se oye poco. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.";
+                case WeaponIds.Bow:
+                    return "Poco daño, pero no se recarga: cada tiro gasta una flecha. Casi no se oye. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.";
                 default:
                     return null;
             }
@@ -121,10 +126,12 @@ namespace Bastion.Engine
 
         /// <summary>
         /// A figure of the card, in words: «4 disparos», «2 acciones», «12 casillas»; the blade «No gasta». `what`: "clip",
-        /// "actions" or "noise". A clip counts shots, not rounds (WeaponDef.Clip; Producto, 18/11: not «balas»).
+        /// "actions" or "noise". A clip counts shots, not rounds (WeaponDef.Clip; Producto, 18/11: not «balas»). One that fires
+        /// arrows with no clip (the bow: WeaponDef.Arrows) spends one a shot.
         /// </summary>
-        public static string WeaponFigure(string what, int n, bool melee = false)
+        public static string WeaponFigure(string what, int n, bool melee = false, bool arrows = false)
         {
+            if (what == "clip" && arrows && n == 0) return "Una flecha por tiro";
             if (what == "clip") return melee || n == 0 ? "No gasta" : $"{n} {(n == 1 ? "disparo" : "disparos")}";
             if (what == "actions") return $"{n} {(n == 1 ? "acción" : "acciones")}";
             return $"{n} {(n == 1 ? "casilla" : "casillas")}";

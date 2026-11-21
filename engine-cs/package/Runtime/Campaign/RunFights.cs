@@ -177,6 +177,9 @@ namespace Bastion.Engine
             var guarded = rescue && node.Guarded == true;
             // The boss's group alone (it isn't scaled: there is one Toro).
             var pods = boss ? new List<List<string>> { BossPod(difficulty) } : Setup.PodsFor(map, Setup.MissionPods(difficulty, rescue && !guarded ? MissionKinds.Scavenge : kind, guarded));
+            // One Cazador fewer in a guarded Rescate since they carry crossbows (Arturo, cuadro 106; ARCO-Y-BALLESTA.md): the
+            // first of its groups', gone with nobody in its place (one swapped for a Saqueador left it harder than before).
+            if (guarded) OneCazadorFewer(pods);
             var squad = run.Squad.Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id)).Where((s) => s != null && s.Alive && s.Kit != null).Select((s) => SquadMemberOf(c, s!)).ToList();
             var seed = Math.Abs(node.Seed ?? 0);
             var alarm = kind == MissionKinds.Sabotage ? AlarmOf(node) : null;
@@ -215,7 +218,7 @@ namespace Bastion.Engine
                 // starts are measured from there (SEPARADOS.md). Saqueadores' too (G23.5): the camp a way off it, not on the way
                 // (R1 of 20/11, rifles, 4 seats: out 0–33 % with La Lata far, 73–87 % near; the Saqueo, 93–100 %).
                 // Evacuación's too (G23.6): the squad goes out for the civilians, and they walk back to it.
-                EvacNear = node.Kind == NodeKinds.Normal || node.Kind == NodeKinds.Split || node.Kind == NodeKinds.Raiders || node.Kind == NodeKinds.Evacuation ? true : (bool?)null,
+                EvacNear = node.Kind == NodeKinds.Normal || node.Kind == NodeKinds.Split || node.Kind == NodeKinds.Raiders || node.Kind == NodeKinds.Evacuation || node.Kind == NodeKinds.Charges ? true : (bool?)null,
                 // Saqueadores (G23.5): the camp of the living on the map.
                 Raiders = node.Kind == NodeKinds.Raiders ? true : (bool?)null,
             });
@@ -242,7 +245,16 @@ namespace Bastion.Engine
             if (node.Kind == NodeKinds.Bitten) Setup.Bitten(state, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xb17e))));
             // El herido (G23.3): the survivor can't walk.
             if (node.Kind == NodeKinds.Wounded) Setup.Wounded(state);
+            // Las cargas (cuadro 109): the nest, its three points and its dead; the three charges into the packs.
+            if (node.Kind == NodeKinds.Charges) Setup.PlaceCharges(state, difficulty, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xc4a6))));
             return (state, name);
+        }
+
+        /// <summary>Cuadro 106: the first Cazador of `pods` out of its group (none in them, as they are).</summary>
+        public static void OneCazadorFewer(List<List<string>> pods)
+        {
+            var band = pods.FirstOrDefault((p) => p.Contains(TemplateIds.Lancer));
+            band?.RemoveAt(band.IndexOf(TemplateIds.Lancer));
         }
 
         // ------------------------------------------------------------ the result
@@ -540,7 +552,7 @@ namespace Bastion.Engine
         /// <summary>A pack home without the fight's own: the armoury's key (G23.1) and Mordido's antiviral (G23.2).</summary>
         private static GearGrid WithoutKey(GearGrid pack)
         {
-            pack.Items.RemoveAll((p) => p.Gear.Kind == GearKinds.Key || p.Gear.Kind == GearKinds.Antiviral);
+            pack.Items.RemoveAll((p) => p.Gear.Kind == GearKinds.Key || p.Gear.Kind == GearKinds.Antiviral || p.Gear.Kind == GearKinds.Charge);
             return pack;
         }
 

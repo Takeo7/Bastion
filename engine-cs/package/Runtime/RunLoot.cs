@@ -64,6 +64,8 @@ namespace Bastion.Engine
             if (!string.IsNullOrEmpty(l.Weapon) && Content.IsGear(GearKinds.Weapon, l.Weapon)) out_.AddRange(maker.Make(GearKinds.Weapon, l.Weapon, 1, l.Mods));
             if (!string.IsNullOrEmpty(l.Mod)) out_.AddRange(maker.Make(GearKinds.Mod, l.Mod, l.Count ?? 1));
             if ((l.Mags ?? 0) > 0) out_.AddRange(maker.Make(GearKinds.Mags, null, l.Mags!.Value));
+            // Arco y ballesta (cuadro 102): arrows, ArrowsPile to a cell.
+            if ((l.Arrows ?? 0) > 0) out_.AddRange(maker.Make(GearKinds.Arrows, null, l.Arrows!.Value));
             return out_;
         }
 

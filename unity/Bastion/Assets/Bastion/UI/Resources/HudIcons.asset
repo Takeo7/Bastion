@@ -29,6 +29,14 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 76a01d15da329774faff16bf89d49346, type: 3}
   - Id: weapon:huntingRifle
     Sprite: {fileID: 21300000, guid: ed68939f156bf584e8cd95bcf3939b6a, type: 3}
+  - Id: weapon:crossbow
+    Sprite: {fileID: 21300000, guid: 69223ceee0c64ceb8b9602b99d13b0da, type: 3}
+  - Id: weapon:bow
+    Sprite: {fileID: 21300000, guid: fed5860c9b7b8d24b921fc2facdf3c67, type: 3}
+  - Id: arrows
+    Sprite: {fileID: 21300000, guid: 94633077cb697e2459685cb4deb95d79, type: 3}
+  - Id: stat:arrows
+    Sprite: {fileID: 21300000, guid: f53945c6ef044c0696f15d6c41b7c96c, type: 3}
   - Id: weapon:pan
     Sprite: {fileID: 21300000, guid: 6dfd9f944c148704ea74e7cb66c48e07, type: 3}
   - Id: weapon:bat
@@ -287,6 +295,8 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: a2cf642f874ea8740b61d10d85e57330, type: 3}
   - Id: node:evacuation
     Sprite: {fileID: 21300000, guid: 9b1edc7e21ad5f045a91a54acd14bd7a, type: 3}
+  - Id: node:charges
+    Sprite: {fileID: 21300000, guid: fc373173698dd3140b71d06eec417fb5, type: 3}
   - Id: tab:stash
     Sprite: {fileID: 21300000, guid: 8a65f66b8fbcf4248a5b819cb71edfeb, type: 3}
   - Id: tab:upgrades

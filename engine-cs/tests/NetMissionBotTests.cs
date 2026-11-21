@@ -151,6 +151,46 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void ToOneOfTheDeadBehindAWindowTheBladeGoesRoundByTheDoor()
+        {
+            // Gameplay's R2 of 21/11 (seed 393): in a Limpieza, the recruit alone with the blade stood under a window for ever,
+            // one of the dead asleep behind it. The walk past the dead went through the window and over it, with nowhere to stop
+            // on the way; now the way is round it, by the door, and it strikes on the second turn.
+            var s = Step1Helpers.StateFrom(new[]
+            {
+                "..............",
+                "...#########..",
+                "...+.......#..",
+                "...#.......#..",
+                "...####=####..",
+                "..............",
+                "..............",
+            });
+            s.Mission.Kind = MissionKinds.Elimination;
+            var u = Step1Helpers.AddUnit(s, "s1", TemplateIds.Rookie, 7, 5, extra: (x) => x.Arms = new Arms { Pistol = false });
+            var z = Step1Helpers.AddUnit(s, "a1", TemplateIds.Zombie, 7, 3, extra: (x) => x.Facing = System.Math.PI / 2);
+            Step2Helpers.Pod(s, "p1", new[] { z }, active: false);
+            s.Concealed = false;
+            Assert.Equal(TileKinds.Window, Grid.KindAt(s, new Pos { X = 7, Y = 4, Z = 0 }));
+            var connected = new List<int> { 0 };
+            var rng = new Rng(5);
+            for (var turn = 0; turn < 3 && z.Alive; turn++)
+            {
+                for (var k = 0; k < 20 && z.Alive; k++)
+                {
+                    var cmd = MissionBot.Next(s, 0, connected);
+                    if (cmd == null || cmd is EndTurnCommand) break;
+                    Assert.True(Rules.ExecuteCommand(s, cmd, 0, connected, rng).Ok, Json.Write(cmd));
+                }
+                if (!z.Alive) break;
+                // The dead's turn passed over: the zombie stays where it is.
+                u.Ap = 2;
+                u.Moves = null;
+            }
+            Assert.False(z.Alive);
+        }
+
+        [Fact]
         public void ABoardedDoorInTheWayIsPriedOrGoneRound()
         {
             // Arturo, 2/11: the crowbar takes the planks off a door. With it, the bot does when the way round is longer;

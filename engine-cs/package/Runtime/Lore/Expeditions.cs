@@ -55,6 +55,7 @@ namespace Bastion.Engine
             [NodeKinds.Split] = "Separados", // G23.4: as Arturo calls it (put by Gameplay, 20/11; kept by Lore)
             [NodeKinds.Raiders] = "Saqueadores", // G23.5: as Arturo calls it (put by Gameplay, 20/11, for the engine to start the stage)
             [NodeKinds.Evacuation] = "Evacuación", // G23.6: as Arturo calls it (put by Gameplay, 20/11, for the engine to start the stage)
+            [NodeKinds.Charges] = "Las cargas", // G23 (cuadro 105: as Arturo calls it; put by Gameplay, 21/11, for the engine to start the stage)
             [NodeKinds.Refuge] = "Refugio",
             [NodeKinds.Trade] = "Trueque",
             [NodeKinds.Event] = "Suceso",

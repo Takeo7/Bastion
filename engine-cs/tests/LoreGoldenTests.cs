@@ -78,9 +78,9 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Jefe de un grupo de Cuervos.", Lore.EnemyFiles["officer"].What);
             Assert.Equal("Mejor arma y más aguante que un Saqueador. Usa la vigilancia.", Lore.EnemyFiles["officer"].Does);
             Assert.Equal("Es el más peligroso del grupo: dispárale primero. El golpe silencioso no sirve contra él.", Lore.EnemyFiles["officer"].Tip);
-            Assert.Equal("Cuervo que captura en vez de matar.", Lore.EnemyFiles["lancer"].What);
-            Assert.Equal("Red y porra cuerpo a cuerpo: el soldado inmovilizado empieza su siguiente turno con una sola acción.", Lore.EnemyFiles["lancer"].Does);
-            Assert.Equal("Corre mucho y no necesita línea de tiro. Pon vigilancia en su camino y no dejes a nadie solo. Si aún no está alerta, el golpe silencioso lo mata.", Lore.EnemyFiles["lancer"].Tip);
+            Assert.Equal("Cuervo con ballesta.", Lore.EnemyFiles["lancer"].What);
+            Assert.Equal("Dispara de lejos, con mucho daño, y recarga tras cada tiro.", Lore.EnemyFiles["lancer"].Does);
+            Assert.Equal("Si aún no está alerta, el golpe silencioso lo mata. Al registrar su cuerpo, os quedáis su ballesta y 5 flechas.", Lore.EnemyFiles["lancer"].Tip);
             Assert.Equal("La alarma: un coche patrulla, una ambulancia o la de una nave.", Lore.EnemyFiles["relay"].What);
             Assert.Equal("No dispara. Tiene salud y blindaje 1. Mientras suena, la zona se llena de zombis.", Lore.EnemyFiles["relay"].Does);
             Assert.Equal("Es el objetivo: hay que callarla antes de que acabe la cuenta atrás. Los explosivos ayudan.", Lore.EnemyFiles["relay"].Tip);
@@ -3130,7 +3130,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Horda enorme que sube desde los Llanos de Ceniza. Si llega al Bastión, se pierde la campaña.", Lore.Glossary["Marea"]);
             Assert.Equal("Sitio donde se juntan los zombis. Hace crecer la Marea; quemarlo la hace retroceder.", Lore.Glossary["Nido"]);
             Assert.Equal("Mientras suena, atrae a todos los zombis de la zona. Puede ser un coche patrulla, una ambulancia o la alarma de una nave.", Lore.Glossary["Sirena"]);
-            Assert.Equal("Cada acción hace ruido. Un disparo se oye a entre 12 y 22 casillas, según el arma; una granada, a 26; una motosierra, a 20; un registro, a 2. Los enemigos van a ver qué ha sido. El ruido no te descubre: te descubre que te vean.", Lore.Glossary["Ruido"]);
+            Assert.Equal("Cada acción hace ruido. Un disparo se oye a entre 12 y 22 casillas, según el arma, y uno de arco o de ballesta, a 1 o 2; una granada, a 26; una motosierra, a 20; un registro, a 2. Los enemigos van a ver qué ha sido. El ruido no te descubre: te descubre que te vean.", Lore.Glossary["Ruido"]);
             Assert.Equal("Misión de registrar y volver con el botín. Entran zombis por los bordes, y antes cuanto más ruido hagas.", Lore.Glossary["Saqueo"]);
             Assert.Equal("Una acción, dentro de una habitación; cada una se registra una vez. Casas: comida y medicinas. Oficinas: piezas. Tiendas: comida. Almacenes: de todo.", Lore.Glossary["Registrar"]);
             Assert.Equal("Hasta tres por mapa: armas, medicinas, munición o comida. Se abren con una acción, desde al lado.", Lore.Glossary["Cajas"]);
@@ -3156,11 +3156,32 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Cuenta los puntos gastados en el tablero: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.", Lore.Glossary["Veteranía"]);
             Assert.Equal("Los muertos que entran por los bordes. El ruido llena el medidor, en dB: a 90 se oye llegar una oleada, que entra un turno después. Salvo en la Limpieza, además, llegan unos pocos cada turno, el doble mientras suena la alarma de un Sabotaje.", Lore.Glossary["Horda"]);
             // Gameplay, 16/11 (0.12.26): the stealth.
-            Assert.Equal("Salvo en un Asedio, la escuadra empieza cada misión oculta: los enemigos no saben que estáis ahí. Mientras dura, cada soldado tiene 3 puntos de movimiento más, y un zombi, o un vivo que aún no está alerta, solo nota a quien tiene delante: por detrás o por un lado, no te nota aunque estés pegado a él. Se rompe cuando un enemigo ve a un soldado o cuando atacáis, salvo con el golpe silencioso. Entonces cada soldado pierde 3 de los puntos de movimiento que le queden.", Lore.Glossary["Ocultación"]);
+            Assert.Equal("Salvo en un Asedio, la escuadra empieza cada misión oculta: los enemigos no saben que estáis ahí. Mientras dura, cada soldado tiene 3 puntos de movimiento más, y un zombi, o un vivo que aún no está alerta, solo nota a quien tiene delante: por detrás o por un lado, no te nota aunque estés pegado a él. Se rompe cuando un enemigo ve a un soldado o cuando atacáis, salvo con el golpe silencioso o un tiro callado. Entonces cada soldado pierde 3 de los puntos de movimiento que le queden.", Lore.Glossary["Ocultación"]);
             Assert.Equal("Mata siempre, sin ruido y sin romper la ocultación, a un Zombi, un Corredor, un Saqueador o un Cazador que tengas al lado, si aún no está alerta y no te tiene delante. No sirve contra el Cabecilla ni con la motosierra.", Lore.Glossary["Golpe silencioso"]);
+            // Arco y ballesta (cuadros 102, 103 and 105; Lore, 21/11).
+            Assert.Equal("Un tiro de arco o de ballesta que mata no rompe la ocultación ni despierta al grupo del muerto, si no os ve ningún otro enemigo. Es como el golpe silencioso, pero de lejos. Si no mata, o alguien os ve, es un tiro como otro.", Lore.Glossary["Tiro callado"]);
+            Assert.Equal("La munición del arco y la ballesta, 10 en cada casilla de la mochila. El arco gasta una en cada tiro, y la ballesta, una al recargar. La que acierta se recupera al registrar el cuerpo; la que falla se pierde.", Lore.Glossary["Flechas"]);
+            Assert.Equal("Flecha", Lore.GearName(GearKinds.Arrows, null));
+            Assert.Equal("10 flechas", Lore.GearName(GearKinds.Arrows, null, 10));
+            Assert.Equal("la flecha", Lore.GearThe(GearKinds.Arrows, null));
+            Assert.Equal("una flecha", Lore.GearA(GearKinds.Arrows, null));
+            Assert.Equal("una ballesta", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.Crossbow));
+            Assert.Equal("2 ballestas", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.Crossbow, 2));
+            Assert.Equal("un arco", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.Bow));
+            Assert.Equal("2 arcos", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.Bow, 2));
+            Assert.Equal("Para el arco y la ballesta. Cada tiro gasta una. La que acierta se recupera al registrar el cuerpo; la que falla se pierde.", Lore.ArrowsText.Help);
+            Assert.Equal("Carga la ballesta: gasta una flecha de la mochila.", Lore.ArrowsText.Reload);
+            Assert.Equal("Mucho daño, y mejor de lejos. Tras cada tiro se recarga, con una acción y una flecha. Se oye poco. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.", Lore.WeaponLine(WeaponIds.Crossbow));
+            Assert.Equal("Poco daño, pero no se recarga: cada tiro gasta una flecha. Casi no se oye. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.", Lore.WeaponLine(WeaponIds.Bow));
+            Assert.Equal("Una flecha por tiro", Lore.WeaponFigure("clip", 0, arrows: true));
+            Assert.Equal("1 disparo", Lore.WeaponFigure("clip", 1, arrows: true));
+            Assert.Equal("Ana registra el cuerpo: una ballesta y 5 flechas.", Lore.SearchLine("Ana", "body", new Loot { Weapon = FoundWeaponIds.Crossbow, Arrows = 5 }, 0));
+            Assert.Equal("Ana registra el cuerpo: 1 flecha.", Lore.SearchLine("Ana", "body", new Loot { Arrows = 1 }, 0));
+            Assert.Equal("+5 flechas", Lore.FindLabel(new Loot { Arrows = 5 }));
+            Assert.Equal("Ana recoge una flecha.", Lore.LootTakenLine("Ana", new Loot { Arrows = 1 }));
             Assert.Equal("Mientras la escuadra está oculta, cada soldado tiene 3 puntos más: 11. Al romperse la ocultación, pierde 3 de los que le queden ese turno.", Lore.MoveText.Rules[1]);
             Assert.Equal("El jefe del capítulo 1: un muerto enorme que embiste y tumba. Matarlo supera el capítulo.", Lore.Glossary["El Toro"]);
-            Assert.Equal(40, Lore.Glossary.Count);
+            Assert.Equal(42, Lore.Glossary.Count);
             Assert.Equal("Un muerto del tamaño de dos.", Lore.EnemyFiles[TemplateIds.Brute].What);
             Assert.All(TemplateIds.All, (t) => Assert.True(!Content.Templates[t].Undead || Lore.EnemyFiles.ContainsKey(t), t));
             Assert.Equal("EL TORO", Lore.BossText.RoarBanner(Lore.BossName(1)));
@@ -3200,8 +3221,9 @@ namespace Bastion.Engine.Tests
             // T8 (Arturo, 18/11): «Salir» looked like quitting the game.
             Assert.Equal("Partir", Lore.ExpeditionText.Start);
             Assert.Equal("Parte la escuadra: empieza una expedición del capítulo 1.", Lore.ExpeditionText.StartHelp(1));
-            // G23.4 Separados, G23.5 Saqueadores and G23.6 Evacuación (Gameplay, 20/11): their names only, Lore's to write the rest.
-            Assert.Equal(19, Lore.StageNames.Count);
+            // G23.4 Separados, G23.5 Saqueadores, G23.6 Evacuación (Gameplay, 20/11) and Las cargas (21/11): their names only, Lore's
+            // to write the rest.
+            Assert.Equal(20, Lore.StageNames.Count);
             Assert.Equal("Evacuación", Lore.StageName(NodeKinds.Evacuation));
             Assert.Equal("Saqueadores", Lore.StageName(NodeKinds.Raiders));
             // G23.5 Saqueadores (Arturo, cuadros 71, 98 and 99): the stage, the objective, the stash's crates (Lore, 20/11).

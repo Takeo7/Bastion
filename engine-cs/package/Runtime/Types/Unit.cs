@@ -76,6 +76,8 @@ namespace Bastion.Engine
         public string? Mod { get; set; } // WeaponModIds
         /// <summary>Magazines (docs/FASE7.md): straight to the searcher's spares, not into the backpack.</summary>
         public int? Mags { get; set; }
+        /// <summary>Arco y ballesta (cuadro 102): arrows, into a run soldier's pack (GearKinds.Arrows).</summary>
+        public int? Arrows { get; set; }
         /// <summary>
         /// How many of its accessory or its improvement (Item, Mod), piled in one slot (Arturo, 7/11: «lo que es igual, sin
         /// límite»; Looting.PileFor); absent, one. The counted ones (Supplies, Medicines, Food, Parts) pile by their own count.
@@ -230,6 +232,13 @@ namespace Bastion.Engine
         public int Ammo { get; set; }
         /// <summary>Spare magazines for the primary weapon (docs/FASE7.md): only the squad counts them; without it, reloading never runs out.</summary>
         public int? Mags { get; set; }
+        /// <summary>
+        /// Arco y ballesta (cuadro 102): the arrows in a run soldier's pack (GearKinds.Arrows; RunPack.SyncArrows), for the bow
+        /// and the crossbow alike. Null: not counted, they never run out (the enemies: the Cazador's crossbow).
+        /// </summary>
+        public int? Arrows { get; set; }
+        /// <summary>Arrows stuck in this one (one a hit with them, WeaponDef.Arrows): back to the pack of whoever searches its body.</summary>
+        public int? ArrowsIn { get; set; }
         /// <summary>A campaign soldier's own weapons (docs/FASE8.md §A); absent, the template's.</summary>
         public Arms? Arms { get; set; }
         /// <summary>Rounds in the pistol carried beside a primary weapon (content.ts PISTOL_CLIP); `ammo` is the main gun's.</summary>

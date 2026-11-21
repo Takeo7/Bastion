@@ -865,6 +865,22 @@ namespace Bastion.UI.Combat
         /// tooltips); a partner's soldier says whose.
         /// </summary>
         /// <summary>
+        /// The weapon in `u`'s hand by its picture (U29, Producto 21/11: «Ballesta» had a gun's by it): the found weapon's, else
+        /// the pistol's, else the blade's; an enemy's, its template's (the Cazador's crossbow). One with no picture of its own
+        /// (Ui.WeaponIcon's blade for what is no blade), the rifle's, as all had before.
+        /// </summary>
+        static string WeaponIconOf(Unit u)
+        {
+            var arms = u.Arms;
+            var id = arms == null ? Content.Templates[u.Template].Weapon
+                : !string.IsNullOrEmpty(arms.Primary) ? Content.FoundWeapons[arms.Primary].Weapon
+                : Content.HasPistol(u) ? WeaponIds.Pistol
+                : !string.IsNullOrEmpty(arms.Melee) ? Content.FoundWeapons[arms.Melee].Weapon : WeaponIds.Knife;
+            var icon = Ui.WeaponIcon(id);
+            return icon == "overwatchMelee" && !(id != null && Content.Weapons.TryGetValue(id, out var w) && w.Melee) ? "stat:weapon" : icon;
+        }
+
+        /// <summary>
         /// A soldier's cover as its shield shows it (Arturo, 7/11; the flag's square before): the worst against whoever sees
         /// it (0, flanked), else the best round it; -1, no cover, or cover doesn't count. With no shooter in sight nobody
         /// flanks anyone: the shield only shows cover, never the red «flanked».
@@ -901,6 +917,7 @@ namespace Bastion.UI.Combat
                 Skills = SkillValues(u),
                 Name = !string.IsNullOrEmpty(u.Nickname) ? $"{u.Name} «{u.Nickname}»" : u.Name,
                 Weapon = weapon,
+                WeaponIcon = WeaponIconOf(u),
                 WeaponTip = string.Join(" · ", new[] { weapon }.Concat(extras)),
             };
             // Its cover, a shield in its colour (Arturo, 7/11).
@@ -926,8 +943,16 @@ namespace Bastion.UI.Combat
                 if (u.Team == Teams.Xcom && u.Automaton == null && Paths.FullMoves(State, u) > 0)
                     view.Stats.Add(new StatView { Kind = "moves", Tip = HudText.Moves.Tip(Paths.MoveBudget(State, u), Paths.FullMoves(State, u), Paths.ConcealedBonus(State, u)), Filled = Paths.MoveBudget(State, u) / Paths.CostOrtho, Total = Paths.FullMoves(State, u) / Paths.CostOrtho });
             }
+            // Arco y ballesta (U29): the bolt loaded (the crossbow's clip of one; the bow has none) and the arrows in the pack,
+            // which both shoot: «7», red at none; the enemies' are not counted (Unit.Arrows null), nor shown.
+            var arrows = gun && Content.AttackWeapon(u, AbilityIds.Shoot) is WeaponDef shot && shot.Arrows;
+            if (arrows)
+            {
+                if (clip > 0) view.Stats.Add(new StatView { Kind = "ammo", Tip = $"{weapon}: {u.Ammo}/{clip}", Filled = u.Ammo, Total = clip });
+                if (u.Arrows is int left) view.Stats.Add(new StatView { Kind = "arrows", Tip = HudText.Arrows.Tip(left), Value = left.ToString(), ValueBad = left == 0 });
+            }
             // The spare magazines after the clip (docs/FASE7.md): «+3», red at none; the enemies don't count theirs.
-            if (clip > 0)
+            else if (clip > 0)
             {
                 var spares = u.Mags == null ? "" : u.Mags > 0 ? $" · {Lore.MagsCount(u.Mags.Value)} de repuesto" : " · sin cargadores de repuesto";
                 view.Stats.Add(new StatView { Kind = "ammo", Tip = $"{weapon}: {u.Ammo}/{clip}{spares}", Filled = u.Ammo, Total = clip, Value = u.Mags != null ? $"+{u.Mags}" : null, ValueBad = u.Mags == 0 });
@@ -1500,6 +1525,14 @@ namespace Bastion.UI.Combat
                 Locked = LockLabel(),
                 Noise = loud > 0 ? AbilityTexts.NoiseEstimate(State, u, loud, true) : "Sin ruido",
             };
+            // Arco y ballesta (U29, cuadro 102): the squad hidden, whether a kill with arrows keeps it so (Gameplay's
+            // Rules.SilentKill: nobody else of the enemy notices the shooter where it stands), or who would see it.
+            if (State.Concealed && target.Team != Teams.Xcom && Content.FiresArrows(u, ability))
+            {
+                var seer = Rules.SilentKill(State, u, target) ? null : Los.Watchers(State, u, u.Pos).FirstOrDefault(w => w.Id != target.Id && Visible(w));
+                var silent = seer == null && Rules.SilentKill(State, u, target) ? HudText.Silent.Kept : HudText.Silent.Seen(seer != null ? OneOf(seer) : null);
+                view.Note = string.IsNullOrEmpty(view.Note) ? silent : $"{view.Note} {silent}";
+            }
             if (d != null)
             {
                 view.HasDamage = true;

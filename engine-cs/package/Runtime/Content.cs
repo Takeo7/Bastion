@@ -58,12 +58,19 @@ namespace Bastion.Engine
         /// de asalto»): one round a shot, the assault rifle's figures otherwise (FoundWeaponIds.HuntingRifle).
         /// </summary>
         public const string HuntingRifle = "huntingRifle";
+        /// <summary>
+        /// Arco y ballesta (Arturo, cuadros 101–106; .dev-snapshots/gameplay/g23/ARCO-Y-BALLESTA.md): silent long arms that
+        /// fire arrows (WeaponDef.Arrows, GearKinds.Arrows). The crossbow strong, a bolt loaded and an action to reload; the
+        /// bow (the recurve) quick, never reloaded, an arrow from the pack each shot. The Cazador's is the crossbow.
+        /// </summary>
+        public const string Crossbow = "crossbow";
+        public const string Bow = "bow";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             Rifle, Shotgun, Cannon, Sniper, Pistol, Sword, Knife, Pan, Bat, Crowbar, Chainsaw, TrooperRifle, TurretGun,
             OfficerRifle, XenoPistol, LancerRifle, StunLance, MecCannon, SectoidPistol, Claws, FragGrenade, MicroMissiles,
-            BloaterBurst, Katana, Longsword, Rake, Stick, BruteFists, HuntingRifle,
+            BloaterBurst, Katana, Longsword, Rake, Stick, BruteFists, HuntingRifle, Crossbow, Bow,
         };
     }
 
@@ -98,6 +105,12 @@ namespace Bastion.Engine
         public int Burst { get; set; }
         /// <summary>Noise radius in tiles of an attack or a blast with it (docs/FASE2.md).</summary>
         public int Noise { get; set; }
+        /// <summary>
+        /// Arco y ballesta (cuadros 101–103): it fires arrows (GearKinds.Arrows). With a clip (the crossbow) reloading takes one
+        /// from the pack instead of a magazine; without (the bow), every shot does. A hit leaves it in the body (Unit.ArrowsIn), and
+        /// a kill nobody else sees keeps the squad hidden (Rules.Attack).
+        /// </summary>
+        public bool Arrows { get; set; }
     }
 
     // ---------------------------------------------------------------- abilities
@@ -508,7 +521,8 @@ namespace Bastion.Engine
             int apCost = 1,
             bool melee = false,
             int burst = 3,
-            int noise = 0)
+            int noise = 0,
+            bool arrows = false)
         {
             return new WeaponDef
             {
@@ -527,6 +541,7 @@ namespace Bastion.Engine
                 Melee = melee,
                 Burst = burst,
                 Noise = noise,
+                Arrows = arrows,
             };
         }
 
@@ -572,6 +587,10 @@ namespace Bastion.Engine
             [WeaponIds.BruteFists] = Weapon(WeaponIds.BruteFists, "Mazazo", 6, critDamage: 2, aim: 10, range: RangeTableIds.None, melee: true, burst: 1, noise: 2),
             // T14 (18/11): the bolt-action rifle fires one round, not the assault rifle's three; its figures, the assault rifle's.
             [WeaponIds.HuntingRifle] = Weapon(WeaponIds.HuntingRifle, "Fusil de cerrojo", 4, spread: 1, critDamage: 2, clip: 4, burst: 1, noise: 18),
+            // Arco y ballesta (cuadros 101–103; ARCO-Y-BALLESTA.md): quiet. The crossbow the precision rifle's reach, a bolt
+            // loaded, an action to reload; the recurve the assault rifle's, never reloaded (Clip 0: an arrow a shot).
+            [WeaponIds.Crossbow] = Weapon(WeaponIds.Crossbow, "Ballesta", 5, spread: 1, critDamage: 2, clip: 1, range: RangeTableIds.Long, burst: 1, noise: 2, arrows: true),
+            [WeaponIds.Bow] = Weapon(WeaponIds.Bow, "Arco", 3, spread: 1, critDamage: 1, burst: 1, noise: 1, arrows: true),
         };
 
         // ---------------------------------------------------------------- abilities
@@ -675,6 +694,8 @@ namespace Bastion.Engine
             [AbilityIds.Carry] = new AbilityDef { Id = AbilityIds.Carry, Name = Lore.WoundedText.CarryAction, Description = Lore.WoundedText.CarryHelp, Target = AbilityTargets.Self, Ap = 1, EndsTurn = false },
             [AbilityIds.SetDown] = new AbilityDef { Id = AbilityIds.SetDown, Name = Lore.WoundedText.SetDownAction, Description = Lore.WoundedText.SetDownHelp, Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Range = 1.5 },
             [AbilityIds.Pass] = new AbilityDef { Id = AbilityIds.Pass, Name = Lore.WoundedText.PassAction, Description = Lore.WoundedText.PassHelp, Target = AbilityTargets.Ally, Ap = 1, EndsTurn = false, Range = 1.5 },
+            // G23 Las cargas (cuadro 109): a charge from the pack set at a point of the nest beside; heard 2 tiles off (Lore's words, provisional).
+            [AbilityIds.PlaceCharge] = new AbilityDef { Id = AbilityIds.PlaceCharge, Name = "Poner la carga", Description = "Pone una carga de la mochila en el punto que tienes al lado. Al poner la tercera empieza la cuenta: 4 turnos para estar en La Lata.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = false, Noise = 2 },
         };
 
         /// <summary>Base chance of fixing the objective terminal (Arreglar); since T2 no bar adds to it.</summary>
@@ -749,6 +770,10 @@ namespace Bastion.Engine
             [FoundWeaponIds.Stick] = new FoundWeaponDef { Id = FoundWeaponIds.Stick, Name = "Palo", Find = "un palo", Weapon = WeaponIds.Stick, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 3 },
             // The commonest find, but only where pistols are counted (MissionState.Pistols; Looting.FoundWeapon).
             [FoundWeaponIds.Pistol] = new FoundWeaponDef { Id = FoundWeaponIds.Pistol, Name = "Pistola", Find = "una pistola", Weapon = WeaponIds.Pistol, Slot = FoundWeaponSlots.Sidearm, Better = false, Weight = 12 },
+            // Arco y ballesta (cuadro 105): never in the campaign of before's finds (Weight 0); a run's, rarely (Looting.RunsBow),
+            // and off the Cazador's body. Names provisional (Lore's).
+            [FoundWeaponIds.Crossbow] = new FoundWeaponDef { Id = FoundWeaponIds.Crossbow, Name = "Ballesta", Find = "una ballesta", Weapon = WeaponIds.Crossbow, Slot = FoundWeaponSlots.Primary, Better = false, Weight = 0 },
+            [FoundWeaponIds.Bow] = new FoundWeaponDef { Id = FoundWeaponIds.Bow, Name = "Arco", Find = "un arco recurvo", Weapon = WeaponIds.Bow, Slot = FoundWeaponSlots.Primary, Better = false, Weight = 0 },
         };
 
         /// <summary>The chainsaw's fuel (ChargeIds.Fuel): the blows it has in each mission (Arturo, 29/10: «un límite de usos»).</summary>
@@ -997,7 +1022,9 @@ namespace Bastion.Engine
             // The living: they take cover and shoot (ai.ts takeAlienTurn), and hear the noise.
             [TemplateIds.Trooper] = Alien(TemplateIds.Trooper, "Saqueador", "SAQ", WeaponIds.TrooperRifle, abilities: new[] { AbilityIds.Shoot, AbilityIds.Overwatch, AbilityIds.Reload, AbilityIds.Grenade }, charges: Charges(ChargeIds.Grenade, 1)),
             [TemplateIds.Officer] = Alien(TemplateIds.Officer, "Cabecilla", "CAB", WeaponIds.OfficerRifle, hp: 6, abilities: new[] { AbilityIds.Shoot, AbilityIds.Overwatch, AbilityIds.Reload }),
-            [TemplateIds.Lancer] = Alien(TemplateIds.Lancer, "Cazador", "CAZ", WeaponIds.LancerRifle, meleeWeapon: WeaponIds.StunLance, hp: 4, abilities: new[] { AbilityIds.StunLance, AbilityIds.Shoot, AbilityIds.Reload }),
+            // Cuadro 105 (Arturo, 21/11: «Los lleva el Cazador»): a crossbow, not the net and club; it shoots from afar, watches
+            // and reloads like a Saqueador, its arrows uncounted (Unit.Arrows null). Its body gives it (Looting.CarriedGuns).
+            [TemplateIds.Lancer] = Alien(TemplateIds.Lancer, "Cazador", "CAZ", WeaponIds.Crossbow, hp: 4, abilities: new[] { AbilityIds.Shoot, AbilityIds.Overwatch, AbilityIds.Reload }),
             // The dead (docs/FASE2.md): claws and teeth, no cover, the horde's AI (ai.ts takeZombieTurn).
             // Harder to put down (playtest 2026-10-15, #12): two more points of health each.
             // Playtest 16/10 #19 and #21: 3 of health; 5 of movement and one action (Arturo, 5/11 #14). The special dead keep
@@ -1073,8 +1100,31 @@ namespace Bastion.Engine
         {
             var w = AttackWeapon(u, ability);
             if (u.Arms != null && w.Id == WeaponIds.Pistol) return PistolClip;
-            return w.Clip + (FiresPrimary(u, ability) && HasMod(u, WeaponModIds.ExtMag) ? ExtMag : 0);
+            // Arco y ballesta: nothing mounted on them (ARCO-Y-BALLESTA.md: «sin mejoras»).
+            return w.Clip + (FiresPrimary(u, ability) && !w.Arrows && HasMod(u, WeaponModIds.ExtMag) ? ExtMag : 0);
         }
+
+        /// <summary>Arco y ballesta (cuadro 102): arrows to a cell of the pack.</summary>
+        public const int ArrowsPile = 10;
+        /// <summary>Arco y ballesta (cuadro 105): the arrows a Cazador's body gives besides its crossbow.</summary>
+        public const int CazadorArrows = 5;
+
+        /// <summary>
+        /// Arco y ballesta (cuadros 101–103): whether `ability` (a shot, or watching to shoot) fires arrows: the primary's, a bow
+        /// or a crossbow (WeaponDef.Arrows), or a unit's own weapon without arms of its own (the Cazador's crossbow).
+        /// </summary>
+        public static bool FiresArrows(Unit u, string ability = AbilityIds.Shoot)
+        {
+            if (!(IsAttack(ability) || ability == AbilityIds.Overwatch || ability == AbilityIds.KillZone)) return false;
+            var shot = IsAttack(ability) ? ability : AbilityIds.Shoot;
+            return !FiresSidearm(u, shot) && AttackWeapon(u, shot).Arrows;
+        }
+
+        /// <summary>
+        /// Arco y ballesta: whether the unit is out of arrows for `ability`, where they are counted (Unit.Arrows): a bow can't
+        /// shoot (every shot takes one), a crossbow can't reload. Never for the enemies (null: uncounted).
+        /// </summary>
+        public static bool OutOfArrows(Unit u) => u.Arrows != null && u.Arrows.Value <= 0;
 
         /// <summary>Whether the soldier carries a pistol (Arms.Pistol): a unit without arms of its own, its template's.</summary>
         public static bool HasPistol(Unit u)
@@ -1105,6 +1155,8 @@ namespace Bastion.Engine
         {
             // A broken weapon doesn't fire (docs/FASE9.md §5), loaded or not.
             if (FiresPrimary(u, ability) && ConditionOf(u) <= 0) return false;
+            // A bow takes an arrow from the pack each shot (Clip 0): none left, it doesn't fire.
+            if (ClipOf(u, ability) == 0 && FiresArrows(u, ability) && OutOfArrows(u)) return false;
             return ClipOf(u, ability) == 0 || RoundsOf(u, ability) > 0;
         }
 
@@ -1112,9 +1164,12 @@ namespace Bastion.Engine
         public static void ReloadWeapon(Unit u)
         {
             var main = ClipOf(u, AbilityIds.Shoot);
-            if (u.Ammo < main || string.IsNullOrEmpty(u.Arms?.Primary)) u.Ammo = main;
+            if (ReloadsMain(u)) u.Ammo = main;
             else if (HasPistol(u)) u.PistolAmmo = PistolClip;
         }
+
+        /// <summary>Whether a reload now fills the main weapon (else the pistol beside it): ReloadWeapon's choice.</summary>
+        public static bool ReloadsMain(Unit u) => u.Ammo < ClipOf(u, AbilityIds.Shoot) || string.IsNullOrEmpty(u.Arms?.Primary);
 
         /// <summary>Whether every gun the soldier carries is full.</summary>
         public static bool FullyLoaded(Unit u)

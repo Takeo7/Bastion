@@ -51,6 +51,12 @@ namespace Bastion.Engine
         /// buildings enough (RunMap.EvacuationSites).
         /// </summary>
         public const string Evacuation = "evacuation";
+        /// <summary>
+        /// G23 Las cargas (Arturo, cuadros 105 and 109; .dev-snapshots/gameplay/g23/CARGAS.md): a Saqueo with a nest of the dead to
+        /// blow up, three charges carried in the packs to set at its three points; the last one set, a count of
+        /// Setup.ChargesTurns, and La Lata goes as they blow (MissionState.Charges).
+        /// </summary>
+        public const string Charges = "charges";
         // Stops, no fight (H4).
         public const string Refuge = "refuge";
         public const string Trade = "trade";
@@ -60,7 +66,7 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> All = new[]
         {
             Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Key, Bitten, Wounded, Split, Raiders,
-            Evacuation, Refuge, Trade, Event, Boss,
+            Evacuation, Charges, Refuge, Trade, Event, Boss,
         };
 
         /// <summary>The stops: no fight, the squad answers them on the map.</summary>

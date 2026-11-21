@@ -14,7 +14,7 @@ namespace Bastion.Client.Units
         Vector3 home;
         float drawn;
 
-        void Start() => home = joint != null ? joint.localPosition : Vector3.zero;
+        bool homed;
 
         void LateUpdate() => Step(Time.deltaTime);
         public void ShotStep(float dt) => Step(dt);
@@ -22,6 +22,11 @@ namespace Bastion.Client.Units
         void Step(float dt)
         {
             if (joint == null) return;
+            if (!homed)
+            {
+                homed = true;
+                home = joint.localPosition;
+            }
             // (Let go, back in a twentieth of a second; drawn, with the hand.)
             drawn = Mathf.MoveTowards(drawn, pull && fingers != null ? 1 : 0, dt * (pull ? 6 : 20));
             var parent = joint.parent;

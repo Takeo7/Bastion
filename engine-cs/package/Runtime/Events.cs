@@ -16,6 +16,21 @@ namespace Bastion.Engine
             return u;
         }
 
+        /// <summary>Evacuación (cuadro 107): a civilian that walks or boards cowers no more (CivilianSpot.Cowering).</summary>
+        private static void Calmed(GameState s, string unit)
+        {
+            if (s.Mission.Civilians == null) return;
+            var spot = s.Mission.Civilians.Find((x) => x.Unit == unit);
+            if (spot != null) spot.Cowering = null;
+        }
+
+        /// <summary>Arco y ballesta (cuadro 102): an arrow spent, off the count (Unit.Arrows) and out of a run soldier's pack.</summary>
+        private static void SpendArrow(Unit u)
+        {
+            if (u.Arrows != null) u.Arrows = Math.Max(0, u.Arrows.Value - 1);
+            if (u.Pack != null) RunPack.SpendArrow(u);
+        }
+
         /// <summary>Lets go of whoever `u` was suppressing.</summary>
         private static void EndSuppression(GameState s, Unit u)
         {
@@ -215,6 +230,7 @@ namespace Bastion.Engine
                 case MovedEvent ev:
                 {
                     var u = UnitOf(s, ev.Unit);
+                    Calmed(s, u.Id);
                     var last = ev.Path.Count > 0 ? ev.Path[ev.Path.Count - 1] : null;
                     // It looks the way it walked (los.ts inViewCone: the dead see ahead of them).
                     var before = ev.Path.Count > 1 ? ev.Path[ev.Path.Count - 2] : u.Pos;
@@ -254,6 +270,13 @@ namespace Bastion.Engine
                     if (aim != null) u.Facing = Los.FacingTo(u.Pos, aim.Pos) ?? u.Facing;
                     if (Content.FiresSidearm(u, ev.Ability)) u.PistolAmmo = Math.Max(0, (u.PistolAmmo ?? 0) - 1);
                     else if (Content.ClipOf(u, ev.Ability) > 0) u.Ammo = Math.Max(0, u.Ammo - 1);
+                    // Arco y ballesta (cuadro 102): a bow's shot takes an arrow from the pack; one that lands stays in the body of
+                    // whoever of the enemy it struck, to be had back searching it (Looting.BodyArrows). The one that misses is lost.
+                    if (Content.FiresArrows(u, ev.Ability))
+                    {
+                        if (Content.ClipOf(u, ev.Ability) == 0) SpendArrow(u);
+                        if (ev.Result != ShotResults.Miss && aim != null && aim.Team == Teams.Alien) aim.ArrowsIn = (aim.ArrowsIn ?? 0) + 1;
+                    }
                     if (ev.Reaction && u.Overwatch)
                     {
                         if (u.KillZone) u.ReactedTo.Add(ev.Target);
@@ -389,7 +412,14 @@ namespace Bastion.Engine
                 case ReloadEvent ev:
                 {
                     var u = UnitOf(s, ev.Unit);
+                    // Arco y ballesta (cuadro 102): the crossbow's bolt is an arrow from the pack, not a magazine.
+                    var bolt = Content.ReloadsMain(u) && Content.FiresArrows(u);
                     Content.ReloadWeapon(u);
+                    if (bolt)
+                    {
+                        SpendArrow(u);
+                        break;
+                    }
                     if (u.Mags != null) u.Mags = Math.Max(0, u.Mags.Value - 1);
                     // A run's soldier (H3): out of its pack.
                     if (u.Pack != null) RunPack.SpendMag(u);
@@ -525,6 +555,7 @@ namespace Bastion.Engine
                 {
                     // Into La Lata (T24): off the field, safe, a seat taken; what it carried in it.
                     var u = UnitOf(s, ev.Unit);
+                    Calmed(s, u.Id);
                     // G23.3: the wounded, in after their carrier (Rules: its own BoardedEvent), no longer carried.
                     Unload(s, u);
                     u.Alive = false;
@@ -789,10 +820,34 @@ namespace Bastion.Engine
                     UnitOf(s, ev.Unit).Captive = false;
                     break;
                 }
+                case ChargePlacedEvent ev:
+                {
+                    // G23 Las cargas: set, out of the pack; the last one, the count starts.
+                    var u = UnitOf(s, ev.Unit);
+                    var c = s.Mission.Charges;
+                    if (c == null) break;
+                    var point = c.Points.Find((p) => p.Tile == ev.Tile.Y * s.Width + ev.Tile.X);
+                    if (point != null) point.Placed = true;
+                    var carried = u.Pack?.Items.Find((p) => p.Gear.Id == ev.Gear);
+                    if (carried != null) u.Pack!.Items.Remove(carried);
+                    if (c.Points.All((p) => p.Placed)) c.Countdown = Setup.ChargesTurns;
+                    break;
+                }
+                case ChargesTickEvent ev:
+                    if (s.Mission.Charges != null) s.Mission.Charges.Countdown = ev.Left;
+                    break;
+                case ChargesBlownEvent:
+                    if (s.Mission.Charges != null) s.Mission.Charges.Blown = true;
+                    break;
                 case CivilianPanickedEvent ev:
                 {
                     var spot = s.Mission.Civilians?.Find((x) => x.Unit == ev.Unit);
-                    if (spot != null) spot.Panics++;
+                    if (spot != null)
+                    {
+                        spot.Panics++;
+                        // Cuadro 107: cowering till their next step.
+                        spot.Cowering = ev.Kind == PanicKinds.Cower ? true : (bool?)null;
+                    }
                     break;
                 }
                 case CivilianHidEvent ev:
@@ -801,6 +856,7 @@ namespace Bastion.Engine
                     var spot = s.Mission.Civilians?.Find((x) => x.Unit == ev.Unit);
                     if (spot != null)
                     {
+                        spot.Cowering = null;
                         spot.Found = false;
                         spot.Area = new SearchArea { Center = CopyVec(ev.Area.Center), Radius = ev.Area.Radius };
                     }
@@ -1046,7 +1102,7 @@ namespace Bastion.Engine
         /// <summary>`!Object.keys(loot).length`: nothing set.</summary>
         private static bool IsEmpty(Loot l)
         {
-            return l.Supplies == null && l.Item == null && l.Medicines == null && l.Food == null && l.Parts == null && l.Weapon == null && l.WeaponId == null && l.Condition == null && l.Mods == null && l.Mod == null && l.Mags == null;
+            return l.Supplies == null && l.Item == null && l.Medicines == null && l.Food == null && l.Parts == null && l.Weapon == null && l.WeaponId == null && l.Condition == null && l.Mods == null && l.Mod == null && l.Mags == null && l.Arrows == null;
         }
 
         /// <summary>One of the backpack's slot `index`: off its pile (Loot.Count), or the slot itself when it is the last.</summary>
@@ -1218,7 +1274,7 @@ namespace Bastion.Engine
         /// <summary>`{ ...loot }`: a shallow copy (its `mods` the same list).</summary>
         public static Loot CopyLoot(Loot l)
         {
-            return new Loot { Supplies = l.Supplies, Item = l.Item, Medicines = l.Medicines, Food = l.Food, Parts = l.Parts, Weapon = l.Weapon, WeaponId = l.WeaponId, Condition = l.Condition, Mods = l.Mods, Mod = l.Mod, Mags = l.Mags, Count = l.Count };
+            return new Loot { Supplies = l.Supplies, Item = l.Item, Medicines = l.Medicines, Food = l.Food, Parts = l.Parts, Weapon = l.Weapon, WeaponId = l.WeaponId, Condition = l.Condition, Mods = l.Mods, Mod = l.Mod, Mags = l.Mags, Arrows = l.Arrows, Count = l.Count };
         }
 
         private static Loot CloneLoot(Loot l)
@@ -1272,6 +1328,8 @@ namespace Bastion.Engine
                 Moves = u.Moves,
                 Ammo = u.Ammo,
                 Mags = u.Mags,
+                Arrows = u.Arrows,
+                ArrowsIn = u.ArrowsIn,
                 Arms = u.Arms != null ? new Arms { Primary = u.Arms.Primary, PrimaryId = u.Arms.PrimaryId, Condition = u.Arms.Condition, Mods = CopyStrings(u.Arms.Mods), Melee = u.Arms.Melee, MeleeId = u.Arms.MeleeId, Pistol = u.Arms.Pistol, PistolId = u.Arms.PistolId } : null,
                 PistolAmmo = u.PistolAmmo,
                 Charges = new Dictionary<string, int>(u.Charges),
@@ -1426,6 +1484,7 @@ namespace Bastion.Engine
                     Split = m.Split?.Select((g) => g.ToList()).ToList(),
                     Raiders = m.Raiders?.Copy(),
                     Civilians = m.Civilians?.Select((x) => x.Copy()).ToList(),
+                    Charges = m.Charges?.Copy(),
                     BiteTurns = m.BiteTurns,
                     Cured = m.Cured,
                     Antiviral = m.Antiviral != null ? Gears.CloneGear(m.Antiviral) : null,

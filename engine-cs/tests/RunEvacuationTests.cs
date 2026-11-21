@@ -82,6 +82,7 @@ namespace Bastion.Engine.Tests
         public void FourCiviliansHiddenInBuildingsOfTheirOwnEachInItsCircle()
         {
             var fewer = 0;
+            var far = 0;
             foreach (var site in new[] { Places.Town, Places.Roadside, Places.Plaza })
             {
                 foreach (var seed in Seeds)
@@ -109,11 +110,14 @@ namespace Bastion.Engine.Tests
                         Assert.True(house >= 0, $"{site} {seed}: {u.Id} outdoors");
                         Assert.True(houses.Add(house), $"{site} {seed}: two in one building");
                         var walk = ToBus(s, u) / Paths.CostOrtho;
-                        Assert.InRange(walk, Setup.CivilianNear, Setup.CivilianFar);
+                        // Near (R1 of 21/11), or as far as before where the map hasn't three buildings so near.
+                        Assert.InRange(walk, Setup.CivilianNear, Setup.CivilianFarthest);
+                        if (walk > Setup.CivilianFar) far++;
                     }
                 }
             }
             Assert.True(fewer <= 2, $"{fewer} of 24 with three");
+            Assert.True(far <= 24, $"{far} beyond the near band");
         }
 
         [Fact]
@@ -248,6 +252,27 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void CoweringStaysInTheStateTillItsNextStep()
+        {
+            // Cuadro 107 (Arte): so that whoever comes in late draws it cowering too.
+            var (s, c, z) = Panicking(PanicKinds.Cower);
+            var spot = SpotOf(s, c);
+            NewSim(s).CivilianStep();
+            Assert.True(spot.Cowering);
+            Assert.True(Events.CloneState(s).Mission.Civilians!.Single((x) => x.Unit == c.Id).Cowering);
+            // The dead gone, its next step is a walk: it cowers no more.
+            z.Alive = false;
+            var sim = NewSim(s);
+            sim.CivilianStep();
+            Assert.NotEmpty(Of<MovedEvent>(sim.Events));
+            Assert.Null(spot.Cowering);
+            // Another kind of panic doesn't cower.
+            var (s2, c2, _) = Panicking(PanicKinds.Away);
+            NewSim(s2).CivilianStep();
+            Assert.Null(SpotOf(s2, c2).Cowering);
+        }
+
+        [Fact]
         public void PanickedItWalksAwayFromTheDead()
         {
             var (s, c, z) = Panicking(PanicKinds.Away);
@@ -358,6 +383,29 @@ namespace Bastion.Engine.Tests
             var r = Exec(s, new EvacCommand { Unit = aboard.Id });
             Assert.True(r.Ok, r.Error);
             Assert.NotNull(s.Outcome);
+        }
+
+        [Fact]
+        public void LeavingWithOneAboardNoRewardTheRunGoesOn()
+        {
+            // Red's question (Producto, 21/11): «ETAPA SUPERADA, SIN LA RECOMPENSA», as Separados': a defeat «abandoned», the
+            // squad safe, the run on, no reward.
+            var (c, s) = Evac(3);
+            NoDead(s);
+            var one = Civilians(s)[0];
+            Found(s, one);
+            Events.ApplyEvent(s, new BoardedEvent { Unit = one.Id });
+            var squad = Squad(s);
+            foreach (var u in squad) Events.ApplyEvent(s, new BoardedEvent { Unit = u.Id });
+            Assert.Equal(1, Rules.CiviliansShort(s));
+            Assert.True(Exec(s, new EvacCommand { Unit = squad[0].Id }).Ok);
+            Assert.Equal((Outcomes.Defeat, EndReasons.Abandoned), (s.Outcome, s.OutcomeReason));
+            var report = RunsHelpers.EndFight(c, s, s.Outcome!, s.OutcomeReason!);
+            Assert.False(report.Victory);
+            Assert.Null(report.Run!.Reward);
+            Assert.Null(report.Run.Ended);
+            Assert.NotNull(c.Run);
+            Assert.All(squad, (u) => Assert.True(c.Soldiers.Single((x) => x.Id == u.CampaignId).Alive));
         }
 
         // ------------------------------------------------------------------ the reward

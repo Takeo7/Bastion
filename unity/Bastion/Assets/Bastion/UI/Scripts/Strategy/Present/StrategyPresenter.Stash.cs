@@ -128,6 +128,8 @@ namespace Bastion.UI.Strategy
                 case GearKinds.Mod: return "stat:weapon";
                 case GearKinds.Vest: return "stat:armor";
                 case GearKinds.Mags: return "stat:ammo";
+                // Arco y ballesta's (U29): the quiver.
+                case GearKinds.Arrows: return "arrows";
                 case GearKinds.Medicine: return "store:medicines";
                 case GearKinds.Supplies: return "§";
                 // La llave's (U22): Synty's map key, as its stage's on the map.
@@ -171,6 +173,7 @@ namespace Bastion.UI.Strategy
                     if (g.Type != null && Content.Vests.TryGetValue(g.Type, out var v)) lines.Add(StrategyText.Stash.Vest(v.Hp, v.Armor));
                     break;
                 case GearKinds.Mags: lines.Add(StrategyText.Stash.MagsLine); break;
+                case GearKinds.Arrows: lines.Add(Lore.ArrowsText.Help); break;
                 case GearKinds.Medicine: lines.Add(StrategyText.Stash.MedicineLine); break;
                 case GearKinds.Supplies: lines.Add(StrategyText.Stash.SuppliesLine); break;
                 // La llave's (U22): what it opens, and that it stays in the stage (Lore's).
@@ -217,7 +220,8 @@ namespace Bastion.UI.Strategy
             var reachBy = b == null ? 0 : a.Reach.Max != b.Value.Reach.Max ? a.Reach.Max - b.Value.Reach.Max : a.Reach.To != b.Value.Reach.To ? a.Reach.To - b.Value.Reach.To : a.Reach.From - b.Value.Reach.From;
             Figure(Lore.WeaponLabels.Reach, StrategyText.Stash.Reach(a.Reach.From, a.Reach.To, a.Reach.Max, a.Melee), reach, reachBy);
             // (A blade has no magazine: no line for it, Lore 18/11.)
-            if (!a.Melee) Figure(Lore.WeaponLabels.Clip, Lore.WeaponFigure("clip", a.Clip, a.Melee), b?.Melee != false ? 0 : Cmp(a.Clip, b?.Clip ?? 0), b?.Melee != false ? 0 : a.Clip - b.Value.Clip);
+            // (The bow's no magazine is an arrow a shot: Lore's, U29.)
+            if (!a.Melee) Figure(Lore.WeaponLabels.Clip, Lore.WeaponFigure("clip", a.Clip, a.Melee, Content.Weapons[d.Weapon].Arrows), b?.Melee != false ? 0 : Cmp(a.Clip, b?.Clip ?? 0), b?.Melee != false ? 0 : a.Clip - b.Value.Clip);
             Figure(Lore.WeaponLabels.Noise, Lore.WeaponFigure("noise", a.Noise), Cmp(a.Noise, b?.Noise ?? 0, lowIsGood: true), a.Noise - (b?.Noise ?? a.Noise));
             if (a.Actions >= 2 || (b?.Actions ?? 0) >= 2) Figure(a.Melee ? Lore.WeaponLabels.ActionsMelee : Lore.WeaponLabels.Actions, Lore.WeaponFigure("actions", a.Actions), Cmp(a.Actions, b?.Actions ?? 0, lowIsGood: true), a.Actions - (b?.Actions ?? a.Actions));
             if (a.Shred > 0 || (b?.Shred ?? 0) > 0) Figure(Lore.WeaponLabels.Shred, a.Shred.ToString(), Cmp(a.Shred, b?.Shred ?? 0), a.Shred - (b?.Shred ?? 0));

@@ -55,7 +55,10 @@ namespace Bastion.Engine
         /// The place a fight of `kind` is drawn in on the map: Saqueadores' among its sites alone (G23.5; Producto's review of
         /// 21/11: never where its camp has no room), the rest by SiteMix. The same draws as before for every other kind.
         /// </summary>
-        public static string SiteOf(string kind, int row, Rng rng) => kind == NodeKinds.Raiders ? rng.Pick(RaidersSites) : Weighted(rng, SiteMix);
+        public static string SiteOf(string kind, int row, Rng rng) => kind == NodeKinds.Raiders ? rng.Pick(RaidersSites) : kind == NodeKinds.Charges ? rng.Pick(ChargesSites) : Weighted(rng, SiteMix);
+
+        /// <summary>G23 Las cargas' sites (CARGAS.md): where a building can be its nest; the camping, the plaza and the maps of one building not.</summary>
+        public static readonly IReadOnlyList<string> ChargesSites = new[] { Places.Town, Places.Estate, Places.Factory };
 
         /// <summary>G23.5 Saqueadores from this row (Arturo, cuadro 99), as La llave and the Cuervos of a Rescate.</summary>
         public const int RaidersFrom = 3;
@@ -64,7 +67,7 @@ namespace Bastion.Engine
         /// A node's modifiers to draw from: Separados never with the horde awake (Producto, 20/11: till the bots measure it);
         /// an event's for the next fight (RunState.Pending), though, it takes (the player chose it).
         /// </summary>
-        public static IReadOnlyList<string> ModifiersFor(string kind) => kind == NodeKinds.Split ? SplitModifiers : Modifiers.All;
+        public static IReadOnlyList<string> ModifiersFor(string kind) => kind == NodeKinds.Split || kind == NodeKinds.Charges ? SplitModifiers : Modifiers.All;
 
         private static readonly IReadOnlyList<string> SplitModifiers = Modifiers.All.Where((m) => m != Modifiers.Awake).ToList();
 
@@ -150,7 +153,7 @@ namespace Bastion.Engine
         /// survivor is sure) nor the boss, by the map's seed; no mark on the map, nor where to look. Never in Separados
         /// (Producto, 20/11: with 2 seats one took the other group's seat in La Lata, and the reward was lost).
         /// </summary>
-        public static bool LooseSurvivor(RunNode n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Bitten && n.Kind != NodeKinds.Wounded && n.Kind != NodeKinds.Boss && n.Kind != NodeKinds.Split && n.Kind != NodeKinds.Evacuation && n.Kind != NodeKinds.Raiders && n.Seed != null && SeedDraw(n.Seed.Value, 0x10e5e) % LooseOdds == 0;
+        public static bool LooseSurvivor(RunNode n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Bitten && n.Kind != NodeKinds.Wounded && n.Kind != NodeKinds.Boss && n.Kind != NodeKinds.Split && n.Kind != NodeKinds.Evacuation && n.Kind != NodeKinds.Raiders && n.Kind != NodeKinds.Charges && n.Seed != null && SeedDraw(n.Seed.Value, 0x10e5e) % LooseOdds == 0;
 
         /// <summary>Rows with no service area: the first fights, made with knives only.</summary>
         public const int EarlyRows = 2;
@@ -173,7 +176,7 @@ namespace Bastion.Engine
         {
             // Separados (G23.4), only out of doors and with La Lata between its two starts: as drawn (SplitSites).
             // Saqueadores (G23.5), where its camp has room: its sites (RaidersSites, the camping among them), never another.
-            if (n.Seed == null || n.Kind == NodeKinds.Boss || n.Kind == NodeKinds.Split || n.Kind == NodeKinds.Raiders) return null;
+            if (n.Seed == null || n.Kind == NodeKinds.Boss || n.Kind == NodeKinds.Split || n.Kind == NodeKinds.Raiders || n.Kind == NodeKinds.Charges) return null;
             // Mordido's, always (G23.2: the one map with medicine cabinets and shelves enough).
             if (n.Kind == NodeKinds.Bitten) return Places.Hospital;
             var seed = Math.Abs(n.Seed.Value);

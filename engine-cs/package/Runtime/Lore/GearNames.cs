@@ -47,6 +47,8 @@ namespace Bastion.Engine
             [GearKinds.Key] = new GearWords("llave de la armería", "llaves de la armería", "la llave de la armería"),
             // G23.2: Mordido's one antiviral.
             [GearKinds.Antiviral] = new GearWords("antiviral", "antivirales", "el antiviral"),
+            // Arco y ballesta (cuadro 102): one ammunition for both, «flechas» for the crossbow's too (no «virote»).
+            [GearKinds.Arrows] = new GearWords("flecha", "flechas", "la flecha"),
         };
 
         /// <summary>
@@ -74,6 +76,8 @@ namespace Bastion.Engine
             [FoundWeaponIds.Longsword] = "espadas",
             [FoundWeaponIds.Rake] = "rastrillos",
             [FoundWeaponIds.Stick] = "palos",
+            [FoundWeaponIds.Crossbow] = "ballestas",
+            [FoundWeaponIds.Bow] = "arcos",
             [VestIds.Vest] = "chalecos antibalas",
             [VestIds.HeavyVest] = "chalecos con placas",
         };
@@ -145,6 +149,21 @@ namespace Bastion.Engine
                 return new GearWords(one, one, one);
             }
             return new GearWords(type ?? kind, type ?? kind, type ?? kind);
+        }
+
+        /// <summary>
+        /// Arco y ballesta (cuadros 102, 103 and 105; Gameplay's ARCO-Y-BALLESTA.md): the arrows, one ammunition for both, in the
+        /// pack (GearKinds.Arrows, Content.ArrowsPile to a cell). The bow spends one a shot; the crossbow, one a reload. One that
+        /// hits is had back searching the body; one that misses is lost.
+        /// </summary>
+        public static class ArrowsText
+        {
+            /// <summary>The arrows' help, in the pack and the stash (UI).</summary>
+            public const string Help = "Para el arco y la ballesta. Cada tiro gasta una. La que acierta se recupera al registrar el cuerpo; la que falla se pierde.";
+            /// <summary>Recargar's help when the main weapon fires arrows (the crossbow; Content.Abilities' is the magazines').</summary>
+            public const string Reload = "Carga la ballesta: gasta una flecha de la mochila.";
+            /// <summary>«1 flecha», «5 flechas»: a find's, a label's.</summary>
+            public static string Count(int n) => n == 1 ? "1 flecha" : $"{n} flechas";
         }
 
         /// <summary>

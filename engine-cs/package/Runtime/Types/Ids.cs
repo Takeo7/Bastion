@@ -270,6 +270,8 @@ namespace Bastion.Engine
         public const string Carry = "carry";
         public const string SetDown = "setDown";
         public const string Pass = "pass";
+        /// <summary>G23 Las cargas (cuadro 109): a charge from the pack set at a point of the nest beside (Abilities.ChargeAbilities).</summary>
+        public const string PlaceCharge = "placeCharge";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
@@ -277,7 +279,7 @@ namespace Bastion.Engine
             SearchRoom, OpenDoor, CloseDoor, RunAndGun, RapidFire, Suppression, ChainShot, Rupture, AimedShot,
             LightningHands, Faceoff, KillZone, Revival, Restoration, ElbowRoom, PatchUp, Stone, OverwatchMelee, Claw,
             Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide, Pry, Takedown, Pound, Charge, Roar,
-            Talk, Alight, Carry, SetDown, Pass,
+            Talk, Alight, Carry, SetDown, Pass, PlaceCharge,
         };
     }
 
@@ -396,11 +398,17 @@ namespace Bastion.Engine
         /// Not in All nor in Content.FoundWeapons, which the campaign of before reads: its def is Content.Knife.
         /// </summary>
         public const string Knife = "knife";
+        /// <summary>
+        /// Arco y ballesta (cuadros 101–106): long arms for the hands, firing arrows (WeaponIds.Crossbow, WeaponIds.Bow). Weight 0 in
+        /// Content.FoundWeapons, so the campaign of before never finds them; a run's boxes do, rarely (Looting.RunsBow).
+        /// </summary>
+        public const string Crossbow = "crossbow";
+        public const string Bow = "bow";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             AssaultRifle, PumpShotgun, PrecisionRifle, MachineGun, Machete, HuntingRifle, SawnOff, ScopedRifle,
-            LightMachineGun, Pan, Bat, Crowbar, Chainsaw, Pistol, Katana, Longsword, Rake, Stick,
+            LightMachineGun, Pan, Bat, Crowbar, Chainsaw, Pistol, Katana, Longsword, Rake, Stick, Crossbow, Bow,
         };
     }
 

@@ -378,6 +378,33 @@ namespace Bastion.UI.Hud
             public static string On(string line) => $"{Name} · {line}";
         }
 
+        /// <summary>
+        /// Searching heard by one unaware in sight, the squad hidden (CombatController.HearSearch; R16 of Red, Saqueadores:
+        /// Producto, 21/11; till Lore's words): under the box, and asked on the first click.
+        /// </summary>
+        public static class Heard
+        {
+            public static string One(string who) => $"Os oye {who}: mirará hacia aquí";
+            public static string Several(int n) => $"Os oyen {n} enemigos: mirarán hacia aquí";
+            public static string Ask(string line, string verb, bool touch) => $"{line}. {(touch ? "Toca" : "Haz clic")} otra vez para {verb}.";
+        }
+
+        /// <summary>
+        /// Arco y ballesta's silent kill (U29, cuadro 102; Lore's words, 21/11), on the aim panel while the squad is hidden: kept
+        /// hidden if it kills, or who else would see the shot («un Saqueador»).
+        /// </summary>
+        public static class Silent
+        {
+            public const string Kept = "Tiro callado: si lo mata, no rompe la ocultación.";
+            public static string Seen(string who) => $"Os ve {who ?? "otro enemigo"}: aunque lo mate, se rompe la ocultación.";
+        }
+
+        /// <summary>Arco y ballesta (U29; till Lore's words): the arrows in the pack, on the soldier's panel.</summary>
+        public static class Arrows
+        {
+            public static string Tip(int n) => n == 0 ? "Sin flechas" : n == 1 ? "1 flecha en la mochila" : $"{n} flechas en la mochila";
+        }
+
         /// <summary>Noises (EventPlayer.PlayNoise).</summary>
         public static class Noise
         {

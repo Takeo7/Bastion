@@ -246,6 +246,13 @@ namespace Bastion.Client.Units
             public string survivorClip;
             /// <summary>The loop a guard by the fire sits in (UnitViews.Guard); null, up.</summary>
             public string guardClip;
+            /// <summary>A bow's string and arrow, its quiver, and the seconds since it loosed (UnitViews.Bow).</summary>
+            public BowString cord;
+            public Transform bowProp;
+            public Transform quiver;
+            public float loosed = 10;
+            /// <summary>Seconds into a crossbow's loading (Cock); −1, none.</summary>
+            public float cock = -1;
             /// <summary>The clip a lab holds it in (UnitViews.LabPose).</summary>
             public string labClip;
             public int labStep;
@@ -589,6 +596,7 @@ namespace Bastion.Client.Units
                         // for «Pistol Idle 2»'s arms took «Shooting»'s down to the waist.)
                         v.pistolKick = 0;
                     }
+                    else if (v.inHand == Held.Bow) Loose(v);
                     else
                     {
                         v.anim?.PlayUpper(FireClip, 0.03f);
@@ -1834,7 +1842,7 @@ namespace Bastion.Client.Units
         /// </summary>
         public void Recoil(string id)
         {
-            if (views.TryGetValue(id, out var v) && v.weapon != null && (v.inHand == Held.Rifle || v.inHand == Held.Pistol))
+            if (views.TryGetValue(id, out var v) && v.weapon != null && (v.inHand == Held.Rifle || v.inHand == Held.Pistol || v.inHand == Held.Bow))
             {
                 v.recoil = true;
                 // (A bolt-action gun: its bolt worked after the kick, UnitViews.Bolt.)

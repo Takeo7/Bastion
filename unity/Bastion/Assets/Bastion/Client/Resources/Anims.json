@@ -440,6 +440,18 @@
    "pack": "idles",
    "fbx": "Animations/Polygon/Feminine/Eat/Actions/A_POLY_IDL_Eat_Small_Femn"
   },
+  "scaredWalk": {
+   "pack": "mixamo",
+   "fbx": "Sneaking Forward"
+  },
+  "scaredBack": {
+   "pack": "mixamo",
+   "fbx": "Walk Backwards"
+  },
+  "terrified": {
+   "pack": "mixamo",
+   "fbx": "Terrified"
+  },
   "sitChair": {
    "pack": "mixamo",
    "fbx": "Sitting Idle 3"
@@ -1324,6 +1336,12 @@
   }
  },
  "campParts": {
+  "terrified": {
+   "loop": [
+    3.62,
+    8.77
+   ]
+  },
   "warmHands": {
    "loop": [
     2.9,
@@ -1421,6 +1439,8 @@
    "sight": 0.057,
    "reflex": true
   },
+  "crossbow": {"fbx": "apocalypse:SM_Wep_CrossBow_01", "reach": 0.8, "palm": [0, -0.045, -0.03], "fore": [-0.014, 0.2], "sight": 0.098, "back": [0, -0.22], "cocked": true},
+  "bow": {"fbx": "Wep_RecurveBow_01", "bow": true},
   "sniper": {
    "fbx": "SM_Wep_SniperRifle_01",
    "tuck": [
@@ -1813,9 +1833,9 @@
    "smg"
   ],
   "lancer": [
-   "boltRifle",
-   "boltRifle",
-   "boltRifle"
+   "crossbow",
+   "crossbow",
+   "crossbow"
   ]
  }
 }

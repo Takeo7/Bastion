@@ -130,7 +130,8 @@ namespace Bastion.UI.Hud
                 stats.Add(e);
             }
             var weaponIcon = tree.Q(className: "stat-icon--weapon");
-            var weaponSprite = icon?.Invoke("stat:weapon");
+            // The one in the hand's own (U29, Producto 21/11: the crossbow's by «Ballesta», not a gun's).
+            var weaponSprite = icon?.Invoke(view.WeaponIcon ?? "stat:weapon") ?? icon?.Invoke("stat:weapon");
             if (weaponSprite != null) weaponIcon.style.backgroundImage = new StyleBackground(weaponSprite);
             tree.Q<Label>("weapon-name").text = view.Weapon;
             tips.Attach(tree.Q("weapon"), view.WeaponTip);

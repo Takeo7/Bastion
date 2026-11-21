@@ -192,7 +192,9 @@ namespace Bastion.Engine.Tests
         {
             var s = Hall();
             s.ActiveTeam = Teams.Alien;
-            var soldier = AddUnit(s, "s1", TemplateIds.Assault, 10, 4);
+            // Out by the door, out of any shot from upstairs: the Cazador shoots now (crossbow, cuadro 105), so it comes down
+            // only for one it can't hit from there.
+            var soldier = AddUnit(s, "s1", TemplateIds.Assault, 13, 3);
             var lancer = AddUnit(s, "a1", TemplateIds.Lancer, 10, 3, 1);
             Active(s, "p1", lancer);
             lancer.Heard = Events.CopyPos(soldier.Pos);

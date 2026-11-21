@@ -275,6 +275,10 @@ namespace Bastion.Engine
                 case AbilityIds.Pass:
                     Emit(new CarriedEvent { Unit = target!.Id, Target = u.Carrying!, From = u.Id });
                     break;
+                // G23 Las cargas.
+                case AbilityIds.PlaceCharge:
+                    PlaceCharge(u);
+                    break;
                 case AbilityIds.Search:
                     Search(u, tile!);
                     break;
@@ -366,8 +370,11 @@ namespace Bastion.Engine
                     Emit(new HealedEvent { Unit = attacker.Id, Target = attacker.Id, Amount = 1 });
                 }
             }
-            if (attacker.Team == Teams.Xcom && string.IsNullOrEmpty(attacker.ControlledBy)) BreakConcealment(ConcealReasons.Attack, attacker.Id, target.Id);
-            if (target.Team == Teams.Alien) ActivatePodOf(target, attacker);
+            // Arco y ballesta (cuadro 102): a kill with arrows doesn't give the squad away nor wake the dead one's group, as the
+            // Golpe silencioso; whoever else sees the shooter does what the rules have them do after any order (AfterXcomAction).
+            var silent = Content.FiresArrows(attacker, ability) && !target.Alive;
+            if (!silent && attacker.Team == Teams.Xcom && string.IsNullOrEmpty(attacker.ControlledBy)) BreakConcealment(ConcealReasons.Attack, attacker.Id, target.Id);
+            if (!silent && target.Team == Teams.Alien) ActivatePodOf(target, attacker);
             CheckOutcome();
             // Shots on someone else's move (overwatch, suppression, covering fire) are heard on their own; the rest with their ability.
             if (reaction && attacker.Alive) MakeNoise(preview.Origin, weapon.Noise, attacker);
@@ -1544,6 +1551,8 @@ namespace Bastion.Engine
         {
             var m = S.Mission;
             if (m.Horde == null || m.Horde.Count == 0 || Grid.Combatants(S, Teams.Alien).Count >= Content.Horde.Cap) return;
+            // Evacuación (R1 of 21/11): none of it before Setup.CivilianHordeFrom.
+            if (m.Civilians != null && turn < Setup.CivilianHordeFrom) return;
             // A few every turn, always (playtest 2026-10-15, #11); twice as many while a sabotage's alarm still sounds (#14).
             var alarm = m.Kind == MissionKinds.Sabotage && !m.ObjectiveDone ? 2 : 1;
             // A bigger map, more edge to come in by (docs/MAPAS.md §6): as many more as it is longer a side than 48.
@@ -1633,7 +1642,7 @@ namespace Bastion.Engine
             if (m.EvacDone == true)
             {
                 var someoneOut = s.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated);
-                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(s) || Rules.BittenSafe(s) || Rules.WoundedSafe(s) || Rules.SplitSafe(s) || Rules.CiviliansSafe(s));
+                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(s) || Rules.BittenSafe(s) || Rules.WoundedSafe(s) || Rules.SplitSafe(s) || Rules.CiviliansSafe(s) || Rules.ChargesSet(s));
                 End(won ? Outcomes.Victory : Outcomes.Defeat, won ? EndReasons.Objective : EndReasons.Abandoned);
                 return;
             }
@@ -1685,7 +1694,7 @@ namespace Bastion.Engine
                 Emit(new LeftBehindEvent { Unit = u.Id, NoSeat = noSeat.Contains(u) ? true : (bool?)null });
             }
             var m = S.Mission;
-            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S) || Rules.BittenSafe(S) || Rules.WoundedSafe(S) || Rules.SplitSafe(S) || Rules.CiviliansSafe(S));
+            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S) || Rules.BittenSafe(S) || Rules.WoundedSafe(S) || Rules.SplitSafe(S) || Rules.CiviliansSafe(S) || Rules.ChargesSet(S));
             if (timeUp && !won) Emit(new MissionEndedEvent { Outcome = Outcomes.Defeat, Reason = EndReasons.Timer });
             else CheckOutcome();
         }
@@ -1789,6 +1798,8 @@ namespace Bastion.Engine
                 else Emit(new MissionEndedEvent { Outcome = Outcomes.Defeat, Reason = EndReasons.Timer });
                 return;
             }
+            // G23 Las cargas: the count, and at 0 the blast and La Lata.
+            if (ChargesCount()) return;
             // The enemies that end their turn on fire burn.
             BurnStanding(Teams.Alien);
             if (Over) return;
@@ -2473,6 +2484,8 @@ namespace Bastion.Engine
             if (m.Split != null) return SplitShort(s) == null && !SplitLost(s);
             // Evacuación (G23.6): two civilians aboard.
             if (m.Civilians != null) return CiviliansAboard(s) >= CiviliansNeeded;
+            // Las cargas: the three set.
+            if (m.Charges != null) return ChargesSet(s);
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier) && aboard.Any((u) => u.Id == m.Item!.Carrier);
             if (m.Kind == MissionKinds.Rescue) return !string.IsNullOrEmpty(m.ObjectiveUnit) && aboard.Any((u) => u.Id == m.ObjectiveUnit) && (m.Bitten != true || m.Cured == true);
             return false;

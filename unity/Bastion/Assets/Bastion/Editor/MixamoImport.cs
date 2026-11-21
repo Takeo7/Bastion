@@ -74,6 +74,11 @@ namespace Bastion.EditorTools
             // The camp (clearingLife.ts; syntyManifest.ts CAMP_LOOPS, CAMP_MOVES): sat on a camp chair, on the ground,
             // talking; sitting down and getting up; knelt warming the hands by the fire (in, stayed in and out: CAMP_PARTS);
             // squatting.
+            // Evacuación's civilians (G23.6; Arturo's, 21/11, picked by measuring them; cuadro 107): walking afraid, backing away, and
+            // cowering where they stand (Terrified: its loop a part of it, Anims.json campParts).
+            ("scaredWalk", "mixamo/Sneaking Forward.fbx", false),
+            ("scaredBack", "mixamo/Walk Backwards.fbx", false),
+            ("terrified", "mixamo/Terrified.fbx", false),
             ("sitChair", "mixamo/Sitting Idle 3.fbx", false),
             ("sitChairStill", "mixamo/Sitting Idle 5.fbx", false),
             ("sitBreathe", "mixamo/Sitting Idle.fbx", false),

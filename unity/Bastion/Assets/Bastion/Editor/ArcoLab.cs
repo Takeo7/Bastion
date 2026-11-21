@@ -342,6 +342,203 @@ namespace Bastion.EditorTools
             return box;
         }
 
+        /// <summary>
+        /// The crossbow as a weapon of the game (Anims.json «crossbow»; the Cazador's, cuadro 105): a raider with his rifle, a
+        /// Cazador with the crossbow, a soldier with one in the hands and one with it across the back (knife out), in a row
+        /// facing the camera. BASTION_VISTA=frente|detras|juego, BASTION_DIST. -shotPlay.
+        /// </summary>
+        public static void Ballesta()
+        {
+            new GameObject("Shot camera").AddComponent<Camera>().farClipPlane = 800;
+            void Started(PlayModeStateChange change)
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                EditorApplication.playModeStateChanged -= Started;
+                BuildCrossbow();
+            }
+            EditorApplication.playModeStateChanged += Started;
+        }
+
+        static void BuildCrossbow()
+        {
+            var state = MapLab.Generated("wilds", 3, "elimination");
+            int ox = state.Width / 2 - 6, oy = state.Height / 2 - 5;
+            for (int y = 0; y < 9; y++)
+                for (int x = 0; x < 13; x++)
+                {
+                    int i = (oy + y) * state.Width + ox + x;
+                    state.Tiles[i] = TileKinds.Floor;
+                    if (state.Decor != null && i < state.Decor.Count) state.Decor[i] = 0;
+                }
+            state.Lights?.RemoveAll(l => l.Tile.X >= ox && l.Tile.X < ox + 13 && l.Tile.Y >= oy && l.Tile.Y < oy + 9);
+            state.Fires?.Clear();
+            state.Concealed = false;
+            string json = Bastion.Net.Json.Write(state.Units.First(u => u.Team == Teams.Xcom));
+            state.Units.Clear();
+            Unit Enemy(string id, string template, int x)
+            {
+                var u = Setup.MakeUnit(id, template, id, null, new Pos { X = ox + x, Y = oy + 4 }, null);
+                u.Facing = Math.PI / 2;
+                state.Units.Add(u);
+                return u;
+            }
+            Unit Soldier(string id, int x)
+            {
+                var u = Bastion.Net.Json.Read<Unit>(json);
+                u.Id = id;
+                u.Name = id;
+                u.Pos = new Pos { X = ox + x, Y = oy + 4 };
+                u.Facing = Math.PI / 2;
+                u.Hidden = null;
+                u.Hunkered = false;
+                u.Overwatch = false;
+                u.Arms = new Arms { Primary = "crossbow", Pistol = false };
+                state.Units.Add(u);
+                return u;
+            }
+            Enemy("saqueador", TemplateIds.Trooper, 3);
+            Enemy("cazador", TemplateIds.Lancer, 5);
+            Enemy("cazadora", TemplateIds.Lancer, 6);
+            Soldier("soldado", 8);
+            Soldier("espalda", 10);
+            Bastion.Client.NightLights.StateForLab = state;
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, false));
+            MapLab.Map(state, "ballesta");
+            var units = new GameObject("Unidades").AddComponent<UnitViews>();
+            units.Sync(state);
+            foreach (var u in state.Units) units.Reveal(u.Id);
+            units.MasksNow();
+            units.GuardForLab("espalda", 0);
+            foreach (var u in state.Units) Debug.Log($"[ballesta] {u.Id} ({u.Template}): {string.Join(", ", units.CarriedForLab(u.Id).Select(c => c.model.name + (c.drawn ? " (drawn)" : "")))}");
+            var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            float F(string name, float or) => float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : or;
+            string view = Environment.GetEnvironmentVariable("BASTION_VISTA") ?? "frente";
+            var at = MapSpace.TileToWorld(state, new Pos { X = ox, Y = oy + 4 }) + new Vector3(F("BASTION_MIRA", 6.5f) * MapSpace.Tile + MapSpace.Tile / 2, 1f, 0);
+            if (view == "juego") MapSpace.Aim(camera, at, F("BASTION_DIST", 24), 0);
+            else
+            {
+                float d = F("BASTION_DIST", 11);
+                var from = at + new Vector3(0, 1.4f, view == "detras" ? d : -d);
+                camera.fieldOfView = 30;
+                camera.transform.SetPositionAndRotation(from, Quaternion.LookRotation(at - from));
+            }
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, false));
+        }
+
+        /// <summary>
+        /// The bow and the crossbow as weapons of the game, doing what they do (Producto, 21/11): BASTION_ARMA=bow|crossbow
+        /// (bow), one soldier facing east that waits, aims at a target six tiles on, shoots, (the crossbow) reloads, and walks
+        /// then runs three tiles; a second with it across the back, knife out, facing away. BASTION_AGACHADO=1: the first
+        /// hunkered. BASTION_VISTA=lado|detras|juego, BASTION_DIST, BASTION_MOCHILA=1 (survivor9, a rucksack). -shotPlay.
+        /// </summary>
+        public static void Armas()
+        {
+            new GameObject("Shot camera").AddComponent<Camera>().farClipPlane = 800;
+            void Started(PlayModeStateChange change)
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                EditorApplication.playModeStateChanged -= Started;
+                BuildArms();
+            }
+            EditorApplication.playModeStateChanged += Started;
+        }
+
+        static async void BuildArms()
+        {
+            var state = MapLab.Generated("wilds", 3, "elimination");
+            int ox = state.Width / 2 - 6, oy = state.Height / 2 - 5;
+            for (int y = 0; y < 9; y++)
+                for (int x = 0; x < 14; x++)
+                {
+                    int i = (oy + y) * state.Width + ox + x;
+                    state.Tiles[i] = TileKinds.Floor;
+                    if (state.Decor != null && i < state.Decor.Count) state.Decor[i] = 0;
+                }
+            state.Lights?.RemoveAll(l => l.Tile.X >= ox && l.Tile.X < ox + 14 && l.Tile.Y >= oy && l.Tile.Y < oy + 9);
+            state.Fires?.Clear();
+            state.Concealed = false;
+            string arm = Environment.GetEnvironmentVariable("BASTION_ARMA") ?? "bow";
+            string json = Bastion.Net.Json.Write(state.Units.First(u => u.Team == Teams.Xcom));
+            state.Units.Clear();
+            foreach (var (id, x, y, facing) in new[] { ("tira", 4, 4, 0.0), ("espalda", 6, 2, Math.PI / 2), ("lado", 8, 2, 0.0) })
+            {
+                var u = Bastion.Net.Json.Read<Unit>(json);
+                u.Id = id;
+                u.Name = id;
+                u.Pos = new Pos { X = ox + x, Y = oy + y };
+                u.Facing = facing;
+                u.Hidden = null;
+                u.Hunkered = id == "tira" && Environment.GetEnvironmentVariable("BASTION_AGACHADO") == "1";
+                u.Overwatch = false;
+                u.Arms = new Arms { Primary = arm, Pistol = false };
+                if (Environment.GetEnvironmentVariable("BASTION_MOCHILA") == "1") u.Appearance = new Appearance { Character = "survivor9", Head = HeadIds.Bare, Sex = Sexes.M, Wardrobe = Appearances.Wardrobe };
+                state.Units.Add(u);
+            }
+            Bastion.Client.NightLights.StateForLab = state;
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, false));
+            MapLab.Map(state, "armas");
+            var units = new GameObject("Unidades").AddComponent<UnitViews>();
+            units.Sync(state);
+            foreach (var u in state.Units) units.Reveal(u.Id);
+            units.MasksNow();
+            units.GuardForLab("espalda", 0);
+            units.GuardForLab("lado", 0);
+            foreach (var u in state.Units) Debug.Log($"[armas] {u.Id}: {units.ArmsReport(u.Id)}; {string.Join(", ", units.CarriedForLab(u.Id).Select(c => c.model.name + (c.drawn ? " (drawn)" : "") + " under " + c.model.parent?.name))}");
+
+            var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            float F(string name, float or) => float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : or;
+            string view = Environment.GetEnvironmentVariable("BASTION_VISTA") ?? "lado";
+            var at = MapSpace.TileToWorld(state, new Pos { X = ox, Y = oy + 4 }) + new Vector3(F("BASTION_MIRA", 5.5f) * MapSpace.Tile, 1f, 0);
+            if (view == "juego") MapSpace.Aim(camera, at + Vector3.forward * MapSpace.Tile, F("BASTION_DIST", 24), 0);
+            else
+            {
+                float d = F("BASTION_DIST", 7);
+                var from = at + (view == "detras" ? new Vector3(0, 1.2f, d) + Vector3.forward * 2 * MapSpace.Tile : new Vector3(0, 0.8f, -d));
+                if (view == "detras") at += Vector3.forward * 2 * MapSpace.Tile;
+                camera.fieldOfView = 30;
+                camera.transform.SetPositionAndRotation(from, Quaternion.LookRotation(at - from));
+            }
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, false));
+            // (From the side, with the one that shoots as it goes.)
+            if (view == "lado")
+            {
+                var follow = camera.gameObject.AddComponent<ArmasFollow>();
+                follow.who = Figures.FeetOf("tira");
+                follow.offset = new Vector3(0.6f, 1.5f, -F("BASTION_DIST", 5.5f));
+            }
+
+            try
+            {
+                var tira = state.Units[0];
+                var target = MapSpace.TileToWorld(state, new Pos { X = tira.Pos.X + 6, Y = tira.Pos.Y }) + Vector3.up * 1.2f;
+                await Awaitable.WaitForSecondsAsync(1.2f);
+                Debug.Log($"[armas] {Time.time:0.00} aim");
+                units.AimAt("tira", target);
+                await Awaitable.WaitForSecondsAsync(1.4f);
+                Debug.Log($"[armas] {Time.time:0.00} shot");
+                units.Recoil("tira");
+                await Awaitable.WaitForSecondsAsync(1.3f);
+                units.AimAt("tira", null);
+                await Awaitable.WaitForSecondsAsync(0.5f);
+                if (arm == "crossbow")
+                {
+                    Debug.Log($"[armas] {Time.time:0.00} reload");
+                    await units.Reload("tira");
+                    await Awaitable.WaitForSecondsAsync(0.4f);
+                }
+                Debug.Log($"[armas] {Time.time:0.00} walk");
+                await units.MoveAlong("tira", new[] { new Pos { X = tira.Pos.X + 1, Y = tira.Pos.Y }, new Pos { X = tira.Pos.X + 2, Y = tira.Pos.Y } }, 1);
+                await Awaitable.WaitForSecondsAsync(0.5f);
+                Debug.Log($"[armas] {Time.time:0.00} run");
+                await units.MoveAlong("tira", new[] { new Pos { X = tira.Pos.X + 3, Y = tira.Pos.Y }, new Pos { X = tira.Pos.X + 4, Y = tira.Pos.Y }, new Pos { X = tira.Pos.X + 5, Y = tira.Pos.Y }, new Pos { X = tira.Pos.X + 6, Y = tira.Pos.Y } }, 2);
+                Debug.Log($"[armas] {Time.time:0.00} done");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[armas] " + e);
+            }
+        }
+
         static float Size(Transform model)
         {
             var renderers = model.GetComponentsInChildren<Renderer>();
@@ -361,6 +558,20 @@ namespace Bastion.EditorTools
             string clip = units != null ? units.LabClipOf("tira") : null;
             cord.pull = clip == "bowToDrawn" || clip == "bowDrawn";
             cord.nocked = clip == "bowAim" || clip == "bowToAim" || cord.pull;
+        }
+    }
+
+    /// <summary>ArcoLab.Armas' side camera, kept on who shoots.</summary>
+    public sealed class ArmasFollow : MonoBehaviour
+    {
+        public Transform who;
+        public Vector3 offset;
+
+        void LateUpdate()
+        {
+            if (who == null) return;
+            var at = who.position + new Vector3(offset.x, 1f, 0);
+            transform.SetPositionAndRotation(who.position + offset, Quaternion.LookRotation(at - (who.position + offset)));
         }
     }
 }

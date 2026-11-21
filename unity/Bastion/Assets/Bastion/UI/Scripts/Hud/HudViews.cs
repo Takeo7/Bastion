@@ -178,6 +178,8 @@ namespace Bastion.UI.Hud
         public string WhoseColor;
         public List<StatView> Stats = new List<StatView>();
         public string Weapon;
+        /// <summary>The weapon in the hand's picture, an id of the HUD's table (U29); null, the rifle's as before.</summary>
+        public string WeaponIcon;
         public string WeaponTip;
         /// <summary>A weapon of the Armería's state and improvements (arms.ts wearMarks): «GASTADA» (worn), «ROTA» (broken), «+2» (mods).</summary>
         public List<TagView> WeaponMarks = new List<TagView>();

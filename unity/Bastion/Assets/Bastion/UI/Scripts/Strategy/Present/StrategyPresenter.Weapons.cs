@@ -45,7 +45,8 @@ namespace Bastion.UI.Strategy
                 new Figure { Label = Lore.WeaponLabels.Aim, Value = Signed(p.Aim), Title = "Lo que el arma suma o resta a la puntería: la mira, el desgaste", N = p.Aim, More = true, Unit = "" },
                 p.Clip != 0 && !p.Melee
                     ? new Figure { Label = Lore.WeaponLabels.Clip, Value = Lore.WeaponFigure("clip", p.Clip), N = p.Clip, More = true, Unit = "" }
-                    : new Figure { Label = Lore.WeaponLabels.Clip, Value = Lore.WeaponFigure("clip", 0, p.Melee) },
+                    // (The bow's: an arrow a shot, Lore's; U29.)
+                    : new Figure { Label = Lore.WeaponLabels.Clip, Value = Lore.WeaponFigure("clip", 0, p.Melee, p.Kind != null && Content.FoundWeapons.TryGetValue(p.Kind, out var found) && Content.Weapons[found.Weapon].Arrows) },
                 new Figure { Label = p.Melee ? Lore.WeaponLabels.ActionsMelee : Lore.WeaponLabels.Actions, Value = Lore.WeaponFigure("actions", p.Actions), N = p.Actions, More = false, Unit = "" },
                 new Figure { Label = Lore.WeaponLabels.Noise, Value = Lore.WeaponFigure("noise", p.Noise), N = p.Noise, More = false, Unit = "" },
             };

@@ -89,6 +89,11 @@ namespace Bastion.UI.EditorTools
             ("weapon:sniper", Sniper), ("weapon:cannon", MachineGun), ("pistol", Pistol),
             // The bolt-action rifle's own (it fires as the assault rifle: Arturo, 18/11 T14), Apocalypse HUD's.
             ("weapon:huntingRifle", "ICON_SM_Wep_HuntingRifle_Clean_01_Clean"),
+            // Arco y ballesta (U29; Arturo, cuadro 108; Producto, 21/11): Apocalypse's crossbow drawn thicker (u29/lab/iconos.swift
+            // gruesa … 8: its line was gone at the bar's 28 px), Dark Fantasy's bow and its one arrow; on the soldier's panel
+            // (14 px) a bold arrow of ours (… flecha … 30), where Dark Fantasy's was a «/» by the separators.
+            ("weapon:crossbow", "w-ballesta"), ("weapon:bow", "ICON_DarkFantasy_Inventory_Bows_01_Clean"),
+            ("arrows", "ICON_DarkFantasy_Inventory_Arrows_02_Clean"), ("stat:arrows", "i-flecha-ficha"),
             ("weapon:pan", Pan), ("weapon:bat", Bat), ("weapon:crowbar", Crowbar), ("weapon:chainsaw", Chainsaw),
             ("slash", Blades), ("takedown", Dagger), ("overwatchMelee", Blade), ("stone", Rock), ("overwatch", Target),
             ("hunker", Helmet), ("hide", Hood), ("pry", Crowbar), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
@@ -177,6 +182,8 @@ namespace Bastion.UI.EditorTools
             // Evacuación (G23.6): PROVISIONAL, Military Combat's helicopter, only so that NodeIconsCheck is quiet while its
             // engine goes in, off the maps (Producto, 21/11); its own goes to Arturo's cuadro with the stage's UI.
             ("node:evacuation", "ICON_MilitaryCombat_Map_Helicopter_01_Clean"),
+            // Las cargas: PROVISIONAL, Military Combat's explosive (Producto, 21/11), as Evacuación's; its own to the cuadro.
+            ("node:charges", "ICON_MilitaryCombat_Inventory_Explosive_01_Clean"),
             // The runs' base tabs: Almacén a backpack, Mejoras the workshop's tools (Salir is the Escuadra's La Lata).
             ("tab:stash", Backpack), ("tab:upgrades", "ICON_Apocalpyse_Inventory_Crafting_01"),
         };

@@ -105,6 +105,7 @@ namespace Bastion.Client.Units
             muzzle = art.muzzle != null && art.muzzle.Length >= 3 ? new Vector3(art.muzzle[0], art.muzzle[1], art.muzzle[2]) : new Vector3(0, 0.02f, box.max.z);
             model.transform.localScale = Vector3.one * Figures.CharacterScale * (art.size > 0 ? art.size : 1);
             foreach (var c in model.GetComponentsInChildren<Collider>()) DestroyNow(c);
+            if (art.bow) foreach (var r in model.GetComponentsInChildren<Renderer>(true)) r.sharedMaterial = BowMaterial(r.sharedMaterial);
             return model.transform;
         }
 
@@ -181,12 +182,13 @@ namespace Bastion.Client.Units
             v.rest = RestFor(v.seed);
             if (SheathOn) Sheathe(v, catalog);
             KeepOff(v);
+            BowKit(v, catalog);
             Draw(v, MainCarry);
             return true;
         }
 
         /// <summary>Whether its main weapon is a two-handed gun (it moves and waits in the rifle's clips).</summary>
-        static bool Rifled(View v) => v.arts.TryGetValue(MainCarry, out var a) && !a.pistol && !a.melee;
+        static bool Rifled(View v) => v.arts.TryGetValue(MainCarry, out var a) && !a.pistol && !a.melee && !a.bow;
 
         /// <summary>Whether its main weapon is the pistol (its own way of waiting, its arms its own as it moves).</summary>
         static bool PistolMain(View v) => v.arts.TryGetValue(MainCarry, out var a) && a.pistol;
@@ -296,7 +298,7 @@ namespace Bastion.Client.Units
             if (v.weapon != null) v.weapon.gameObject.SetActive(true);
             v.muzzle = v.muzzles.TryGetValue(which, out var m) ? m : Vector3.zero;
             v.butt = v.butts.TryGetValue(which, out var b) ? b : Vector3.zero;
-            v.inHand = v.arts.TryGetValue(which, out var art) ? art.pistol ? Held.Pistol : art.melee ? Held.Blade : Held.Rifle : Held.None;
+            v.inHand = v.arts.TryGetValue(which, out var art) ? art.pistol ? Held.Pistol : art.melee ? Held.Blade : art.bow ? Held.Bow : Held.Rifle : Held.None;
             // (The rifle's turn in the hand kept: drawn again, it is held as it was, not level at the waist for a frame.)
             v.pistolGrip = null;
             // A long gun back in the hands from somewhere else: rigid in the right one as it was held, and onto the left over
@@ -319,6 +321,14 @@ namespace Bastion.Client.Units
             model.SetParent(mount, false);
             model.localRotation = Quaternion.identity;
             float lossy = Mathf.Max(mount.lossyScale.x, 1e-4f);
+            // (A bow: its length is its own +y, and its grip its origin; flat against the back. UnitViews.Bow.)
+            if (v.arts[key].bow)
+            {
+                model.localScale = Vector3.one / lossy * Mathf.Max(v.body.lossyScale.x, 1e-4f);
+                model.localRotation = BowOnBack;
+                model.localPosition = Vector3.zero;
+                return;
+            }
             model.localScale = Vector3.one * Figures.CharacterScale * Size(v.arts[key]) / lossy;
             // (The gun by its middle, or as far out and down as its art says (WeaponArt.back, F-18); the chainsaw nearer its
             // motor, so that the motor sits in the middle of the back, not at the waist: Gameplay 29/10.)
@@ -518,7 +528,7 @@ namespace Bastion.Client.Units
         }
 
         /// <summary>What it holds now, for how it holds it and which clips: a two-handed gun, the pistol, a blade.</summary>
-        enum Held { None, Rifle, Pistol, Blade }
+        enum Held { None, Rifle, Pistol, Blade, Bow }
 
         /// <summary>How it waits with what it holds (syntyFigures.ts direct): a rifle's rest, the pistol by the thigh over the gun arm, a blade none.</summary>
         static void AtRest(View v, float fade)
@@ -532,7 +542,7 @@ namespace Bastion.Client.Units
                 return;
             }
             v.anim.ArmRest(null, 0, fade);
-            v.anim.Rest(v.inHand == Held.Rifle ? catalog.Clip(RestOf(v)) : null, fade);
+            v.anim.Rest(v.inHand == Held.Rifle ? catalog.Clip(RestOf(v)) : v.inHand == Held.Bow ? catalog.Clip("bowIdle") : null, fade);
         }
 
         /// <summary>Whether its weapon is up: aimed for a shot, at a target being picked, or on watch; not while it turns to it first (A-03).</summary>
@@ -635,7 +645,7 @@ namespace Bastion.Client.Units
             var catalog = FigureCatalog.Load();
             if (v.anim == null || catalog == null) return;
             v.anim.ArmRest(null, 0, fade);
-            v.anim.Rest(catalog.Clip(v.inHand == Held.Pistol ? "pistolAim" : v.crouched ? "rifleKneelAim" : "rifleAim"), fade);
+            v.anim.Rest(catalog.Clip(v.inHand == Held.Bow ? "bowDrawn" : v.inHand == Held.Pistol ? "pistolAim" : v.crouched ? "rifleKneelAim" : "rifleAim"), fade);
         }
 
         /// <summary>What it holds where the hands hold it, after the body's pose (syntyFigures.ts clipHold): a gun between them, the pistol along the forearm, a blade in the fist.</summary>
@@ -651,6 +661,9 @@ namespace Bastion.Client.Units
                 case Held.Blade:
                     HoldBlade(v, dt);
                     break;
+                case Held.Bow:
+                    HoldBow(v, dt);
+                    break;
                 default:
                     // Between the hands as far as the left is on it (twoHands), else rigid in the right as it was last held
                     // there; that turn learnt only with both hands all the way on it (the 3D review's G-1, 10/11). Eased
@@ -665,7 +678,8 @@ namespace Bastion.Client.Units
                         v.weapon.rotation = Quaternion.Slerp(hand.rotation * g, v.weapon.rotation, v.twoHands);
                         v.grip = g;
                     }
-                    if (v.inHand == Held.Rifle && v.reload > 0) ReloadTilt(v);
+                    if (v.cock >= 0 && !v.dead) Cock(v);
+                    else if (v.inHand == Held.Rifle && v.reload > 0) ReloadTilt(v);
                     else if (v.inHand == Held.Rifle) Steady(v, dt);
                     // A straight-stocked one tucked under the arm away from the aim, the hands to it (UnitViews.Tuck, T22): eased
                     // in and out with the aim, a reload and a busy left hand, over the clips' own hold.
@@ -709,7 +723,7 @@ namespace Bastion.Client.Units
         /// docs/UNITY-ARTE.md: «se mantiene rígida cuando la izquierda suelta» (0.10.1's clipGrip); the gun had gone after
         /// the left hand wherever its palms were 12–80 cm apart.
         /// </summary>
-        static bool LeftBusy(View v) => v.dead || v.reload > 0 || v.search > 0 || v.tended != null || v.searchAt != null || (v.anim != null && v.anim.FreeShare > 0.01f);
+        static bool LeftBusy(View v) => v.dead || v.cock >= 0 || v.reload > 0 || v.search > 0 || v.tended != null || v.searchAt != null || (v.anim != null && v.anim.FreeShare > 0.01f);
 
         /// <summary>
         /// The point of the long gun in its hands put in the right palm (WeaponArt.palm, its model's frame unscaled; a lab's
@@ -1971,6 +1985,23 @@ namespace Bastion.Client.Units
             if (v.anim == null || clip == null || (v.inHand != Held.Rifle && !pistol))
             {
                 await Awaitable.WaitForSecondsAsync(ReloadSeconds, ct);
+                return;
+            }
+            // (A crossbow: no clip either; its nose down and its string drawn back by the left hand. UnitViews.Bow.)
+            if (!pistol && v.drawn != null && v.arts.TryGetValue(v.drawn, out var strung) && strung.cocked)
+            {
+                try
+                {
+                    for (float t = 0; t < CockSeconds; t += Time.deltaTime)
+                    {
+                        v.cock = t;
+                        await Awaitable.NextFrameAsync(ct);
+                    }
+                }
+                finally
+                {
+                    v.cock = -1;
+                }
                 return;
             }
             // (A straight-stocked one: no clip, the bolt worked and the rounds in from above with the gun low. Loading, T25.)

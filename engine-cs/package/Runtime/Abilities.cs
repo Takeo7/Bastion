@@ -16,7 +16,7 @@ namespace Bastion.Engine
         public List<Pos> Path { get; set; } = new List<Pos>();
     }
 
-    public static class Abilities
+    public static partial class Abilities
     {
         public static List<string> AbilitiesOf(Unit u)
         {
@@ -277,10 +277,13 @@ namespace Bastion.Engine
                 .ToList();
         }
 
+        /// <summary>Arco y ballesta (cuadro 102): a bow without arrows to shoot, a crossbow without arrows to reload (Lore's, provisional).</summary>
+        public const string NoArrows = "No quedan flechas.";
+
         /// <summary>Why the ability cannot be used right now (ignoring targets), or null if it can.</summary>
         public static string? AbilityBlocker(GameState s, Unit u, string ability)
         {
-            if (!AbilitiesOf(u).Contains(ability) && !CarryAbilities(s, u).Contains(ability)) return "No tiene esa habilidad.";
+            if (!AbilitiesOf(u).Contains(ability) && !CarryAbilities(s, u).Contains(ability) && !ChargeAbilities(s, u).Contains(ability)) return "No tiene esa habilidad.";
             var def = Content.Abilities[ability];
             var need = ApNeeded(u, ability);
             // A door is part of moving (docs/PRUEBA-2026-11-05-ARTURO.md #14, movement apart from the actions): with
@@ -292,8 +295,11 @@ namespace Bastion.Engine
             if (!string.IsNullOrEmpty(def.Charge) && !((u.Charges.TryGetValue(def.Charge!, out var left) ? left : 0) > 0)) return "No quedan usos.";
             if (Content.RunsChainsaw(u, ability) && !((u.Charges.TryGetValue(ChargeIds.Fuel, out var fuel) ? fuel : 0) > 0)) return "La motosierra no tiene gasolina hasta la próxima misión.";
             var ammo = AmmoNeeded(u, ability);
+            // Arco y ballesta (cuadro 102): a bow takes an arrow from the pack each shot.
+            if (Content.FiresArrows(u, ability) && Content.ClipOf(u, ability) == 0 && Content.OutOfArrows(u)) return NoArrows;
             if (ammo > 0 && (Content.IsAttack(ability) ? Content.RoundsOf(u, ability) : u.Ammo) < ammo)
             {
+                if (Content.FiresArrows(u, ability) && Content.OutOfArrows(u)) return NoArrows;
                 if (u.Mags == 0) return "Sin munición y sin cargadores.";
                 return ammo > 1 ? $"Necesita {ammo} balas en el cargador: recarga." : "Sin munición: recarga.";
             }
@@ -303,6 +309,9 @@ namespace Bastion.Engine
             if (u.Carrying != null && Content.FiresPrimary(u, ability)) return Lore.WoundedText.NoLongArm;
             switch (ability)
             {
+                case AbilityIds.PlaceCharge:
+                    if (PlaceChargeRefusal(s, u) is string charge) return charge;
+                    break;
                 case AbilityIds.Carry:
                     if (u.Carrying != null) return Lore.WoundedText.AlreadyCarrying;
                     if (Rules.WoundedOf(s) is not Unit w || !w.Alive) return Lore.WoundedText.NobodyToCarry;
@@ -318,6 +327,12 @@ namespace Bastion.Engine
                     break;
                 case AbilityIds.Reload:
                     if (Content.FullyLoaded(u)) return !string.IsNullOrEmpty(u.Arms?.Primary) ? "Los cargadores están llenos." : "El cargador está lleno.";
+                    // Arco y ballesta: the crossbow's bolt is an arrow from the pack, not a magazine.
+                    if (Content.ReloadsMain(u) && Content.FiresArrows(u))
+                    {
+                        if (Content.OutOfArrows(u)) return NoArrows;
+                        break;
+                    }
                     if (u.Mags == 0) return "No quedan cargadores.";
                     break;
                 case AbilityIds.Hunker:

@@ -215,7 +215,7 @@ namespace Bastion.Engine
         /// </summary>
         public static bool FreeExit(MissionState m)
         {
-            return m.Kind == MissionKinds.Scavenge && m.Lair == null && string.IsNullOrEmpty(m.Boss) && m.Split == null && m.Civilians == null;
+            return m.Kind == MissionKinds.Scavenge && m.Lair == null && string.IsNullOrEmpty(m.Boss) && m.Split == null && m.Civilians == null && m.Charges == null;
         }
 
         // -------------------------------------------------------------- Separados
@@ -506,6 +506,16 @@ namespace Bastion.Engine
         /// the squad on `p`, as the rules do (Sim's Noticer and SpottedFrom; UI, 21/11): in its notice cone (Los.InNoticeCone:
         /// hidden, not one behind or beside one unaware), within NoticeRange, in its line of sight.
         /// </summary>
+        /// <summary>
+        /// Arco y ballesta (cuadro 102), for UI and the bots: whether `shooter`'s shot at `target`, if it kills, keeps the squad
+        /// hidden: it fires arrows, and nobody else of the enemy notices it where it stands (Los.Watchers, the rules' own
+        /// reach). Rules.Attack is what holds; this only tells beforehand.
+        /// </summary>
+        public static bool SilentKill(GameState s, Unit shooter, Unit target)
+        {
+            return Content.FiresArrows(shooter) && !Los.Watchers(s, shooter, shooter.Pos).Any((w) => w.Id != target.Id);
+        }
+
         public static bool Notices(GameState s, Unit watcher, Unit? who, Pos p, Pos? from = null, double? facing = null)
         {
             return Los.InNoticeCone(s, watcher, p, from, facing) && Los.SightOrigin(s, from ?? watcher.Pos, p, NoticeRange(s, watcher, p, who, from), Los.WindowReachOf(watcher.Team)) != null;

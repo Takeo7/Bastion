@@ -165,6 +165,8 @@ namespace Bastion.UI.Combat
                 var def = Content.Abilities[id];
                 // Golpe silencioso only with one to take down (Gameplay, 16/11): no key otherwise.
                 if (id == AbilityIds.Takedown && !HasTargets(id)) continue;
+                // The bow has nothing to reload (U29: no clip, each shot takes an arrow from the pack): no key, not one always off.
+                if (id == AbilityIds.Reload && Content.FiresArrows(u) && Content.ClipOf(u, AbilityIds.Shoot) == 0) continue;
                 // The chainsaw's blows are its fuel's (Content.RunsChainsaw): shown as the grenades' are.
                 int? charge = def.Charge != null ? AbilityTexts.Charge(u, def.Charge) : Content.RunsChainsaw(u, id) ? AbilityTexts.Charge(u, ChargeIds.Fuel) : (int?)null;
                 string reason;
@@ -193,7 +195,9 @@ namespace Bastion.UI.Combat
                     Damage = AbilityTexts.DamageText(State, u, id),
                     Noise = AbilityTexts.NoiseText(State, u, id),
                     Stats = AbilityTexts.AbilityStats(State, u, id),
-                    Description = id == AbilityIds.Search && SearchBeside(u) is string beside ? AbilityTexts.SearchWords(beside).effect : def.Description,
+                    // Recargar with the crossbow loads a bolt, not a magazine (U29; Lore's).
+                    Description = id == AbilityIds.Search && SearchBeside(u) is string beside ? AbilityTexts.SearchWords(beside).effect
+                        : id == AbilityIds.Reload && Content.FiresArrows(u) ? Lore.ArrowsText.Reload : def.Description,
                     // Registrar by what is beside: a car, a body, a box (Arturo, 18/11 T12: it was the backpack every time).
                     Icon = id == AbilityIds.Search ? SearchIcon(SearchBeside(u)) : null,
                     Active = mode != Mode.Move && modeAbility == id,

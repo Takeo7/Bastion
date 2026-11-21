@@ -470,7 +470,7 @@ namespace Bastion.Engine
                     roll -= w.Weight;
                 }
                 left.Remove(pick);
-                wares.Add(new Ware { Gear = Gears.NewGear(c, pick.Kind, pick.Type), Price = Content.Haggled(pick.Price, haggle) });
+                wares.Add(new Ware { Gear = Gears.NewGear(c, pick.Kind, pick.Type, pick.Count), Price = Content.Haggled(pick.Price, haggle) });
             }
             return wares;
         }

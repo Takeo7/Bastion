@@ -1,6 +1,7 @@
 #nullable enable
 // types.ts: what a mission holds besides the map and the units.
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Bastion.Engine
 {
@@ -117,8 +118,34 @@ namespace Bastion.Engine
         public int Panics { get; set; }
         /// <summary>Their own seed (the node's and theirs): what a panic makes them do (Rules.PanicOf), the same on every machine.</summary>
         public int Seed { get; set; }
+        /// <summary>
+        /// Cowering (cuadro 107, for Arte: drawn so for whoever comes in late too): from their panic of kind «cower» till their
+        /// next step that isn't one (a walk, boarding, hiding, another panic). Null: not.
+        /// </summary>
+        public bool? Cowering { get; set; }
 
-        public CivilianSpot Copy() => new CivilianSpot { Unit = Unit, Area = Area != null ? new SearchArea { Center = new Vec2 { X = Area.Center.X, Y = Area.Center.Y }, Radius = Area.Radius } : null, Found = Found, Panics = Panics, Seed = Seed };
+        public CivilianSpot Copy() => new CivilianSpot { Unit = Unit, Area = Area != null ? new SearchArea { Center = new Vec2 { X = Area.Center.X, Y = Area.Center.Y }, Radius = Area.Radius } : null, Found = Found, Panics = Panics, Seed = Seed, Cowering = Cowering };
+    }
+
+    /// <summary>
+    /// G23 Las cargas (MissionState.Charges): the nest's three points (by tile, GameState nodes) and whether each is set; the count
+    /// once the last is (Setup.ChargesTurns down to 0, at the end of each enemy turn); blown, when it reached 0.
+    /// </summary>
+    public sealed class ChargesState
+    {
+        public List<ChargePoint> Points { get; set; } = new List<ChargePoint>();
+        public int? Countdown { get; set; }
+        public bool? Blown { get; set; }
+        /// <summary>The nest's building, by its ground tiles (its dead were set there).</summary>
+        public List<int> Nest { get; set; } = new List<int>();
+
+        public ChargesState Copy() => new ChargesState { Points = Points.Select((p) => new ChargePoint { Tile = p.Tile, Placed = p.Placed }).ToList(), Countdown = Countdown, Blown = Blown, Nest = new List<int>(Nest) };
+    }
+
+    public sealed class ChargePoint
+    {
+        public int Tile { get; set; }
+        public bool Placed { get; set; }
     }
 
     /// <summary>G23.5 Saqueadores' camp (MissionState.Raiders): its bounds with its fence, and its stash's crates by tile (GameState nodes).</summary>
@@ -277,6 +304,8 @@ namespace Bastion.Engine
         /// each with its circle to look in till found, and its panics. Won with two aboard (Rules.EvacWins). Missing, none of it.
         /// </summary>
         public List<CivilianSpot>? Civilians { get; set; }
+        /// <summary>G23 Las cargas (cuadro 109; .dev-snapshots/gameplay/g23/CARGAS.md): the nest's points and the count (Setup.PlaceCharges). Missing, none of it.</summary>
+        public ChargesState? Charges { get; set; }
         /// <summary>Mordido: the squad's turns left till the bitten turns, from their finding (Setup.BiteTurns); null before.</summary>
         public int? BiteTurns { get; set; }
         /// <summary>Mordido: the antiviral used on the bitten (GearUsedEvent): no count any more, and La Lata takes them.</summary>

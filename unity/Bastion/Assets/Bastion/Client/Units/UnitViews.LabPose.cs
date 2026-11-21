@@ -36,8 +36,9 @@ namespace Bastion.Client.Units
                     if (v.labClip != step[0])
                     {
                         v.labClip = step[0];
-                        v.anim.CampLoop(clip, true);
-                        Debug.Log(System.FormattableString.Invariant($"[pose] {u.Id}: {step[0]} ({(clip != null ? clip.length : -1):0.00} s) at {Time.time:0.00}, in camp {v.anim.InCamp}, walking {v.walking}"));
+                        var part = Anims.CampPartOf(step[0]);
+                        if (clip != null && part?.loop != null && part.loop.Length >= 2) v.anim.CampLoop(clip, true, part.loop[0], part.loop[1]);
+                        else v.anim.CampLoop(clip, true);
                     }
                     float lasts = step.Length > 1 ? float.Parse(step[1], System.Globalization.CultureInfo.InvariantCulture) : clip != null ? clip.length : 0;
                     if (v.labStep >= steps.Length - 1 || v.labTime < lasts) break;

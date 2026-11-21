@@ -231,6 +231,8 @@ namespace Bastion.Engine
             if (find.Parts.GetValueOrDefault() != 0) parts.Add($"{PartsFinds[seed % PartsFinds.Count]} ({PartsCount(find.Parts!.Value)})");
             if (!string.IsNullOrEmpty(find.Weapon)) parts.Add(Content.FoundWeapons[find.Weapon!].Find);
             if (find.Mags.GetValueOrDefault() != 0) parts.Add(find.Mags == 1 ? MagFinds[seed % MagFinds.Count] : MagsCount(find.Mags!.Value));
+            // Arco y ballesta: a box's bundle, or those had back from a body (and a Cazador's own).
+            if (find.Arrows.GetValueOrDefault() != 0) parts.Add(ArrowsText.Count(find.Arrows!.Value));
             return parts;
         }
 
@@ -330,6 +332,7 @@ namespace Bastion.Engine
                 if (find.Parts.GetValueOrDefault() != 0) parts.Add($"+{PartsCount(find.Parts!.Value)}");
                 if (!string.IsNullOrEmpty(find.Weapon)) parts.Add(Content.FoundWeapons[find.Weapon!].Name);
                 if (find.Mags.GetValueOrDefault() != 0) parts.Add($"+{MagsCount(find.Mags!.Value)}");
+                if (find.Arrows.GetValueOrDefault() != 0) parts.Add($"+{ArrowsText.Count(find.Arrows!.Value)}");
             }
             var label = string.Join(" · ", parts);
             return label.Length > 0 ? label : "Nada";

@@ -448,11 +448,32 @@ namespace Bastion.Engine
             return weapon != null ? Content.GearWeapon(weapon)?.Name ?? Content.Knife.Name : Content.Knife.Name;
         }
 
-        /// <summary>The magazines a run's soldier counts are those in its pack (Unit.Mags).</summary>
+        /// <summary>The magazines a run's soldier counts are those in its pack (Unit.Mags); its arrows too (SyncArrows).</summary>
         public static void SyncMags(Unit u)
         {
             if (u.Pack == null) return;
             u.Mags = u.Pack.Items.Where((p) => p.Gear.Kind == GearKinds.Mags).Sum((p) => p.Gear.Count);
+            SyncArrows(u);
+        }
+
+        /// <summary>Arco y ballesta (cuadro 102): the arrows a run's soldier counts are those in its pack (Unit.Arrows), none or many.</summary>
+        public static void SyncArrows(Unit u)
+        {
+            if (u.Pack == null) return;
+            u.Arrows = u.Pack.Items.Where((p) => p.Gear.Kind == GearKinds.Arrows).Sum((p) => p.Gear.Count);
+        }
+
+        /// <summary>A bow's shot or a crossbow's reload takes an arrow out of the pack: off the smallest pile.</summary>
+        public static void SpendArrow(Unit u)
+        {
+            if (u.Pack == null) return;
+            var pile = u.Pack.Items.Where((p) => p.Gear.Kind == GearKinds.Arrows).OrderBy((p) => p.Gear.Count).FirstOrDefault();
+            if (pile != null)
+            {
+                pile.Gear.Count -= 1;
+                if (pile.Gear.Count <= 0) u.Pack.Items.Remove(pile);
+            }
+            SyncArrows(u);
         }
 
         /// <summary>Reloading takes a magazine out of the pack: off the smallest pile.</summary>

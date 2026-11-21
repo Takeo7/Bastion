@@ -605,6 +605,30 @@ namespace Bastion.Engine
         public SearchArea Area { get; set; } = new SearchArea();
     }
 
+    /// <summary>G23 Las cargas: `unit` sets a charge (its gear, out of its pack) at the point on `tile`; `left`, how many are still to set.</summary>
+    public sealed class ChargePlacedEvent : GameEvent
+    {
+        public override string T => "chargePlaced";
+        public string Unit { get; set; } = "";
+        public Pos Tile { get; set; } = new Pos();
+        public string Gear { get; set; } = "";
+        public int Left { get; set; }
+    }
+
+    /// <summary>G23 Las cargas: the count, after an enemy turn (`left`, turns to go; at 0 they blow: ChargesBlownEvent).</summary>
+    public sealed class ChargesTickEvent : GameEvent
+    {
+        public override string T => "chargesTick";
+        public int Left { get; set; }
+    }
+
+    /// <summary>G23 Las cargas: the three points go off at once (the damage, each its DamagedEvent; the scenery, TileChangedEvent).</summary>
+    public sealed class ChargesBlownEvent : GameEvent
+    {
+        public override string T => "chargesBlown";
+        public List<Pos> Points { get; set; } = new List<Pos>();
+    }
+
     /// <summary>Flare: reinforcements will land here at the end of the next alien turn.</summary>
     public sealed class ReinforcementsIncomingEvent : GameEvent
     {
