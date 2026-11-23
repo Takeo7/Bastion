@@ -34,6 +34,7 @@ namespace Bastion.UI.App
         [SerializeField] string baseScene = "Base";
 
         static AppFlow instance;
+        static bool opened;
         NetLink link;
         VisualElement root;
         VisualElement card;
@@ -128,6 +129,16 @@ namespace Bastion.UI.App
             // Over everything the scenes put up.
             doc.sortingOrder = 100;
             root = doc.rootVisualElement;
+            // The app opening (cuadro 136): the game's title first, while the start screen builds its backdrop under it.
+            if (!opened)
+            {
+                opened = true;
+                if (SceneManager.GetActiveScene().name == startScene)
+                {
+                    Perf.Begin("abrir");
+                    _ = RaiseVeil(new LoadView { Title = StartText.Title }, 0);
+                }
+            }
             root.pickingMode = PickingMode.Ignore;
             // A click or a key on any screen (they all share this panel): its sound (ui.ts).
             Bastion.Client.Audio.UiSounds.Install(root);
@@ -184,9 +195,13 @@ namespace Bastion.UI.App
             if (active != want)
             {
                 // From the base to a mission: La Lata leaves first (screen.ts launch, awaited before the battle).
+                // (Each change of screen timed for red.log, Perf: from the yes to the new screen drawn, M2.)
+                Perf.Begin($"{Label(active)} → {Label(want)}");
                 if (want == battleScene && active == baseScene) Depart();
-                else if (want == battleScene) _ = LoadBattle();
-                else Load(want);
+                else if (want == battleScene) _ = LoadBattle(WindowFor(want, active));
+                // Back to the menu: no window (cuadro 139, Red's measure in the app: ~90 ms, nothing to cover).
+                else if (want == startScene) Load(want);
+                else _ = LoadWith(want, WindowFor(want, active));
                 return;
             }
             // «Continuar partida» and «Nueva partida» (NetLink.Opening, 0.12.24): the start screen stays, saying so, while the
@@ -203,8 +218,18 @@ namespace Bastion.UI.App
         void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, LoadSceneMode mode)
         {
             loading = false;
-            // Not the battle (back to the base, to the menu): nothing to wait for under the veil.
-            if (scene.name != battleScene) LiftVeil();
+            // A held preload is spent by any scene's load (another scene loaded over it lets the battle's in first, then
+            // its own, in one frame: seen, the 0.14.2's review, point 4); kept, the next stage «let in» a spent one and
+            // the app stopped loading for good.
+            preloaded = null;
+            // (When, for the labs' strips: which of their frames is the change.)
+            Debug.Log(System.FormattableString.Invariant($"[app] escena «{scene.name}» a los {Time.time:0.00} s de juego, fotograma {Time.frameCount}"));
+            // The base: its window goes once two frames of it are drawn. The start screen lifts it itself, once its backdrop
+            // is built (StartScreen); the battle, once its map and figures are drawn (CombatSession, StageLoad.FirstDrawn).
+            if (scene.name == baseScene) _ = LiftAfterFrames(2);
+            // (The room's menu instead of the start screen, or a backdrop already up: lifted anyway, a moment later.) With no
+            // window (back to the menu), the change is done two frames in (Perf's line).
+            else if (scene.name == startScene) _ = LiftAfterFrames(loadVeil != null ? 90 : 2);
             GameSettings.InMenu = scene.name != battleScene;
             // Ajustes' «Interfaz» on whatever panel the new scene brought (all share AppFlow's today).
             GameSettings.ApplyInterface();
@@ -227,13 +252,34 @@ namespace Bastion.UI.App
             hud.AddComponent<Bastion.UI.Combat.CombatSession>().Hud = root;
         }
 
+        /// <summary>
+        /// To a stage (cuadro 136): from the map on paper, the stage's sheet comes up over it (the same paper, faded in), and
+        /// La Lata's leaving the clearing, which the map hides, is skipped; else (a siege, the old campaign) La Lata leaves
+        /// first as ever. Then the battle under the window.
+        /// </summary>
+        /// <remarks>
+        /// From the base (the first stage, cuadro 138, Arturo: «Ver salir a La Lata, corto»): the map on paper goes, the
+        /// clearing is seen and La Lata drives off (BaseSession.Depart), the battle's scene loading meanwhile in the
+        /// background (not shown till the sheet is up); then the sheet. Between stages, the sheet at once. The black of
+        /// before (0.13.0 to 0.14.1): the map's tab had the clearing's camera off, and La Lata left unseen.
+        /// </remarks>
         async void Depart()
         {
             departing = true;
             try
             {
                 var session = FindFirstObjectByType<Bastion.UI.Strategy.BaseSession>();
-                if (session != null) await session.Depart();
+                var sheet = session?.Control?.StageSheet();
+                // The battle's scene loading from the start, in the background: through La Lata's leaving, or the sheet's coming in.
+                PreloadBattle();
+                if ((sheet == null || sheet.Departs) && session != null) await session.Depart();
+                // (The 0.14.2's review, points 4 and 8, labs only: the room left during the departure, or its host gone.)
+                var test = System.Environment.GetEnvironmentVariable("BASTION_PRUEBA_SALIDA");
+                // («corte1»: only the first, to go to a stage again after it.)
+                if (test == "corte" || (test == "corte1" && !cutOnce)) link.Leave();
+                if (test == "corte1") cutOnce = true;
+                if (test == "anfitrion") HostClosedCard();
+                if (sheet != null) await RaiseVeil(sheet, FadeIn);
             }
             finally
             {
@@ -242,81 +288,156 @@ namespace Bastion.UI.App
             if (link.LastRoom?.Phase == RoomPhases.Mission) await LoadBattle();
         }
 
-        /// <summary>The battle loaded under the veil: up first, drawn a frame, then the scene.</summary>
-        async Awaitable LoadBattle()
+        /// <summary>The battle's scene loading in the background, held back from showing (LoadBattle lets it in).</summary>
+        AsyncOperation preloaded;
+
+        /// <summary>(BASTION_PRUEBA_SALIDA=corte1: the room left during the first departure only.)</summary>
+        static bool cutOnce;
+
+        void PreloadBattle()
+        {
+            if (preloaded != null || System.Environment.GetEnvironmentVariable("BASTION_SIN_PRECARGA") == "1") return;
+            preloaded = SceneManager.LoadSceneAsync(battleScene);
+            if (preloaded != null) preloaded.allowSceneActivation = false;
+        }
+
+        /// <summary>What a scene is called in the change's line.</summary>
+        string Label(string scene) => scene == battleScene ? "combate" : scene == baseScene ? "base" : "menú";
+
+        /// <summary>The battle loaded under the window: up first (a dark one with no stage known: a game going on in one), drawn, then the scene.</summary>
+        async Awaitable LoadBattle(LoadView window = null)
         {
             loading = true;
-            RaiseVeil();
-            await Awaitable.NextFrameAsync();
+            if (loadVeil == null) await RaiseVeil(window, 0);
+            if (preloaded != null)
+            {
+                // Loaded meanwhile: only let in now, under the window.
+                preloaded.allowSceneActivation = true;
+                preloaded = null;
+                return;
+            }
             Load(battleScene);
+        }
+
+        /// <summary>Any other scene under its window: up, drawn, then the scene (cuadro 136: «ventana en todas las esperas»).</summary>
+        async Awaitable LoadWith(string scene, LoadView window)
+        {
+            loading = true;
+            await RaiseVeil(window, 0);
+            Load(scene);
+        }
+
+        /// <summary>
+        /// The window for going to `scene` from `from`, all on paper (cuadro 139, Arturo: «todas las esperas en papel»; only
+        /// «BASTIÓN», as the app opens, stays dark): the base from the battle, «Vuelta a la base» with the stage's result
+        /// (CombatSession's words); from the start screen, the game going on («Capítulo 1 · Medio») or a new one; a battle
+        /// from the start screen, the stage left half played, or a skirmish (its words as its state comes: VeilWords).
+        /// </summary>
+        LoadView WindowFor(string scene, string from)
+        {
+            if (scene == baseScene && from == battleScene)
+            {
+                var back = Bastion.UI.Combat.CombatSession.ReturnWindow() ?? new LoadView { Title = LoadText.Back };
+                back.Paper = true;
+                return back;
+            }
+            // Into a game going on from the start screen: its chapter and level, and the stage left half played, from the first
+            // frame (the battle's own words came only after its load: 4 s of an empty window, 23/11).
+            if (scene == battleScene)
+            {
+                var going = link.LastRoom?.SavedCampaign;
+                // A skirmish (none half played: the room's menu blocks one then): its kind and map come with its state.
+                if (going == null || going.Chapter <= 0 || going.InMission == null) return new LoadView { Paper = true, Kicker = RoomText.Skirmish };
+                // On paper (Producto, from Red's inventory: 1,8 s under a black card), its red ring traced as its squad is made.
+                return new LoadView { Paper = true, Kicker = LoadText.GoingOn, Title = StartText.SavedLine(going.Chapter, Lore.GameLevelText.NameOf(going.GameLevel)), Place = going.InMission };
+            }
+            if (scene == baseScene)
+            {
+                var saved = link.LastRoom?.SavedCampaign;
+                if (saved != null && saved.Chapter > 0) return new LoadView { Paper = true, Kicker = LoadText.GoingOn, Title = StartText.SavedLine(saved.Chapter, Lore.GameLevelText.NameOf(saved.GameLevel)) };
+                return new LoadView { Paper = true, Kicker = LoadText.New, Title = StartText.SavedLine(1, Lore.GameLevelText.NameOf(StartScreen.HostLevel)) };
+            }
+            return new LoadView { Title = StartText.Title };
+        }
+
+        async Awaitable LiftAfterFrames(int frames)
+        {
+            var raised = veilRaised;
+            for (var i = 0; i < frames; i++) await Awaitable.NextFrameAsync();
+            // A change with no window (back to the menu): over now, for Perf's line.
+            if (loadVeil == null) Perf.End();
+            else LiftVeil(raised);
         }
 
         // ---------------------------------------------------------- loading
 
-        /// <summary>The veil comes off by itself this long after it went up, whatever happened to the battle (s).</summary>
+        /// <summary>The window comes off by itself this long after it went up, whatever happened to the scene (s).</summary>
         const float VeilMost = 20;
-        /// <summary>How long its words take to go, and then its black (mixta-hud.css .load-veil.out: 0.12 s, 0.4 s).</summary>
-        const float WordsOut = 0.12f, VeilOut = 0.4f;
+        /// <summary>How long it takes to come in over the map (the sheet) and to go (s).</summary>
+        const float FadeIn = 0.3f, VeilOut = 0.4f;
 
-        VisualElement loadVeil, loadWords, loadRun;
-        Label loadKicker, loadTitle, loadPlace;
-        float loadSince, liftSince = -1;
+        LoadWindow window;
+        VisualElement loadVeil;
+        LoadView shownView;
+        float loadSince, liftSince = -1, fadeFrom = -1, fadeLength;
+        /// <summary>
+        /// Which raising the window is at (each change of screen its own): a lift asked for one before (the start screen's
+        /// backdrop built as the base's window went up over it) leaves the newer window be.
+        /// </summary>
+        int veilRaised;
+
+        /// <summary>The window's raising now (LiftVeil(raised) lifts only that one).</summary>
+        public static int Raised => instance?.veilRaised ?? 0;
 
         /// <summary>
-        /// While the battle loads (hud.ts veil, game.ts raiseVeil; UX-REVISION-3 #1): the operation's name over a running
-        /// bar instead of a frozen screen, over everything; its words once the battle has its state (VeilWords), lifted once
-        /// the map is drawn (LiftVeil); the arrival card waits for it (Veiled).
+        /// The loading window (cuadro 136; hud.ts veil before it): over everything, its words from the start (no running bar:
+        /// it froze halfway with the load, M2), faded in over `fade` seconds (the sheet over the map), and drawn before it
+        /// returns: the load that follows freezes on it. Without a view, a dark one, to be told the battle's words
+        /// (VeilWords). Up already: its view put in if it had none.
         /// </summary>
-        void RaiseVeil()
+        async Awaitable RaiseVeil(LoadView v, float fade)
         {
+            veilRaised++;
+            loadSince = Time.realtimeSinceStartup;
             if (loadVeil != null)
             {
+                // Up still (going, or the one before's): held, with this change's words if it has its own.
                 liftSince = -1;
-                return;
+                loadVeil.pickingMode = PickingMode.Position;
+                if (v != null && v != shownView) Show(v);
             }
-            loadVeil = Ui.El();
-            var v = loadVeil.style;
-            v.position = Position.Absolute;
-            v.left = 0;
-            v.top = 0;
-            v.right = 0;
-            v.bottom = 0;
-            v.backgroundColor = Color.black;
-            // The words from 30 % of the height less 48 px (.load-veil: padding-top calc(30vh − 48px)): a spacer's height,
-            // as a margin's percent goes by the width.
-            var spacer = Ui.El(null, loadVeil);
-            spacer.style.height = Length.Percent(30);
-            spacer.style.flexShrink = 0;
-            loadWords = Ui.El(null, loadVeil);
-            loadWords.style.alignItems = Align.Center;
-            loadWords.style.marginTop = -48;
-            loadKicker = Ui.Text("", "font-title", loadWords);
-            loadKicker.style.fontSize = 13;
-            loadKicker.style.letterSpacing = 3.4f;
-            loadKicker.style.color = Color.white;
-            loadTitle = Ui.Text("", "font-title", loadWords);
-            loadTitle.style.fontSize = 44;
-            loadTitle.style.letterSpacing = 2.2f;
-            loadTitle.style.color = Color.white;
-            loadTitle.style.marginTop = 4;
-            loadTitle.style.marginBottom = 10;
-            var rail = Ui.El(null, loadWords);
-            rail.style.width = 220;
-            rail.style.height = 4;
-            rail.style.overflow = Overflow.Hidden;
-            rail.style.backgroundColor = new Color(1, 1, 1, 0.08f);
-            loadRun = Ui.El(null, rail);
-            loadRun.style.position = Position.Absolute;
-            loadRun.style.top = 0;
-            loadRun.style.bottom = 0;
-            loadRun.style.width = Length.Percent(40);
-            loadRun.style.backgroundColor = Color.white;
-            loadPlace = Ui.Text("", null, loadWords);
-            loadPlace.style.marginTop = 8;
-            loadPlace.style.color = (Color)new Color32(0x8d, 0x91, 0x8a, 0xff);
-            loadSince = Time.realtimeSinceStartup;
-            liftSince = -1;
+            else
+            {
+                liftSince = -1;
+                Show(v);
+                if (fade > 0)
+                {
+                    fadeFrom = loadSince;
+                    fadeLength = fade;
+                    loadVeil.style.opacity = 0;
+                }
+            }
+            // Faded in, then two frames drawn whole: what the load freezes on is the window.
+            while (fadeFrom >= 0 && Time.realtimeSinceStartup - fadeFrom < fadeLength) await Awaitable.NextFrameAsync();
+            if (loadVeil != null) loadVeil.style.opacity = 1;
+            fadeFrom = -1;
+            await Awaitable.NextFrameAsync();
+            await Awaitable.NextFrameAsync();
+        }
+
+        void Show(LoadView v)
+        {
+            var opacity = loadVeil?.style.opacity ?? 1;
+            loadVeil?.RemoveFromHierarchy();
+            shownView = v;
+            window = new LoadWindow(v ?? new LoadView());
+            loadVeil = window.Root;
+            loadVeil.style.opacity = opacity;
             root.Add(loadVeil);
+            // The host's card over it, if it is up (the review's point 8: a sheet raised after it hid it).
+            veil?.BringToFront();
+            // Its step on the element now up: one replaced (the battle's words put in) took its schedule with it, and the
+            // window never went (the way into a game going on, 23/11).
             loadVeil.schedule.Execute(StepVeil).Every(16);
         }
 
@@ -324,55 +445,66 @@ namespace Bastion.UI.App
         {
             if (loadVeil == null) return;
             var now = Time.realtimeSinceStartup;
-            // The stripe sliding along its rail (veil-run: 1.1 s, eased, from −100 % to 250 % of itself).
-            var t = (now - loadSince) % 1.1f / 1.1f;
-            loadRun.style.left = Length.Percent(Mathf.Lerp(-40, 100, t * t * (3 - 2 * t)));
+            if (fadeFrom >= 0) loadVeil.style.opacity = Mathf.Clamp01((now - fadeFrom) / fadeLength);
             if (liftSince < 0)
             {
                 if (now - loadSince > VeilMost) LiftVeil();
                 return;
             }
-            // Lifting, the words go first: the briefing comes up under them with the same name.
             var gone = now - liftSince;
-            loadWords.style.opacity = Mathf.Clamp01(1 - gone / WordsOut);
             loadVeil.style.opacity = Mathf.Clamp01(1 - gone / VeilOut);
             if (gone < VeilOut) return;
             loadVeil.RemoveFromHierarchy();
             loadVeil = null;
+            window = null;
+            shownView = null;
         }
 
-        /// <summary>The battle's words on the veil (game.ts raiseVeil): what kind of operation, its name, the place.</summary>
+        /// <summary>
+        /// The battle's words on a window that has none (a skirmish's sheet, its kicker alone): what it is and where, on the
+        /// same paper (or dark, a window that was).
+        /// </summary>
         public static void VeilWords(string kicker, string title, string place)
         {
             var app = instance;
-            if (app == null || app.loadVeil == null) return;
-            app.loadKicker.text = kicker ?? "";
-            Ui.Show(app.loadKicker, !string.IsNullOrEmpty(kicker));
-            app.loadTitle.text = (title ?? "").ToUpperInvariant();
-            app.loadPlace.text = place ?? "";
-            Ui.Show(app.loadPlace, !string.IsNullOrEmpty(place));
-            // For tests with the app (BASTION_FOTOS, Red's CampaignRun's): the veil with its words, as this frame ends.
+            if (app == null || app.loadVeil == null || !string.IsNullOrEmpty(app.shownView?.Title)) return;
+            app.Show(new LoadView { Paper = app.shownView?.Paper == true, Kicker = app.shownView?.Kicker ?? kicker, Title = title, Place = place });
+            // For tests with the app (BASTION_FOTOS, Red's CampaignRun's): the window with its words, as this frame ends.
             var shots = System.Environment.GetEnvironmentVariable("BASTION_FOTOS");
             if (!string.IsNullOrEmpty(shots)) ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(shots, $"velo-{++app.veilShots}.png"));
         }
 
         int veilShots;
 
-        /// <summary>The map is drawn: the veil goes, its words first.</summary>
-        public static void LiftVeil()
+        /// <summary>How far something real under the window has come (0–1: the squad's figures made): the sheet's red ring.</summary>
+        public static void Progress(float f) => instance?.window?.Progress(f);
+
+        /// <summary>
+        /// The scene is drawn: the window goes, and the change is over (Perf's line). With `raised` (Raised when asked for),
+        /// only if no other window went up since.
+        /// </summary>
+        public static void LiftVeil(int raised = -1)
         {
             var app = instance;
             if (app == null || app.loadVeil == null || app.liftSince >= 0) return;
+            if (raised >= 0 && raised != app.veilRaised) return;
+            Perf.End();
             app.liftSince = Time.realtimeSinceStartup;
             app.loadVeil.pickingMode = PickingMode.Ignore;
         }
 
-        /// <summary>The veil is up and not going: what comes after it (the arrival card) waits.</summary>
+        /// <summary>The window is up and not going: what comes after it (the arrival card) waits.</summary>
         public static bool Veiled => instance != null && instance.loadVeil != null && instance.liftSince < 0;
+
+        /// <summary>The window is on screen at all, going or not: the first turn's stamp waits till it is gone, to be seen whole.</summary>
+        public static bool WindowShown => instance != null && instance.loadVeil != null;
 
         void Load(string scene)
         {
             loading = true;
+            Debug.Log(System.FormattableString.Invariant($"[app] cargando «{scene}» a los {Time.realtimeSinceStartup:0.00} s{(preloaded != null ? ", con la del combate precargada" : "")}"));
+            // (Let in first, as Unity does anyway; spent then: OnSceneLoaded.)
+            if (preloaded != null && scene != battleScene) preloaded.allowSceneActivation = true;
             SceneManager.LoadScene(scene);
         }
 
@@ -396,6 +528,12 @@ namespace Bastion.UI.App
         void OnHostClosed()
         {
             if (link.Hosting || card != null) return;
+            HostClosedCard();
+        }
+
+        void HostClosedCard()
+        {
+            if (card != null) return;
             var host = link.PartnerName;
             veil = Ui.El();
             veil.style.position = Position.Absolute;

@@ -56,13 +56,34 @@ namespace Bastion.Client
         /// The squad in the row gets into La Lata and it drives off (screen.ts on launching: clearingArt depart); done once it
         /// is gone (at once if there is nobody and nothing to go). The row then stands again only when it is given again.
         /// </summary>
-        public async Awaitable Leave(CancellationToken ct = default)
+        /// <summary>
+        /// `quick` (Arturo's cuadro 138, 23/11: «ver salir a La Lata, corto»): the squad aboard already, nobody seen getting
+        /// in, and La Lata off in QuickLeave seconds. Left from the stages' map, the clearing's camera is off under it (the
+        /// map's view is the valley's: Change): on again here, on the row's shot, or La Lata left unseen behind black (the
+        /// 5.7 s in black Red measured in the 0.14.1, since the runs' map).
+        /// </summary>
+        public async Awaitable Leave(CancellationToken ct = default, bool quick = false)
         {
             if (Lata == null || Leaving) return;
+            if (MapOn)
+            {
+                changing = null;
+                MapOn = false;
+                if (Camera != null) Camera.enabled = true;
+                Go(LineupShot(), true);
+            }
             Leaving = true;
             try
             {
-                if (standers.Count > 0 && Lata.Shown)
+                if (quick)
+                {
+                    // (On the motorbike its riders are seen: sat on it at once; any other vehicle shuts them in.)
+                    if (Lata.IsBike && Lata.Seat(0) != null && Lata.Shown) MountNow();
+                    else foreach (var s in standers) if (s.root != null) s.root.gameObject.SetActive(false);
+                    Lata.StartSeconds = QuickStart;
+                    Lata.GoSeconds = QuickLeave - QuickStart;
+                }
+                else if (standers.Count > 0 && Lata.Shown)
                 {
                     float began = Time.time;
                     // (Onto the motorbike only if it is built: without its model nobody could sit on it.)
@@ -81,8 +102,14 @@ namespace Bastion.Client
             finally
             {
                 Leaving = false;
+                if (Lata != null) { Lata.StartSeconds = LaLata.DepartSeconds - LaLata.GoPace; Lata.GoSeconds = LaLata.GoPace; }
             }
         }
+
+        /// <summary>How long La Lata takes to shut its doors and be gone in a quick leave (seconds).</summary>
+        public const float QuickLeave = 2;
+        /// <summary>Of those, how long it stands starting (its doors shut, its lights on); the rest it drives its whole way, out of the picture as they end (measured: SettlementLab's BASTION_MEDIR=salida).</summary>
+        const float QuickStart = 0.3f;
 
         /// <summary>
         /// The camera while La Lata goes, as long as it takes (Arturo, 31/10, his #1): where it stands, turned after La Lata
@@ -350,6 +377,28 @@ namespace Bastion.Client
                 }
                 await Awaitable.NextFrameAsync(ct);
             }
+        }
+
+        /// <summary>The row on the motorbike at once (a quick leave): its first two sat on it as MountUp leaves them, the rest out of sight.</summary>
+        void MountNow()
+        {
+            var standing = standers.Where(s => s.root != null && s.root.gameObject.activeInHierarchy).ToList();
+            var riders = new List<Stander>();
+            for (int k = 0; k < Lata.Seats; k++)
+            {
+                var spot = Lata.MountSpot(k, Lata.transform.position);
+                var pick = standing.Where(s => !riders.Contains(s)).OrderBy(s => spot == null ? 0 : (s.root.position - spot.Value).sqrMagnitude).FirstOrDefault();
+                if (pick == null) break;
+                Sling(pick);
+                pick.seat = k;
+                pick.anim?.Motion("idle");
+                pick.anim?.CampLoop(FigureCatalog.Load()?.Clip("sitChair"));
+                pick.mountFrom = pick.root.position;
+                pick.mountTurn = pick.root.rotation;
+                pick.mounted = 1;
+                riders.Add(pick);
+            }
+            foreach (var s in standing) if (!riders.Contains(s)) s.root.gameObject.SetActive(false);
         }
 
         /// <summary>

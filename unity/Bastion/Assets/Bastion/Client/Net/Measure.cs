@@ -19,8 +19,8 @@ namespace Bastion.Client.Net
     /// - base: a new campaign on its base, the premise closed, then the Asentamiento, Soldados and Mapa a third of it each
     ///   (120 s at least).
     /// Each step goes to red.log («[prueba] medir: …»), to tell its lines apart, and what the loads take: from the app's
-    /// start to its first frame of the game, and from the case asked for (the mission, the campaign) to its first card
-    /// showing («Entendido»), with the longest frame between. However it goes, the app quits BASTION_SEGUNDOS + 60 seconds in.
+    /// start to its first frame of the game, and from the case asked for (the mission, the campaign) to the fight's first
+    /// frame drawn (StageLoad.Drawn) or the base's premise card («Entendido»), with the longest frame between. However it goes, the app quits BASTION_SEGUNDOS + 60 seconds in.
     /// </summary>
     internal sealed class Measure
     {
@@ -184,11 +184,15 @@ namespace Bastion.Client.Net
             link.Send(msg);
         }
 
-        /// <summary>The load, until the case's first card shows (the arrival's, the premise's): how long, and its longest frame.</summary>
+        /// <summary>
+        /// The load, until the case is in: a fight's first frame drawn with its map and figures (Arte's StageLoad: the arrival's
+        /// card, «Entendido», is gone since the 0.14.2, cuadro 139, and this waited for ever: the 0.14.2's review, 7); the
+        /// base's premise card. How long, and its longest frame.
+        /// </summary>
         private void Loading(float now)
         {
             longest = Math.Max(longest, Time.unscaledDeltaTime);
-            if (UiPress.Shown("Entendido") == 0) return;
+            if (which == "base" ? UiPress.Shown("Entendido") == 0 : !Bastion.Client.StageLoad.Drawn) return;
             loaded = true;
             log($"[prueba] medir: {which} cargado a los {now - askedAt:F1} s de pedirlo · fotograma más largo {longest * 1000:F0} ms");
         }

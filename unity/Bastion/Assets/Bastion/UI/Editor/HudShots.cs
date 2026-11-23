@@ -75,6 +75,47 @@ namespace Bastion.UI.EditorTools
         }
 
         /// <summary>
+        /// The loading windows (cuadro 136), as AppFlow puts them up, with made-up words: BASTION_VENTANA=titulo (opening,
+        /// back to the menu), continuar, nueva (to the base from the start screen), vuelta (back from a stage; vuelta-papel, on
+        /// paper), etapa (to a stage, on paper, its ring half traced).
+        ///   unity/tools/captura.sh -shotSetup Bastion.UI.EditorTools.HudShots.Ventana -shotPlay -shotCamera "Shot camera" -shotFrames 1
+        /// </summary>
+        public static void Ventana()
+        {
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = Color.black;
+            var screen = new GameObject("Ventana");
+            var doc = screen.AddComponent<UIDocument>();
+            doc.panelSettings = Panel();
+            screen.AddComponent<VentanaLab>();
+        }
+
+        /// <summary>
+        /// M2 (23/11): what building the battle's HUD weighs, as AppFlow builds it when the scene is in (a document with the
+        /// HUD's panel and HudRoot, its pieces made in OnEnable), three times (the first pays for what loads once); each a line
+        /// [carga-hud] in milliseconds.
+        ///   unity/tools/captura.sh -shotSetup Bastion.UI.EditorTools.HudShots.CargaHud -shotPlay -shotCamera "Shot camera" -shotFrames 1
+        /// </summary>
+        public static void CargaHud()
+        {
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            for (var round = 0; round < 3; round++)
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                var hud = new GameObject("HUD " + round);
+                hud.AddComponent<UIDocument>().panelSettings = Panel();
+                double document = watch.Elapsed.TotalMilliseconds;
+                hud.AddComponent<Bastion.UI.Hud.HudRoot>();
+                double built = watch.Elapsed.TotalMilliseconds;
+                Debug.Log(System.FormattableString.Invariant($"[carga-hud] round {round}: document {document:0.0} ms, HudRoot {built - document:0.0} ms; all {built:0.0} ms"));
+                if (round < 2) Object.DestroyImmediate(hud);
+            }
+        }
+
+        /// <summary>
         /// The room menu with a made-up room (RoomLab): Arturo hosting, Ana to come, the addresses to give her. Over Arte's
         /// crossroads, which the room puts up itself (cuadro 124), shot from where its camera stands.
         /// </summary>

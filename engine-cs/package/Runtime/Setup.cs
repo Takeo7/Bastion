@@ -363,6 +363,9 @@ namespace Bastion.Engine
             // A run's fight saved half played before the 0.14.0 (Producto's review of 23/11): its pits, as one set out now
             // (NoPits). Without La Lata (a Limpieza had none) it may be abandoned (Rules.AbandonAllowed).
             if (s.Run != null && s.Mission != null && s.Mission.Pits == null && s.Mission.EvacZone.Count > 0 && s.Outcome == null) NoPits(s);
+            // A fight saved half played before M1 (0.14.1's and older): its buildings open to the outside found, as one set out
+            // now (Buildings.FindOpen; Producto, cuadro 134: «sin excepción»).
+            if (s.Mission != null && s.Outcome == null) Buildings.FindOpen(s);
         }
 
         /// <summary>
@@ -1234,6 +1237,8 @@ namespace Bastion.Engine
             // Each on a draw of its own, so nothing else moves (G21, G19).
             PlaceLootedCars(state, new Rng((opts.Map.Seed ?? 0) * 37 + LootedSalt));
             PlacePieces(state, new Rng((opts.Map.Seed ?? 0) * 31 + PiecesSalt));
+            // M1 (Arturo, cuadros 133 and 134): the buildings open to the outside with no door to close, found from the start.
+            Buildings.FindOpen(state);
             // Paused at the start, while the briefing is read: the space bar (or «Empezar») sets the clock going.
             if (opts.Realtime == true) state.Realtime = new Realtime { Clock = 0, Paused = true, Units = new Dictionary<string, RtUnit>() };
             return state;

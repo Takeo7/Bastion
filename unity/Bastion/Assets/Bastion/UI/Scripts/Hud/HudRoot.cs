@@ -287,8 +287,12 @@ namespace Bastion.UI.Hud
         /// <summary>The camera up over the map (#12): its strip shown or not.</summary>
         public void SetMiniMap(bool open) => miniMap?.Set(open);
         public void SetCall(CallView v) => cards.SetCall(v);
+        /// <summary>The stage's end card as last put up (null, none): the way back's window says its result (cuadro 136).</summary>
+        public OutcomeView Outcome { get; private set; }
+
         public void SetOutcome(OutcomeView v)
         {
+            Outcome = v;
             // Under the stage's card, no note of the fight is left to read or answer.
             if (v != null) notes.Hush();
             cards.SetOutcome(v);

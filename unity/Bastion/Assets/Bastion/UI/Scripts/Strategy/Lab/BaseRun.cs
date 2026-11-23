@@ -205,6 +205,31 @@ namespace Bastion.UI.Strategy
                     Debug.Log($"[base-run] ayuda de {S(1)}: {(found != null ? "abierta" : "no está")}");
                     return false;
                 }
+                // «pasa:rnode-n4-0»: the pointer over that element (the map on paper: its card); «pulsa:rnode-n4-0», a click on it
+                // (a stage picked), as its own button's (cuadro 132). «pulsa:runmap-side/kit-fold»: by a path of names, the first
+                // inside the one before (Almacén has a «kit-fold» of its own).
+                case "pasa":
+                case "pulsa":
+                {
+                    var strategy = FindFirstObjectByType<StrategyRoot>();
+                    VisualElement found = strategy?.GetComponent<UIDocument>()?.rootVisualElement;
+                    foreach (var piece in S(1).Split('/'))
+                        found = found?.Q(piece) ?? found?.Q(className: piece);
+                    if (found != null && part[0] == "pasa")
+                        using (var e = PointerEnterEvent.GetPooled())
+                        {
+                            e.target = found;
+                            found.SendEvent(e);
+                        }
+                    else if (found is Button button)
+                        using (var e = NavigationSubmitEvent.GetPooled())
+                        {
+                            e.target = button;
+                            button.SendEvent(e);
+                        }
+                    Debug.Log($"[base-run] {part[0]} {S(1)}: {(found != null ? "hecho" : "no está")}");
+                    return false;
+                }
                 // «estado»: what is open now, in the log (U10's test with two).
                 case "estado": Debug.Log($"[base-run] estado: {control.OpenNow()}"); return false;
                 // «ocultar»: every panel of the screen hidden, the clearing and its row as they are (A8: Arte's shots of the

@@ -858,6 +858,15 @@ namespace Bastion.Client.Map
         /// </summary>
         public void Depart(float distance = 12, bool fade = false) => Depart(distance, fade, null);
 
+        /// <summary>
+        /// How long it takes to shut its doors and start, and then to drive off (seconds; its own pace unless said: the
+        /// settlement's short leave, cuadro 138).
+        /// </summary>
+        public float StartSeconds = ShutSeconds, GoSeconds = AwaySeconds;
+
+        /// <summary>Its own pace: what shutting its doors and driving off take (seconds), and the driving off alone.</summary>
+        public const float DepartSeconds = ShutSeconds + AwaySeconds, GoPace = AwaySeconds;
+
         /// <summary>Depart, waited for: done once it is gone (at once if it isn't there), or when `ct` is cancelled.</summary>
         public async Awaitable DepartAsync(float distance = 12, bool fade = false, System.Threading.CancellationToken ct = default)
         {
@@ -876,7 +885,7 @@ namespace Bastion.Client.Map
             }
             var from = doors.Select(d => d.k).ToList();
             float lit = night ? LightsNight : LightsDay;
-            Then(ShutSeconds, t =>
+            Then(StartSeconds, t =>
             {
                 for (int i = 0; i < doors.Count; i++) DoorAt(doors[i], from[i] * (1 - t));
                 Glow(LightsStanding + t * lit);
@@ -892,7 +901,7 @@ namespace Bastion.Client.Map
                 return;
             }
             float last = 0;
-            Then(AwaySeconds, t =>
+            Then(GoSeconds, t =>
             {
                 float along = distance * t * t;
                 Place(at + new Vector3(Mathf.Sin(heading), 0, Mathf.Cos(heading)) * along);

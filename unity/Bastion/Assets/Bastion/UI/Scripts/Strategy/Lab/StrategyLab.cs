@@ -790,6 +790,22 @@ namespace Bastion.UI.Strategy
                     doc.RegisterCallback(once);
                 }
             }
+            // The loading window's proposals (M2, BASTION_CARGA: a, b, c) over the map on paper, once it is laid out (it reads
+            // the marks' places from it), and again as the busts come.
+            else if (view == "runmap" && LoadProposals.Kind != null)
+            {
+                var doc = root.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement;
+                void Draw() => LoadProposals.Draw(doc, p.Expedition(runsChosen), root.IconFor, id => root.PortraitOf?.Invoke(id));
+                if (!proposalBusts)
+                {
+                    proposalBusts = true;
+                    Bastion.Client.Portraits.Changed += _ => Draw();
+                }
+                UnityEngine.UIElements.EventCallback<UnityEngine.UIElements.GeometryChangedEvent> laid = null;
+                laid = _ => Draw();
+                UnityEngine.UIElements.UQueryExtensions.Q(doc, className: "runmap-field")?.RegisterCallback(laid);
+                if (!float.IsNaN(doc.layout.width) && doc.layout.width > 0) Draw();
+            }
             else if (view == "upgrades") root.SetUpgrades(p.Upgrades());
             else if (view == "squad") root.SetSquad(p.RunSquad());
             else if (view == "barracks") root.SetSoldiers(p.Soldiers(pick));

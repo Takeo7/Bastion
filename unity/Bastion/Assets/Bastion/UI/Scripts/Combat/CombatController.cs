@@ -931,7 +931,9 @@ namespace Bastion.UI.Combat
                 // The range's islands while the pointer is on one (Arturo, 14/11).
                 Overlay.PointIslands(hover);
             }
-            Keys();
+            // The loading sheet up: no keys nor pointer for the battle under it (the 0.14.2's review, point 2).
+            var sheeted = App.AppFlow.WindowShown;
+            if (!sheeted) Keys();
             PauseTick();
             Cutaway();
             ClearView();
@@ -964,9 +966,9 @@ namespace Bastion.UI.Combat
             // From above, marks and lines no smaller than one reads (cuadro 55); in the view, as the world has them.
             Hud?.SetTagFloor(Overhead ? MapMarkPixels : 0);
             Bastion.Client.Units.SearchOutline.Width = Overhead ? MapOutline : 2;
-            LootAllKey();
+            if (!sheeted) LootAllKey();
             BesideTick();
-            if (!GameInput.HasPointer || Rig == null) return;
+            if (sheeted || !GameInput.HasPointer || Rig == null) return;
             // With the finger nothing hovers: the gestures say what it did.
             if (GameInput.Touch)
             {

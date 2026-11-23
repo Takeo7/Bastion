@@ -3,7 +3,8 @@
     "rootNamespace": "Bastion.Client.Net",
     "references": [
         "Bastion.Engine",
-        "Bastion.Net"
+        "Bastion.Net",
+        "Bastion.Client"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

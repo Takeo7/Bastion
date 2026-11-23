@@ -1,56 +1,54 @@
 /*
- * The map of an expedition (RunMapScreen): flat, over a dark ground of its own (the clearing's camera off), the stages
- * as round marks from the start at the bottom to the boss at the top, the ways as lines (drawn in C#); the squad's
- * plate on the right is Almacén's (Stash.uss).
+ * The map of an expedition (RunMapScreen) as a map drawn on paper (cuadros 126–132, P1: the light paper, Arte's valley):
+ * the game's dark ground around it, the heading and «Volver a la base» over the sheet, the legend on the same paper under
+ * it; on the right the squad folded to its busts (KitPanel, Stash.uss) over the stage's card in parts. The ways, the rings
+ * and the pin are drawn in C# (DrawInk); the words are labels on a halo of paper.
  */
 
+/* Over the whole screen, under the top strip and down where the base's tabs are (hidden on the map): no band of the
+   clearing above nor below (cuadro 135). */
 .runmap {
     position: absolute;
     left: 0;
-    top: 0;
+    top: -49px;
     right: 0;
-    bottom: 0;
+    bottom: -48px;
     background-color: #111416;
 }
 
+/* The map's side: from the left edge to the column on the right. */
 .runmap-plate {
     position: absolute;
-    left: 60px;
-    top: 10px;
-    bottom: 10px;
-    width: 800px;
+    left: 16px;
+    top: 59px;
+    bottom: 12px;
+    right: 368px;
+}
+
+.runmap-top {
+    margin-bottom: 8px;
+}
+
+/* Under the legend: «Volver a la base» and where one goes back from. */
+.runmap-foot {
+    flex-direction: row;
     align-items: center;
+    margin-top: 6px;
 }
 
 .runmap-head {
-    align-self: flex-start;
     font-size: 22px;
 }
 
 .runmap-line {
-    align-self: flex-start;
-    font-size: 14px;
-}
-
-.runmap-field {
-    position: relative;
-    flex-shrink: 0;
-}
-
-.runmap-links {
-    position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
+    font-size: 13px;
 }
 
 .runmap-back {
-    align-self: flex-start;
-    height: 34px;
-    margin: 4px 0 0 0;
-    padding: 0 16px;
-    font-size: 14px;
+    height: 30px;
+    margin: 0;
+    padding: 0 14px;
+    font-size: 13px;
     color: #eef0ea;
     background-color: #3d4346;
     border-width: 1px;
@@ -68,173 +66,309 @@
 
 /* Where the button went (G22, U21): where one goes back from, quiet. */
 .runmap-home {
-    align-self: flex-start;
-    margin: 12px 0 0 0;
+    margin: 0 0 0 12px;
     font-size: 12px;
 }
 
-/* ================================================================ the stages */
+/* ================================================================ the sheet */
 
+.runmap-field {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.runmap-sheet,
+.runmap-valley,
+.runmap-ink,
+.runmap-marks {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* A stage: its ring's hit area, clear (the ring is the ink's); the place's symbol in it. */
 .rnode {
     position: absolute;
-    justify-content: center;
-    align-items: center;
     margin: 0;
     padding: 0;
-    background-color: #2b2f31;
-    border-width: 2px;
-    border-color: #4b5254;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0;
+    border-radius: 40px;
 }
 
-.rnode__icon {
-    width: 58%;
-    height: 58%;
-    -unity-background-image-tint-color: #dfe2da;
-    -unity-background-scale-mode: scale-to-fit;
-}
-
-.rnode--start {
-    background-color: #1c1f21;
-}
-
-/* The stops, no fight: a green steel. */
-.rnode--stop {
-    background-color: #24332b;
-    border-color: #4f6b58;
-}
-
-.rnode--boss {
-    background-color: #3a1e1c;
-    border-color: #b3261e;
-}
-
-.rnode--hidden {
-    background-color: #16191b;
-    border-color: #262a2d;
+.rnode:hover,
+.rnode:active {
+    background-color: rgba(0, 0, 0, 0);
 }
 
 .rnode__q {
-    font-size: 22px;
-    color: #3f4447;
-}
-
-.rnode--done {
-    opacity: 0.5;
-}
-
-.rnode--at {
-    border-width: 3px;
-    border-color: #ffffff;
-    opacity: 1;
-}
-
-.rnode--open {
-    border-width: 3px;
-    border-color: #8fd05a;
-}
-
-.rnode--open:hover {
-    background-color: #3d4346;
-}
-
-.rnode--blocked {
-    border-color: #a1a79d;
-}
-
-/* The modifier's badge, its colour by kind. */
-.rnode__mod {
     position: absolute;
-    right: -6px;
-    top: -6px;
-    width: 24px;
-    height: 24px;
-    border-radius: 12px;
-    justify-content: center;
-    align-items: center;
-    background-color: #2a3550;
-    border-width: 1px;
-    border-color: #111416;
-}
-
-/* An event's modifier: on the left, ringed in white. */
-.rnode__mod--added {
-    right: auto;
-    left: -6px;
-    border-width: 2px;
-    border-color: #ffffff;
-}
-
-.rnode__mod--storm {
-    background-color: #46505a;
-}
-
-.rnode__mod--awake {
-    background-color: #8a2a20;
-}
-
-/* A special map's mark (the hospital, the offices…): its place's line drawing, low on the right, steel blue. */
-.rnode__site {
-    position: absolute;
-    right: -8px;
+    left: 0;
+    top: 0;
+    right: 0;
     bottom: 0;
-    width: 24px;
-    height: 24px;
-    border-radius: 12px;
-    border-width: 1px;
-    border-color: #9db4c2;
-    background-color: #24343e;
-    justify-content: center;
-    align-items: center;
+    -unity-text-align: middle-center;
+    font-size: 17px;
+    color: rgba(97, 84, 69, 0.85);
 }
 
-.rnode__site-icon {
-    width: 18px;
-    height: 18px;
-    -unity-background-image-tint-color: #ffffff;
-}
-
-.rnode__mod-icon {
-    width: 16px;
-    height: 16px;
-    -unity-background-image-tint-color: #ffffff;
+.runmap-symbol {
+    position: absolute;
     -unity-background-scale-mode: scale-to-fit;
 }
 
-.rnode__name {
+/* A stage's words at its right: its name and its notes, each on a halo of paper (no line of the valley under a word). */
+.runmap-words-at {
     position: absolute;
-    width: 160px;
-    -unity-text-align: upper-center;
-    font-size: 12px;
+    align-items: flex-start;
+}
+
+.runmap-name {
+    padding: 0 4px;
+    font-size: 13px;
+    white-space: nowrap;
+    background-color: rgba(224, 214, 189, 0.9);
+    border-radius: 3px;
+}
+
+.runmap-name--strong {
+    -unity-font-style: bold;
+}
+
+.runmap-note {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 1px;
+    padding: 0 4px;
+    background-color: rgba(224, 214, 189, 0.9);
+    border-radius: 3px;
+}
+
+.runmap-note--end {
+    margin-top: 1px;
+    padding: 0 4px;
+    font-size: 11px;
+    color: #7a140d;
+    background-color: rgba(224, 214, 189, 0.9);
+    border-radius: 3px;
+}
+
+.runmap-note__mark {
+    width: 12px;
+    height: 12px;
+    margin-right: 3px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* A warning's mark (no seat, whose proposal): a dot, its words in ink. */
+.runmap-note__mark--dot {
+    width: 8px;
+    height: 8px;
+    margin: 0 4px 0 2px;
+    border-radius: 4px;
+}
+
+.runmap-note__text {
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+/* ================================================================ the legend, under the sheet */
+
+.runmap-legend {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 6px;
+    padding: 5px 12px;
+    background-color: #e0d6bd;
+}
+
+.runmap-legend__head {
+    margin-right: 14px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: #261f17;
+}
+
+.runmap-legend__mark {
+    width: 13px;
+    height: 13px;
+    margin-right: 4px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.runmap-legend__way {
+    width: 30px;
+    height: 10px;
+    margin-right: 5px;
+}
+
+.runmap-legend__text {
+    margin-right: 14px;
+    font-size: 11px;
+    color: #261f17;
+}
+
+/* ================================================================ the right: the squad folded, the stage's card */
+
+.runmap-side {
+    position: absolute;
+    right: 18px;
+    top: 12px;
+    bottom: 10px;
+    width: 334px;
+}
+
+.runmap-squad {
+    padding: 10px 12px 10px;
+    margin-bottom: 10px;
+}
+
+.runmap-card {
+    padding: 12px 14px 14px;
+}
+
+.rcard__kicker {
+    font-size: 11px;
+    letter-spacing: 1.5px;
     color: #a1a79d;
 }
 
-.rnode__name--open {
-    color: #ffffff;
+.rcard__top {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 4px;
 }
 
-/* A Rescate with no seat left in La Lata (N2, 17/11): «Sin plaza libre» under its name, in the danger's red. */
-.rnode__warn {
+.rcard__icon {
+    width: 30px;
+    height: 30px;
+    margin-right: 8px;
+    -unity-background-image-tint-color: #eef0ea;
+}
+
+.rcard__icon-sprite {
+    width: 30px;
+    height: 30px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.rcard__name {
+    font-size: 22px;
+    white-space: normal;
+    flex-shrink: 1;
+}
+
+.rcard__chips {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.rcard__chip {
+    margin: 0 6px 4px 0;
+    padding: 2px 7px;
     font-size: 11px;
-    color: var(--t-danger);
-}
-
-.rnode__here {
-    position: absolute;
-    width: 160px;
-    -unity-text-align: middle-right;
-    font-size: 11px;
     color: #ffffff;
+    background-color: #2a3550;
 }
 
-/* The squad's plate beside the map: up to the foot, so that a long kit scrolls in it. */
-.runmap-squad {
-    top: 12px;
+.rcard__chip--danger1 {
+    background-color: #5e7a4f;
+}
+
+.rcard__chip--danger2 {
+    background-color: #b9822f;
+}
+
+.rcard__chip--danger3 {
+    background-color: #b3261e;
+}
+
+.rcard__chip--storm {
+    background-color: #46505a;
+}
+
+.rcard__chip--awake {
+    background-color: #8a2a20;
+}
+
+.rcard__head {
+    margin: 10px 0 2px;
+    font-size: 11px;
+    letter-spacing: 1.2px;
+    color: #a1a79d;
+}
+
+.rcard__body {
+    font-size: 13px;
+    white-space: normal;
+}
+
+.rcard__note {
+    margin-top: 6px;
+}
+
+.rcard__where {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.rcard__place-icon {
+    width: 38px;
+    height: 38px;
+    margin-right: 8px;
+    flex-shrink: 0;
+    -unity-background-image-tint-color: #eef0ea;
+}
+
+.rcard__place-words {
+    flex-shrink: 1;
+}
+
+.rcard__place {
+    font-size: 14px;
+}
+
+/* «Sin plaza libre», why not now: amber, as the stage card's warnings, not the danger's red. */
+.rcard__warn {
+    margin-top: 10px;
+    padding: 6px 8px;
+    font-size: 13px;
+    white-space: normal;
+    color: #f2c773;
+    background-color: rgba(242, 199, 115, 0.1);
+    border-left-width: 3px;
+    border-left-color: #f2c773;
+}
+
+/* Whose proposal it is (two players): a bar in their colour. */
+.rcard__whose {
+    margin-top: 10px;
+    padding: 2px 8px;
+    font-size: 13px;
+    border-left-width: 4px;
+}
+
+.rcard__hint {
+    margin-top: 6px;
+    color: #c4c9c0;
+}
+
+.rcard__go {
+    margin: 14px 0 0 0;
+    height: 34px;
+    font-size: 14px;
 }
 
 /* ================================================================ a stop, over the map */
 
 .runmap-field--under {
-    opacity: 0.25;
+    opacity: 0.4;
 }
 
 /* Solid, so that the map under it doesn't show through. */

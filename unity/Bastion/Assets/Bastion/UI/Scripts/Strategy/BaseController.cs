@@ -73,6 +73,9 @@ namespace Bastion.UI.Strategy
         bool arriving;
 
         public CampaignState State => p.State;
+        /// <summary>The stage being gone to on paper (cuadro 136), for the loading window; null, no stage of an expedition.</summary>
+        public Bastion.UI.App.LoadView StageSheet() => p.StageSheet(chosenNode);
+
         public string View => view;
 
         /// <summary>For tests (BaseRun «esc», «b»): what is open, in a line for the log.</summary>
@@ -384,7 +387,14 @@ namespace Bastion.UI.Strategy
         StashScreenView stash;
 
         /// <summary>A stage of the map: there (with two, proposed).</summary>
-        public void OnNode(string id) => Order(new ChooseNodeCommand { Node = id });
+        public void OnNode(string id)
+        {
+            chosenNode = id;
+            Order(new ChooseNodeCommand { Node = id });
+        }
+
+        /// <summary>The stage this player last sent the squad to (the loading window's, before the campaign says so).</summary>
+        string chosenNode;
 
         /// <summary>«Volver a la base»: asked first, then the expedition ends (with two, proposed).</summary>
         public void OnEndRun()

@@ -44,6 +44,7 @@ namespace Bastion.UI.Strategy
             // The game's own map and squad panel, hidden under it.
             screen.Query(className: "runmap").ForEach(e => e.style.display = DisplayStyle.None);
             screen.Query(className: "runmap-squad").ForEach(e => e.style.display = DisplayStyle.None);
+            screen.Query(className: "runmap-side").ForEach(e => e.style.display = DisplayStyle.None);
             var c = p.State;
             var run = c.Run;
             // Over the whole screen under the top strip, opaque: the clearing's 3D off behind it, as the game's map has it.

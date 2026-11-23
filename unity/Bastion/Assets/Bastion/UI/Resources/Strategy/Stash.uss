@@ -149,8 +149,29 @@
     background-color: #f0503c;
 }
 
+/* The head and, on the map, the fold's key at its right (cuadro 132). */
+.kit-top {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
 .kit-head {
     margin-bottom: 6px;
+}
+
+.kit-fold {
+    margin: 0;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #8fd05a;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+}
+
+.kit-fold:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
 .stash-name {

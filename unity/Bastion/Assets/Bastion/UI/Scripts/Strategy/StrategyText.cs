@@ -195,6 +195,25 @@ namespace Bastion.UI.Strategy
             public const string EndNo = "Seguir la expedición";
             public const string Squad = "Escuadra";
             public const string Here = "AQUÍ";
+            /// <summary>The map on paper (cuadro 132): the stage card's words, the partner's mark, the legend, the squad folded.</summary>
+            public const string Go = "Ir a esta etapa";
+            public const string WhatHead = "Qué hay que hacer";
+            public const string WhereHead = "Dónde";
+            /// <summary>«Etapa 4 de 7», as the room says it (Lore, 23/11: «fila» is a word of the inside); the boss's, «7 de 7».</summary>
+            public static string Kicker(int row) => $"Etapa {row} de {Bastion.Engine.RunMap.Rows}";
+            public static string Danger(int d) => $"Peligro {d}";
+            public static string ProposedBy(string name) => $"Propuesta de {name}";
+            public const string ProposedMine = "Tu propuesta";
+            public const string KitOpen = "Equipo ▸";
+            public const string KitClose = "Mapa ◂";
+            public const string ChapterEnd = "Fin del capítulo";
+            /// <summary>The card with none chosen, and on one under the pointer that isn't (cuadro 135; Lore's words, 23/11).</summary>
+            public const string PickHead = "Elige una etapa";
+            public static string PickHint(bool touch) => touch ? "Toca una etapa rodeada en rojo para ver qué es y elegirla." : "Haz clic en una etapa rodeada en rojo para elegirla. Pasa el puntero por cualquiera para ver qué es.";
+            public static string ToPick(bool touch) => touch ? "Tócala para elegirla." : "Haz clic en ella para elegirla.";
+            public const string LegendHead = "Leyenda";
+            /// <summary>The legend: the modifiers by their name alone (Lore: «más botín» told half; the card says it whole), then the ways.</summary>
+            public static readonly string[] Legend = { "De noche", "Mal tiempo", "Horda despierta", "Se puede ir", "Recorrido", "Más adelante" };
             /// <summary>The Trueque's button (Lore: «cambiar», never «comprar»); «Seguir» from a stop.</summary>
             public const string Swap = "Cambiar";
             public const string Leave = "Seguir";

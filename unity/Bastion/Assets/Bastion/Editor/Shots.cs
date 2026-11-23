@@ -154,7 +154,8 @@ namespace Bastion.EditorTools
                     // camera there now, its cameras and panels into textures as the first ones were; none yet, no shot.
                     if (camera == null)
                     {
-                        camera = Camera.main;
+                        // (Any camera there if none is the main one: the base's clearing has «Cámara del claro» only. UI, 23/11.)
+                        camera = Camera.main ?? UnityEngine.Object.FindFirstObjectByType<Camera>();
                         if (camera == null) return;
                         camera.GetUniversalAdditionalCameraData().renderPostProcessing = true;
                         foreach (var c in UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))

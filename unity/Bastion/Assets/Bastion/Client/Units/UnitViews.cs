@@ -1231,10 +1231,44 @@ namespace Bastion.Client.Units
         int sightSeq;
         long sightEyes;
 
+        /// <summary>
+        /// The squad's figures of `view` made ahead in the background, a step a frame (SoldierFigure.Prepare), for a loading
+        /// screen to wait for (Preparing) before the first Sync: made in it, the six of them are most of a second in one
+        /// frame (Arturo's M2, 23/11: «se congela la imagen»). Whoever is not made by then, Sync makes as ever. In play only.
+        /// </summary>
+        public static void Prepare(GameState view)
+        {
+            if (!Application.isPlaying || view?.Units == null) return;
+            // (BASTION_SIN_PREPARAR=1: none ahead, all of them in the first Sync as before: to weigh one against the other.)
+            if (Environment.GetEnvironmentVariable("BASTION_SIN_PREPARAR") == "1") return;
+            var dresses = new List<Dress>();
+            foreach (var u in view.Units)
+            {
+                // (Those FigureOf dresses as soldiers of the squad: not the risen, the civilians nor an objective.)
+                if (u.Team != "xcom" || u.Objective || u.RisenFrom != null || u.Template == TemplateIds.Civilian) continue;
+                try { dresses.Add(Dress.Of(u.Appearance, u.CampaignId ?? u.Name, u.Appearance == null ? Content.SexOfName(u.Name) : null)); }
+                catch (Exception e) { Debug.LogWarning($"[figures] {u.Id}: {e.Message}"); }
+            }
+            // (Whatever goes wrong here must not hang the load that waits for Preparing: nothing left queued, and Sync makes
+            // them as ever. The 0.14.2's review.)
+            try { SoldierFigure.Prepare(dresses); }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[figures] nothing made ahead: {e.Message}");
+                try { SoldierFigure.Prepare(new List<Dress>()); } catch (Exception) { }
+            }
+        }
+
+        /// <summary>Whether figures asked for with Prepare are still being made.</summary>
+        public static bool Preparing => SoldierFigure.Waiting > 0;
+
         /// <summary>The figures as the state seen says: those that come in made, those gone taken away, each on its tile.</summary>
         public void Sync(GameState view)
         {
             using var synced = SyncMarker.Auto();
+            // (The first on a map just built, timed for its stage's line: StageLoad, M2.)
+            double loading = StageLoad.Waiting ? StageLoad.Clock() : -1;
+            double catalogBefore = StageLoad.CatalogSoFar;
             state = view;
             // (The street's tall things a straightened walk keeps clear of, worked out now, once a map: UnitViews.Straight.)
             if (view != null) Poles();
@@ -1355,6 +1389,7 @@ namespace Bastion.Client.Units
             foreach (var id in views.Keys.Where(id => !seen.Contains(id)).ToList()) Remove(id);
             foreach (var (id, from, hop) in alighting) if (views.TryGetValue(id, out var comer)) Alight(comer, from, hop);
             alighting.Clear();
+            if (loading >= 0) StageLoad.Figures(StageLoad.Clock() - loading - (StageLoad.CatalogSoFar - catalogBefore));
         }
 
         View Make(Unit u)

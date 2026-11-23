@@ -920,7 +920,28 @@ namespace Bastion.EditorTools
                             Debug.Log($"[settlement] close by doors {near}-{near + 1}: camera at {mid + side * 5.2f + dir * 1.2f + Vector3.up * 1.9f}, on {mid}");
                         }
                         float at = Time.time;
-                        await Settlement.Instance.Leave();
+                        // (BASTION_SALIDA_CORTA=1: the quick leave, cuadro 138; BASTION_DESDE_MAPA=1: from the stages' map, its camera off.)
+                        if (Environment.GetEnvironmentVariable("BASTION_DESDE_MAPA") == "1") { Settlement.Instance.SetView(Settlement.Views.Geoscape, true); await Awaitable.WaitForSecondsAsync(0.3f); }
+                        // (BASTION_MEDIR=salida: where La Lata is across the picture, 0 its left edge and 1 its right, every 0.1 s of the leave.)
+                        var leaving = Settlement.Instance.Leave(default, Environment.GetEnvironmentVariable("BASTION_SALIDA_CORTA") == "1");
+                        if (Environment.GetEnvironmentVariable("BASTION_MEDIR") == "salida")
+                        {
+                            var line = new System.Text.StringBuilder();
+                            float next = 0;
+                            while (Settlement.Instance.Leaving)
+                            {
+                                if (Time.time - at >= next)
+                                {
+                                    var l = Settlement.Instance.Lata;
+                                    var v = Settlement.Instance.Camera.WorldToViewportPoint(l.transform.position + Vector3.up);
+                                    line.Append(FormattableString.Invariant($" {Time.time - at:0.0}s:{(l.Shown ? v.x.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "gone")}"));
+                                    next += 0.1f;
+                                }
+                                await Awaitable.NextFrameAsync();
+                            }
+                            Debug.Log(FormattableString.Invariant($"[salida] from game time {at:0.00} s; La Lata across the picture:") + line);
+                        }
+                        await leaving;
                         Debug.Log($"[settlement] boarded and gone in {Time.time - at:0.00} s of game time");
                     }
                 }

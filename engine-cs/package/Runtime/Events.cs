@@ -700,6 +700,9 @@ namespace Bastion.Engine
                             if (Los.IsViewer(u, Teams.Xcom) && Grid.Distance(u.Pos, ev.Pos) <= 1 && u.Pos.Z == ev.Pos.Z) Buildings.Discover(s, u.Pos, true);
                         }
                     }
+                    // A wall blown through (or anything else left open to the outside with no door): its building is found,
+                    // whole, as the street is seen (M1, Arturo, cuadro 134: «Abre la casa entera»), as this event plays.
+                    else if (ev.Kind != TileKinds.Door) Buildings.FindOpen(s);
                     // A door or barricade of a siege that is gone (a blast took it): a breach.
                     var holds = s.Breakables;
                     var node = Grid.NodeOf(s, ev.Pos);

@@ -102,6 +102,18 @@ namespace Bastion.UI.Strategy
         public KitView Kit;
         /// <summary>The stop the squad is at (H4), over the map; null, none.</summary>
         public StopView Stop;
+        /// <summary>
+        /// A stage proposed to the vote (two players, ChooseNodeAction): its id, whose («Propuesta de Ana», «Tu propuesta») and
+        /// in whose colour, on the map itself (cuadro 132); null, none.
+        /// </summary>
+        public string Proposed;
+        public string ProposedLine;
+        public string ProposedColor;
+        /// <summary>The stage card's words: «Ir a esta etapa» and its two heads; the legend's.</summary>
+        public string Go;
+        public string WhatHead;
+        public string WhereHead;
+        public List<string> Legend = new List<string>();
     }
 
     /// <summary>A stage on the map: where it sits, what it is (if it is seen), its weather or wake, how far the squad got.</summary>
@@ -137,6 +149,19 @@ namespace Bastion.UI.Strategy
         public string Why;
         /// <summary>Its card on hover after the name: what it is, where, how hard, its modifier.</summary>
         public List<string> Card = new List<string>();
+        /// <summary>
+        /// The stage card in parts (cuadros 126 and 132; Producto's review 16), seen only: «Etapa · fila 4»; its danger (0,
+        /// none: a stop); what to do; where (the place's name, its drawing, its line); its modifiers' lines.
+        /// </summary>
+        public string Kicker;
+        public int Danger;
+        public string What;
+        public string Place;
+        public string PlaceIcon;
+        public string PlaceLine;
+        public List<string> Notes = new List<string>();
+        /// <summary>The warning's whole line on the card («Sin plaza libre»'s, Lore.RescueNoSeat); null, none.</summary>
+        public string WarnLine;
     }
 
     /// <summary>A way between two stages (From null: from the start).</summary>

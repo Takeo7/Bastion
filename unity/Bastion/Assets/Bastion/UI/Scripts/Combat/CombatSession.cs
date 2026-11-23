@@ -70,7 +70,8 @@ namespace Bastion.UI.Combat
             control.DeadlineLeft = DeadlineLeft;
             control.Order += cmd => net.Send(cmd);
             control.Message += msg => net.Send(msg);
-            rig.Held = () => Hud != null && Hud.MenuOpen;
+            // (The loading sheet holds them too: the opening shot isn't moved under it.)
+            rig.Held = () => Hud != null && Hud.MenuOpen || App.AppFlow.WindowShown;
             rig.OverHud = at => Hud != null && Hud.Over(at);
             if (Hud != null)
             {
@@ -109,8 +110,17 @@ namespace Bastion.UI.Combat
             if (Current == control?.State) Current = null;
         }
 
+        /// <summary>The squad's figures being made under the window (cuadro 136): what the host sends waits till they are.</summary>
+        bool preparing;
+        readonly List<ServerMessage> held = new List<ServerMessage>();
+
         void OnMessage(ServerMessage m)
         {
+            if (preparing)
+            {
+                held.Add(m);
+                return;
+            }
             switch (m)
             {
                 case RoomMessage room:
@@ -134,8 +144,11 @@ namespace Bastion.UI.Combat
                 case CampaignMessage campaign when tookOff == null:
                     tookOff = campaign.State;
                     break;
+                case SnapshotMessage snap when snap.State != null && control.State == null && Application.isPlaying:
+                    _ = Prepared(snap.State);
+                    break;
                 case SnapshotMessage snap when snap.State != null:
-                    Load(snap.State);
+                    _ = Load(snap.State, false);
                     break;
                 case EventsMessage events:
                     Play(events);
@@ -175,21 +188,121 @@ namespace Bastion.UI.Combat
             return ColorUtility.TryParseHtmlString(hex, out var c) ? c : UnityEngine.Color.white;
         }
 
+        /// <summary>
+        /// The first state (cuadro 136, with Arte's UnitViews.Prepare): the squad's figures made a step a frame under the
+        /// loading window, its red ring traced as they come, then the load as ever; what came meanwhile after it, in order.
+        /// </summary>
+        async Awaitable Prepared(GameState state)
+        {
+            preparing = true;
+            try
+            {
+                try
+                {
+                    // (The 0.14.2's review, point 5: what a failure here leaves; BASTION_PRUEBA_SALIDA=fallo, labs only.)
+                    if (System.Environment.GetEnvironmentVariable("BASTION_PRUEBA_SALIDA") == "fallo") throw new InvalidOperationException("prueba: fallo al preparar");
+                    Bastion.Client.Units.UnitViews.Prepare(state);
+                    var all = Math.Max(1, Bastion.Client.Units.SoldierFigure.Waiting);
+                    while (Bastion.Client.Units.UnitViews.Preparing)
+                    {
+                        App.AppFlow.Progress(1 - Bastion.Client.Units.SoldierFigure.Waiting / (float)all);
+                        await Awaitable.NextFrameAsync(destroyCancellationToken);
+                    }
+                    App.AppFlow.Progress(1);
+                    // A frame between the last soldier's last step and the load (Arte, 23/11: in the same frame, 0,2 s more).
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                }
+                catch (Exception e) when (!(e is OperationCanceledException))
+                {
+                    // The figures not made ahead: the load makes them as it always did (the review's point 5).
+                    Debug.LogException(e);
+                }
+                // (What the host sends keeps waiting through the spread load too: preparing goes after it.)
+                await Load(state, true);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                // Whatever the load met, what came meanwhile is played all the same: never held for good.
+                Debug.LogException(e);
+            }
+            finally
+            {
+                preparing = false;
+            }
+            var later = held.ToList();
+            held.Clear();
+            foreach (var m in later) OnMessage(m);
+        }
+
+        /// <summary>
+        /// The way back's window (cuadro 136): «Vuelta a la base», the stage's result as its end card says it (its title, or
+        /// the mission's won or lost) and its line; null out of a battle.
+        /// </summary>
+        public static Bastion.UI.App.LoadView ReturnWindow()
+        {
+            var session = FindFirstObjectByType<CombatSession>();
+            var end = session?.Hud?.Outcome;
+            if (session == null || session.control?.State == null) return null;
+            var title = end?.Title ?? (end == null ? null : end.Victory ? HudText.Mission.Victory : HudText.Mission.Defeat);
+            var (_, stage) = session.control.VeilWords();
+            return new Bastion.UI.App.LoadView
+            {
+                // Mid-expedition after a stage won, on to the map of stages (Lore: «Vuelta a la base» was false there).
+                Kicker = end?.Back == HudText.Mission.RunGoOn ? Bastion.UI.App.LoadText.GoOn : Bastion.UI.App.LoadText.Back,
+                Title = title ?? stage,
+                Line = end?.Line,
+                Place = title != null ? stage : null,
+            };
+        }
+
         /// <summary>A mission's state whole: the controller on it, the map and the figures built from it, and a fresh mission's arrival card.</summary>
-        void Load(GameState state)
+        /// <remarks>
+        /// `spread` (the first, under the loading window: cuadro 136): the map, the figures and the HUD each in a frame of its
+        /// own (in one, 0,6 s in the editor: Arte's map, ShowSeen with the figures, the first Refresh); else all at once.
+        /// </remarks>
+        async Awaitable Load(GameState state, bool spread)
         {
             var first = control.State == null;
+            // Each part of the first load timed, a line in the log (M2, cuadro 136: what of the load's frame is whose).
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            double Lap()
+            {
+                var ms = watch.Elapsed.TotalMilliseconds;
+                watch.Restart();
+                return ms;
+            }
             control.State = state;
             Current = state;
             // A copy for the map: it keeps what it drew to tell the next change, and Play changes this state in place, so
             // with this very state the first change after a load (a boot searched, app 0.12.0) was already in it and drew nothing.
-            Bastion.Client.Battlefield.Current?.Show(Events.CloneState(state));
+            var copy = Events.CloneState(state);
+            var cloned = Lap();
+            Bastion.Client.Battlefield.Current?.Show(copy);
+            var shown = Lap();
+            if (spread)
+            {
+                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                watch.Restart();
+            }
             player.Load(state);
+            var played = Lap();
+            if (spread)
+            {
+                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                watch.Restart();
+            }
             if (state.Outcome == null) control.Sfx.Start(state, !state.Concealed);
             control.Sfx.Siren(() => control.View);
+            var sounds = Lap();
             Snapshot?.Invoke(state);
             control.Refresh();
+            var refreshed = Lap();
             if (first) control.OpeningShot();
+            if (first) Debug.Log(System.FormattableString.Invariant($"[carga] UI Load{(spread ? " (en tres fotogramas)" : "")}: copia {cloned:0} · mapa (Battlefield.Show) {shown:0} | EventPlayer.Load {played:0} | sonido {sounds:0} · Refresh {refreshed:0} · cámara {Lap():0} ms"));
             if (first)
             {
                 var (kicker, title) = control.VeilWords();
@@ -206,26 +319,55 @@ namespace Bastion.UI.Combat
             if (state.Outcome != null && !player.OutcomeShown) player.ShowOutcome(state.Outcome, state.OutcomeReason);
         }
 
-        /// <summary>The map built: the loading veil goes once two frames of it are drawn (game.ts raiseVeil).</summary>
+        /// <summary>
+        /// The window goes once the stage is drawn with its map and figures (Arte's StageLoad.FirstDrawn, cuadro 136: never
+        /// the battle half built nor a black frame); if that never comes (no figures), after FirstDrawnMost seconds.
+        /// </summary>
         async Awaitable LiftVeil()
         {
+            var raised = App.AppFlow.Raised;
+            var asked = Time.realtimeSinceStartup;
+            var drawn = false;
+            void Drawn() => drawn = true;
+            Bastion.Client.StageLoad.FirstDrawn += Drawn;
+            var since = Time.realtimeSinceStartup;
             try
             {
-                await Awaitable.NextFrameAsync(destroyCancellationToken);
-                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                // (Drawn already, maybe, before this was asked: the event goes as its frame ends, a frame before the spread
+                // load gets here; StageLoad.Drawn keeps it. The 0.14.2's review, point 1: 6 s always.)
+                while (!drawn && !Bastion.Client.StageLoad.Drawn && Time.realtimeSinceStartup - since < FirstDrawnMost) await Awaitable.NextFrameAsync(destroyCancellationToken);
+                drawn |= Bastion.Client.StageLoad.Drawn;
             }
             catch (OperationCanceledException)
             {
-                // The scene went first.
+                // The scene went first: the next one's window takes over (and Perf's change isn't over by this: point 3).
+                return;
             }
-            App.AppFlow.LiftVeil();
+            finally
+            {
+                Bastion.Client.StageLoad.FirstDrawn -= Drawn;
+            }
+            // (Why and when it goes, for the strips: the review's point 1.)
+            Debug.Log(System.FormattableString.Invariant($"[hoja] se quita: {(drawn ? "primer dibujo" : "tope de " + FirstDrawnMost + " s")}, a los {Time.realtimeSinceStartup - asked:0.00} s de pedirlo"));
+            App.AppFlow.LiftVeil(raised);
         }
 
+        const float FirstDrawnMost = 6;
+
+        /// <summary>
+        /// A fresh mission, once its sheet is going: the first turn's stamp, as any other turn's («TU TURNO», held till this
+        /// player does something, or «TURNO DE ANA» to whoever doesn't hold the command: cuadro 139, no arrival card), and
+        /// the log's notes (Intro). The camera stays on the opening shot, set under the sheet.
+        /// </summary>
         async Awaitable IntroAfterVeil()
         {
             try
             {
-                while (App.AppFlow.Veiled) await Awaitable.NextFrameAsync(destroyCancellationToken);
+                // (Gone whole, not only going: the stamp coming in under the fading sheet was half seen.)
+                while (App.AppFlow.WindowShown) await Awaitable.NextFrameAsync(destroyCancellationToken);
+                var s = control.State;
+                if (s == null || s.Outcome != null) return;
+                player.TurnStamp(s.ActiveTeam, s.Command, s.Concealed);
                 control.Intro();
             }
             catch (OperationCanceledException)
@@ -268,10 +410,13 @@ namespace Bastion.UI.Combat
                 net.Send(new PresenceMessage { Unit = control.PickedId, Tile = tile });
             }
             // The turn clock runs only while nothing covers the field and every event has been seen (game.ts reportIdle: Arturo, 22/10).
-            var idle = (Hud == null || !Hud.Covering) && !player.Busy;
+            // (Nor while the loading sheet is up: the review's point 2, the clock ran under it.)
+            var idle = (Hud == null || !Hud.Covering) && !player.Busy && !App.AppFlow.WindowShown;
             if (idle != idleSent)
             {
                 idleSent = idle;
+                // (When the turn clock may run, and whether the sheet is still up: the review's point 2.)
+                Debug.Log(System.FormattableString.Invariant($"[reloj] libre {(idle ? "sí" : "no")}, con la hoja {(App.AppFlow.WindowShown ? "puesta" : "fuera")}, a los {Time.realtimeSinceStartup:0.00} s"));
                 net.Send(new IdleMessage { Idle = idle });
             }
         }

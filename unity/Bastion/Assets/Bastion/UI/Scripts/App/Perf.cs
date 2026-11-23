@@ -137,10 +137,61 @@ namespace Bastion.UI.App
             announced = false;
         }
 
+        // ---------------------------------------------------------- changes of screen
+
+        static Perf instance;
+        string changing;
+        float changeFrom, changeLongest;
+        int changeFrames;
+
+        void Awake() => instance = this;
+
+        /// <summary>
+        /// A change of screen begins (AppFlow's loading window up, M2: Red's inventory of the waits): `what` («base → etapa»,
+        /// «abrir»…) timed till End, with its longest frame and how many there were, a line to red.log. The frames the
+        /// rest of Perf leaves out (WarmUp, those over Pause) are just the ones this counts.
+        /// </summary>
+        public static void Begin(string what)
+        {
+            if (instance == null) return;
+            // One not over yet: said as cut short, not as done (the 0.14.2's review, point 3: a quit closed one).
+            if (instance.changing != null) instance.Unfinished($"cortado por «{what}»");
+            instance.changing = what;
+            instance.changeFrom = Time.realtimeSinceStartup;
+            instance.changeLongest = 0;
+            instance.changeFrames = 0;
+        }
+
+        /// <summary>The change is over (the new screen drawn, its window going): its line.</summary>
+        public static void End()
+        {
+            var p = instance;
+            if (p == null || p.changing == null) return;
+            var took = Time.realtimeSinceStartup - p.changeFrom;
+            Send(FormattableString.Invariant($"cambio {p.changing}: {took:0.00} s, fotograma más largo {p.changeLongest * 1000:0} ms, {p.changeFrames} fotogramas"));
+            p.changing = null;
+        }
+
+        void Unfinished(string why)
+        {
+            Send(FormattableString.Invariant($"cambio {changing}: sin acabar, {why}, a los {Time.realtimeSinceStartup - changeFrom:0.00} s"));
+            changing = null;
+        }
+
+        void OnApplicationQuit()
+        {
+            if (changing != null) Unfinished("al cerrar");
+        }
+
         void Update()
         {
             var now = Time.realtimeSinceStartup;
             var dt = Time.unscaledDeltaTime;
+            if (changing != null)
+            {
+                changeFrames++;
+                changeLongest = Mathf.Max(changeLongest, dt);
+            }
             FrameTimingManager.CaptureFrameTimings();
             Count(now);
             // Out of focus (another window on top, the partner's app beside it) nothing counts; back, half the warm-up.

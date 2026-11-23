@@ -330,6 +330,12 @@ namespace Bastion.Net
     {
         public override string T => "campaign";
         public CampaignState? State { get; set; }
+
+        /// <summary>
+        /// A run's stage just over: its line, as the host's red.log has it (Room.StageLine), for the partner's red.log too (Producto,
+        /// 23/11: whoever hosts, both players' games say how each stage went). Null in every other.
+        /// </summary>
+        public string? Line { get; set; }
     }
 
     /// <summary>The base screen the partner is on.</summary>

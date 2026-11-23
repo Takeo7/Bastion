@@ -32,6 +32,7 @@ namespace Bastion.Client.Map
         {
             // What each stage takes, in one line once the map is whole (MapLoad: «[carga] map …»).
             MapLoad.Begin();
+            double loading = StageLoad.Clock();
             using (MapLoad.Time("clear"))
             {
                 for (int k = transform.childCount - 1; k >= 0; k--) DestroyNow(transform.GetChild(k).gameObject);
@@ -53,6 +54,9 @@ namespace Bastion.Client.Map
             // (BASTION_SOMBRAS_FIJAS=1: the pipeline's own, to weigh what fitting them costs: a test.)
             if (FitShadows && GetComponent<ShadowFit>() == null && Environment.GetEnvironmentVariable("BASTION_SOMBRAS_FIJAS") != "1") gameObject.AddComponent<ShadowFit>();
             MapLoad.End($"{(string.IsNullOrEmpty(state.MapId) ? state.MapName : state.MapId)} {state.Width}×{state.Height}");
+            // (A battle's alone: its stage's line, StageLoad; the base's clearing, the base's map with nobody on it, is no
+            // stage; a siege fought on it is.)
+            if (state.Base == null || state.Units.Count > 0) StageLoad.Map(string.IsNullOrEmpty(state.MapId) ? state.MapName : state.MapId, StageLoad.Clock() - loading);
             return builder;
         }
 

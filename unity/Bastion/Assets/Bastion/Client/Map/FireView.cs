@@ -123,6 +123,9 @@ namespace Bastion.Client.Map
             }
         }
 
+        /// <summary>How far from a window's or a door's middle its flames stand, toward the side that burns (tiles): clear of the wall.</summary>
+        const float SillOut = 0.42f;
+
         /// <summary>
         /// A molotov's fire: a pool of petrol burning over its tiles (the 3×3 one can step on), low flames on each, embers
         /// over the middle, the ground scorched under it all; `grow`, its flames from where the bottle broke out to their
@@ -161,6 +164,27 @@ namespace Bastion.Client.Map
                 int x = p.X, y = p.Y;
                 var floor = MapSpace.TileToWorld(s, p);
                 float r(int salt) => MapArt.Hash(x, y, 450 + salt);
+                // (A window's or a door's tile burns too, by the rules (it is walked through), but it is in the wall's line:
+                // its four flames and its glow stood half out of the wall, on the sill from the street (Red's R19, 23/11).
+                // Smaller ones instead, at its edge on each side that burns: the threshold is seen to burn from there, and
+                // nothing shows on a side that doesn't. Producto, 23/11.)
+                string kind = Bastion.Engine.Grid.KindAt(s, p);
+                if (kind == TileKinds.Window || kind == TileKinds.WindowBroken || kind == TileKinds.Door || kind == TileKinds.DoorOpen)
+                {
+                    for (int d = 0; d < 4; d++)
+                    {
+                        var dir = Bastion.Engine.Grid.Dirs4[d];
+                        var q = new Pos { X = x + dir.X, Y = y + dir.Y, Z = p.Z };
+                        if (!Bastion.Engine.Grid.InBounds(s, q.X, q.Y) || !fire.Tiles.Contains(Bastion.Engine.Grid.NodeOf(s, q))) continue;
+                        string beside = Bastion.Engine.Grid.KindAt(s, q);
+                        if (beside == TileKinds.Window || beside == TileKinds.WindowBroken || beside == TileKinds.Door || beside == TileKinds.DoorOpen) continue;
+                        var toward = new Vector3(dir.X, 0, -dir.Y);
+                        var across = new Vector3(-toward.z, 0, toward.x);
+                        for (int k = 0; k < 2; k++)
+                            Effect(licks, flames, floor + (toward * SillOut + across * ((k - 0.5f) * 0.44f + (r(20 + d * 2 + k) - 0.5f) * 0.1f)) * MapSpace.Tile, r(30 + d * 2 + k) * 360, (0.3f + 0.08f * r(40 + d * 2 + k)) * lick, art.fireLick != null ? LickRate : 1);
+                    }
+                    continue;
+                }
                 // The ground of the tile aglow, a soft blot over it and into its neighbours', so the pool reads whole.
                 if (glow != null) Patch(holder, glow, floor + lift, 1.6f, r(9) * 360);
                 // (Four flames a tile, low, one in each quarter, so they cover it: a pool's, not a car's; the middle's a

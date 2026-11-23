@@ -147,7 +147,7 @@ namespace Bastion.UI.Strategy
 
         /// <summary>
         /// Take-off (screen.ts launch), before the mission loads (AppFlow waits for it): the panels go, the squad gets into
-        /// La Lata and it drives off (Arte's Settlement.Leave, ≈10 s with the bus); a siege, nobody leaves: a moment. What the host sends meanwhile waits for the battle (this stopped listening).
+        /// La Lata and it drives off (Arte's Settlement.Leave, the quick one: ≈2 s); a siege, nobody leaves: a moment. What the host sends meanwhile waits for the battle (this stopped listening).
         /// </summary>
         public async Awaitable Depart()
         {
@@ -165,12 +165,55 @@ namespace Bastion.UI.Strategy
                     return;
                 }
                 var started = Time.realtimeSinceStartup;
-                var going = clearing.Leave(ct);
-                while (clearing.Leaving && Time.realtimeSinceStartup - started < LeaveAtMost) await Awaitable.NextFrameAsync(ct);
+                // Short (cuadro 138, Arturo: «Ver salir a La Lata, corto»): the squad aboard already and La Lata off in about
+                // 2 s, the clearing's camera on again under the stages' map (whose tab had it off: 5.7 s in black from 0.13.0).
+                // Done once it is out of the frame (Producto: the sheet comes in as it goes, not at a set time); the rest of its
+                // way goes on under the sheet.
+                _ = Quietly(clearing.Leave(ct, quick: true));
+                var frame = new Frame(clearing);
+                while (clearing.Leaving && !frame.Out() && Time.realtimeSinceStartup - started < LeaveAtMost) await Awaitable.NextFrameAsync(ct);
             }
             catch (OperationCanceledException)
             {
                 // The scene went first.
+            }
+        }
+
+        /// <summary>La Lata's leaving left to go on by itself: its scene going under it (the battle's coming) stops it, quietly.</summary>
+        static async Awaitable Quietly(Awaitable going)
+        {
+            try
+            {
+                await going;
+            }
+            catch (OperationCanceledException)
+            {
+                // The scene went first.
+            }
+        }
+
+        /// <summary>
+        /// Whether La Lata has driven out of the clearing's camera: once moving, none of its drawn parts (with whoever rides
+        /// it) left in the camera's frustum.
+        /// </summary>
+        sealed class Frame
+        {
+            readonly Bastion.Client.Settlement clearing;
+            Renderer[] parts;
+
+            public Frame(Bastion.Client.Settlement clearing) => this.clearing = clearing;
+
+            public bool Out()
+            {
+                var lata = clearing.Lata;
+                var camera = clearing.Camera;
+                if (lata == null || camera == null || !camera.isActiveAndEnabled || !lata.Moving) return false;
+                // Its body and riders only: its dust, left on the track, stays in the frame.
+                parts ??= lata.GetComponentsInChildren<Renderer>().Where(r => r is MeshRenderer || r is SkinnedMeshRenderer).ToArray();
+                var planes = GeometryUtility.CalculateFrustumPlanes(camera);
+                foreach (var r in parts)
+                    if (r != null && r.enabled && r.gameObject.activeInHierarchy && GeometryUtility.TestPlanesAABB(planes, r.bounds)) return false;
+                return true;
             }
         }
 

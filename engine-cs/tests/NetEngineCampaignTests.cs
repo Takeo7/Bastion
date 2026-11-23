@@ -66,6 +66,9 @@ namespace Bastion.Engine.Tests
             public readonly List<string> Log = new List<string>();
             public readonly FakeClock Clock = new FakeClock();
             public Room Room;
+
+            /// <summary>Told each stage's line by the room (Room's stageNoted): one that throws stands for a failing line.</summary>
+            public Action<string>? StageNoted;
             private int peers;
 
             public Host()
@@ -78,7 +81,7 @@ namespace Bastion.Engine.Tests
             public Room Make()
             {
                 var rules = new EngineCampaignRules();
-                return new Room(new SaveStore(SavePath, Log.Add, rules), new EngineRules(), "1.0.0", null, Clock, new Rng(11), null, rules);
+                return new Room(new SaveStore(SavePath, Log.Add, rules), new EngineRules(), "1.0.0", null, Clock, new Rng(11), null, rules, stageNoted: StageNoted);
             }
 
             /// <summary>The campaign as the room last saved it.</summary>
@@ -976,6 +979,84 @@ namespace Bastion.Engine.Tests
             Assert.Equal(LevelIds.Easy, (string?)pepe.Take("room").Last()["savedCampaign"]!["gameLevel"]);
             host.Say(ana, new { t = "continueCampaign" });
             Assert.Equal(LevelIds.Easy, CampaignOf(pepe).GameLevel);
+        }
+
+        /// <summary>
+        /// A run's stage over (Producto, 23/11): one line in the host's red.log, and the same to the partner (CampaignMessage
+        /// .line) for theirs: how it ended, the level, chapter, row, kind and site, the seats and who went out by player, the
+        /// fallen, hurt and boarded, and the § home. Here the squad falls (the base's soldiers keep the game going).
+        /// </summary>
+        [Fact]
+        public void AStagesEndIsALineInBothRedLogs()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign", level = LevelIds.Medium });
+            GoOut(host, ana, pepe);
+            host.Say(ana, new { t = "backToMenu" });
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            var node = RunMap.Node(save.Campaign!.Run!, save.Campaign.Run!.At)!;
+            foreach (var u in save.State!.Units.Where((u) => u.Team == Teams.Xcom))
+            {
+                u.Alive = false;
+                u.Hp = 0;
+            }
+            save.Phase = RoomPhases.Mission;
+            store.Save(save);
+            Assert.DoesNotContain(host.Log, (l) => l.StartsWith("[campaña] Etapa "));
+            // Pepe in first: the fight is over as soon as someone is (SyncTurn), and the line goes to whoever is in then.
+            host.Room = host.Make();
+            pepe = host.Join("Pepe", pepeToken);
+            ana = host.Join("Ana", anaToken);
+            host.Advance(2000);
+            Assert.Null(CampaignOf(ana).Outcome);
+            var line = Assert.Single(host.Log, (l) => l.StartsWith("[campaña] Etapa "));
+            Assert.StartsWith("[campaña] Etapa 1 terminada: perdida (escuadra caída) en el turno ", line);
+            Assert.Contains($" · nivel medium, capítulo 1, fila 1 · {node.Kind} en {node.Site}", line);
+            Assert.Contains(" · plazas 2, salen 2 (Ana 1, Pepe 1) · caídos 2, heridos 0, a La Lata 0 · § netos 0", line);
+            Assert.Equal(line, (string?)pepe.Take("campaign").Last((m) => m["line"] != null && m["line"]!.Type != JTokenType.Null)["line"]);
+        }
+
+        /// <summary>
+        /// The 0.14.2's review, 6: a stage's line that fails stops nothing. The result is applied, sent to both and saved; the
+        /// failure is one line in red.log, and the partner gets the campaign without the line.
+        /// </summary>
+        [Fact]
+        public void AStagesLineThatFailsStopsNothing()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign", level = LevelIds.Medium });
+            GoOut(host, ana, pepe);
+            host.Say(ana, new { t = "backToMenu" });
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            foreach (var u in save.State!.Units.Where((u) => u.Team == Teams.Xcom))
+            {
+                u.Alive = false;
+                u.Hp = 0;
+            }
+            save.Phase = RoomPhases.Mission;
+            store.Save(save);
+            host.StageNoted = (_) => throw new InvalidOperationException("prueba");
+            host.Room = host.Make();
+            pepe = host.Join("Pepe", pepeToken);
+            ana = host.Join("Ana", anaToken);
+            host.Advance(2000);
+            Assert.Contains("[campaña] No se pudo escribir la línea de la etapa: InvalidOperationException: prueba", host.Log);
+            // The result went out to the partner, without the line, and is in the save.
+            var sent = pepe.Take("campaign").Last();
+            Assert.True(sent["line"] == null || sent["line"]!.Type == JTokenType.Null);
+            Assert.NotNull(sent["state"]!.ToObject<CampaignState>(Json.Serializer)!.LastReport?.Run);
+            Assert.NotNull(host.Saved().LastReport?.Run);
+            Assert.True(store.Load()!.ResultApplied);
         }
 
         /// <summary>

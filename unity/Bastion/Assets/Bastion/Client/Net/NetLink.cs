@@ -362,6 +362,8 @@ namespace Bastion.Client.Net
             var dir = Environment.GetEnvironmentVariable("BASTION_DATOS");
             DataDir = string.IsNullOrEmpty(dir) ? Application.persistentDataPath : dir!;
             log = new NetLog(Path.Combine(DataDir, "red.log"));
+            // Each stage's load, where it went (Arte's StageLoad, M2, 23/11): this app's red.log.
+            Bastion.Client.StageLoad.Said += (line) => log.Write(line);
             // A test driver (it names the player itself) keeps the name and the seats' tokens in a file of its own: run on
             // a player's data (8/11, BASTION_MEDIR on Arturo's iPhone), it left «Medida» in their conexion.json, and their
             // own campaign then took them in as another player.
@@ -593,6 +595,9 @@ namespace Bastion.Client.Net
                 startWhenBoth = false;
                 Send(new StartMessage());
             }
+            // A run's stage over: the room's line in the partner's red.log too (the host's has it from the room), so either
+            // player's game says how each stage went (Producto, 23/11).
+            if (msg is CampaignMessage { Line: string stageLine } && !Hosting) log.Write(stageLine);
             if (carry != null && Hosting)
             {
                 if (msg is RoomMessage now) CarryOn(now);

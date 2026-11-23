@@ -129,6 +129,9 @@ namespace Bastion.Net
         private readonly IClock clock;
         private readonly Action<string> say;
 
+        /// <summary>For the tests: whoever is told each stage's line once it is in red.log (one that throws stands for a failing line).</summary>
+        private readonly Action<string>? stageNoted;
+
         private readonly ConcurrentQueue<Action> inbox = new ConcurrentQueue<Action>();
         private readonly AutoResetEvent posted = new AutoResetEvent(false);
         private readonly List<Later> timers = new List<Later>();
@@ -211,8 +214,9 @@ namespace Bastion.Net
         /// store's Log. `campaignRules`: the campaign's; without them, skirmishes only. `key`: the one to join from the
         /// internet; by default, a new one each time (Key).
         /// </summary>
-        public Room(SaveStore store, IRules rules, string version, IReadOnlyList<HostAddress>? hosts = null, IClock? clock = null, Rng? rng = null, Action<string>? say = null, ICampaignRules? campaignRules = null, string? key = null)
+        public Room(SaveStore store, IRules rules, string version, IReadOnlyList<HostAddress>? hosts = null, IClock? clock = null, Rng? rng = null, Action<string>? say = null, ICampaignRules? campaignRules = null, string? key = null, Action<string>? stageNoted = null)
         {
+            this.stageNoted = stageNoted;
             Key = key ?? NewKey();
             this.store = store;
             this.rules = rules;
@@ -1236,8 +1240,17 @@ namespace Bastion.Net
             if (mode == "campaign" && campaign != null && campaignRules != null && state?.Outcome != null && !resultApplied)
             {
                 var going = campaign.Outcome == null;
+                // A run's stage, as it was before its result moves the run on (StageLine).
+                var stage = Campaign.IsRuns(campaign) ? Telemetry(() => StageOf(campaign)) : null;
                 campaignRules.ApplyMissionResult(campaign, state, rng);
                 resultApplied = true;
+                var line = stage != null ? Telemetry(() =>
+                {
+                    var said = StageLine(stage, campaign, state);
+                    store.Log(said);
+                    stageNoted?.Invoke(said);
+                    return said;
+                }) : null;
                 // N8 (cuadro 118): nobody alive in the game, the squad nor the base: lost, for both; every order refused from
                 // now on, and from the base only «newCampaign» (the lobby has no «Continuar» for it: SavedCampaign.Of).
                 if (going && campaign.Outcome != null)
@@ -1245,9 +1258,90 @@ namespace Bastion.Net
                     say($"[room] Partida terminada: {campaign.Outcome}.");
                     store.Log($"[campaña] Partida terminada: {campaign.Outcome} (nivel {Levels.Of(campaign).Id}, capítulo {campaign.Chapter ?? 1}, {campaign.NodesPlayed ?? 0} etapas).");
                 }
-                Broadcast(new CampaignMessage { State = campaign });
+                Broadcast(new CampaignMessage { State = campaign, Line = line });
             }
             Persist();
+        }
+
+        /// <summary>
+        /// A stage's line, which never stops the room (the 0.14.2's review, 6: thrown after the result was applied, the partner
+        /// got no campaign and the game wasn't saved): a failure is one line in red.log and no line.
+        /// </summary>
+        private T? Telemetry<T>(Func<T> make) where T : class
+        {
+            try
+            {
+                return make();
+            }
+            catch (Exception e)
+            {
+                store.Log($"[campaña] No se pudo escribir la línea de la etapa: {e.GetType().Name}: {e.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// A run's stage as it was before its result: the game's level and chapter, its node (row, kind, site), the seats, and
+        /// the squad that went out with the § in their packs.
+        /// </summary>
+        private sealed class StageStart
+        {
+            public string Level = "";
+            public int Chapter;
+            public RunNode? Node;
+            public int Seats;
+            public List<string> Squad = new List<string>();
+            public int Carried;
+        }
+
+        private static StageStart StageOf(CampaignState c)
+        {
+            var squad = c.Run?.Squad.ToList() ?? new List<string>();
+            return new StageStart
+            {
+                Level = Levels.Of(c).Id,
+                Chapter = c.Chapter ?? 1,
+                Node = c.Run != null ? RunMap.Node(c.Run, c.Run.At) : null,
+                Seats = Runs.SeatsOf(c),
+                Squad = squad,
+                Carried = Carried(c, squad),
+            };
+        }
+
+        /// <summary>The § in the packs of those of `squad` alive (supplies go only in a pack).</summary>
+        private static int Carried(CampaignState c, List<string> squad) =>
+            c.Soldiers.Where((x) => x.Alive && x.Kit != null && squad.Contains(x.Id)).Sum((x) => Gears.Supplies(x.Kit!.Pack));
+
+        /// <summary>
+        /// A run's stage over, one line for red.log (Producto, 23/11: how the players' games go, level by level), the host's
+        /// and, by CampaignMessage.Line, the partner's: its number, won or lost and why, in which turn; the level, the
+        /// chapter, the row, the kind of stage and its site, night or storm; the seats and who went out, by player; the
+        /// fallen, those back hurt (after any mending) and those who got into La Lata; the § the squad brought home over what
+        /// it went out with (what was found, a special's reward, less what the fallen carried).
+        /// </summary>
+        private string StageLine(StageStart s, CampaignState c, GameState m)
+        {
+            var run = c.LastReport?.Run;
+            var squad = m.Units.Where((u) => u.Team == Teams.Xcom && u.CampaignId != null).ToList();
+            var byPlayer = squad.GroupBy((u) => u.Owner ?? 0).OrderBy((g) => g.Key).Select((g) => $"{(g.Key >= 0 && g.Key < seats.Length && seats[g.Key] != null ? seats[g.Key]!.Name : $"puesto {g.Key + 1}")} {g.Count()}");
+            var hurt = run == null ? 0 : run.Hp.Count((h) => c.Soldiers.FirstOrDefault((x) => x.Id == h.Key) is CampaignSoldier x && x.Alive && h.Value < Runs.MaxHp(x));
+            var supplies = Carried(c, s.Squad) - s.Carried;
+            var why = m.OutcomeReason switch
+            {
+                EndReasons.Objective => "objetivo",
+                EndReasons.Wiped => "escuadra caída",
+                EndReasons.Timer => "tiempo",
+                EndReasons.Abandoned => "abandono",
+                EndReasons.ObjectiveLost => "objetivo perdido",
+                var other => other ?? "-",
+            };
+            var node = s.Node;
+            var mods = new[] { node?.Modifier, node?.Added }.Where((x) => x != null).Distinct().ToList();
+            return $"[campaña] Etapa {run?.Stage ?? c.NodesPlayed ?? 0} terminada: {(m.Outcome == Outcomes.Victory ? "ganada" : "perdida")} ({why}) en el turno {m.Turn}"
+                + $" · nivel {s.Level}, capítulo {s.Chapter}, fila {node?.Row.ToString() ?? "-"}"
+                + $" · {node?.Kind ?? run?.NodeKind ?? "-"} en {node?.Site ?? "-"}{(mods.Count > 0 ? $" ({string.Join(", ", mods)})" : "")}"
+                + $" · plazas {s.Seats}, salen {squad.Count} ({string.Join(", ", byPlayer)})"
+                + $" · caídos {run?.Fallen.Count ?? 0}, heridos {hurt}, a La Lata {squad.Count((u) => u.Evacuated)} · § netos {(supplies > 0 ? "+" : "")}{supplies}";
         }
 
         /// <summary>A disconnect may be the last thing blocking the end of the XCOM turn; `back`, who has just come back (the command may go to them).</summary>

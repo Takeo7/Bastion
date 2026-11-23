@@ -52,7 +52,15 @@ namespace Bastion.Client.Units
         public GameObject Weapon(string fbx) => Find(ref weaponBy, weaponNames, weapons, fbx);
 
         /// <summary>The catalog in Resources, or null if it has not been made.</summary>
-        public static FigureCatalog Load() => loaded != null ? loaded : loaded = Resources.Load<FigureCatalog>("FigureCatalog");
+        public static FigureCatalog Load()
+        {
+            if (loaded != null) return loaded;
+            // (Timed the once it loads, for the stage's line it falls in: StageLoad, M2.)
+            double from = StageLoad.Clock();
+            loaded = Resources.Load<FigureCatalog>("FigureCatalog");
+            StageLoad.Catalog(StageLoad.Clock() - from);
+            return loaded;
+        }
 
         /// <summary>A Sidekick preset's prefab (ApocalypseZombie_01…), or null.</summary>
         public GameObject Preset(string name) => Find(ref presetBy, presetNames, presets, name);

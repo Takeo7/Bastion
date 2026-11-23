@@ -3099,9 +3099,7 @@ namespace Bastion.UI.Combat
                             if (o.Team != Teams.Xcom && !ShownToSquad(o)) units.Shade(o.Id, false);
                     }
                     if (turn.Team == Teams.Alien && !EnemyTurnShows()) return;
-                    control.Sfx.Turn(turn.Team == Teams.Alien, !v.Concealed);
-                    var partner = turn.Team == Teams.Xcom && control.Players.Any(p => p.Slot != control.MySlot && p.Connected) && turn.Command != null && turn.Command != control.MySlot;
-                    Hud?.Banner(turn.Team == Teams.Alien ? "TURNO ENEMIGO" : partner ? $"TURNO DE {PlayerName(turn.Command).ToUpperInvariant()}" : "TU TURNO", "turn", null, turn.Team == Teams.Xcom && !partner);
+                    TurnStamp(turn.Team, turn.Command, v.Concealed);
                     // The squad's turn: the camera to the soldier who plays first (#47).
                     if (turn.Team == Teams.Xcom) control.TurnCamera(v, turn.Command ?? control.MySlot, true);
                     var left = v.Mission.TurnsLeft != null && turn.Turn > 1 ? v.Mission.TurnsLeft - 1 : v.Mission.TurnsLeft;
@@ -3762,6 +3760,21 @@ namespace Bastion.UI.Combat
             moment = null;
             control.SetMoment(null, null);
             return true;
+        }
+
+        // ------------------------------------------------------- the turn
+
+        /// <summary>
+        /// The turn's stamp and its sound, as a turn begins (TurnBeganEvent): «TURNO ENEMIGO», «TURNO DE ANA» (the partner holding
+        /// the command) or «TU TURNO», held till this player does something (the clock waits meanwhile). Also the first turn's,
+        /// as the stage's sheet goes (cuadro 139, Arturo: the arrival card and its «Entendido» out; Producto: the same stamp as
+        /// any other turn's).
+        /// </summary>
+        public void TurnStamp(string team, int? command, bool concealed)
+        {
+            control.Sfx.Turn(team == Teams.Alien, !concealed);
+            var partner = team == Teams.Xcom && control.Players.Any(p => p.Slot != control.MySlot && p.Connected) && command != null && command != control.MySlot;
+            Hud?.Banner(team == Teams.Alien ? "TURNO ENEMIGO" : partner ? $"TURNO DE {PlayerName(command).ToUpperInvariant()}" : "TU TURNO", "turn", null, team == Teams.Xcom && !partner);
         }
 
         // ------------------------------------------------------- the end

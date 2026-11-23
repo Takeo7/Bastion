@@ -316,11 +316,32 @@ namespace Bastion.UI.Start
             if (scene != backdrop)
             {
                 backdrop = scene;
-                MenuBackdrop.Show(scene == "multijugador" ? MenuBackdrop.Scene.Crossroads : MenuBackdrop.Scene.Road);
+                // Under a loading window (the app opening, back from a game: cuadro 136), built once the window is drawn,
+                // and the window lifted once the backdrop is: the title, not a frozen black, while it builds.
+                if (App.AppFlow.Veiled) _ = BackdropUnderWindow(scene);
+                else MenuBackdrop.Show(scene == "multijugador" ? MenuBackdrop.Scene.Crossroads : MenuBackdrop.Scene.Road);
             }
             if (scene == Scene) return;
             Scene = scene;
             SceneChanged?.Invoke(scene);
+        }
+
+        async Awaitable BackdropUnderWindow(string scene)
+        {
+            // (Only the window it was built under: «Continuar partida» raises the base's over it meanwhile.)
+            var raised = App.AppFlow.Raised;
+            try
+            {
+                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                if (backdrop == scene) MenuBackdrop.Show(scene == "multijugador" ? MenuBackdrop.Scene.Crossroads : MenuBackdrop.Scene.Road);
+                await Awaitable.NextFrameAsync(destroyCancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // The screen went first.
+            }
+            App.AppFlow.LiftVeil(raised);
         }
 
         bool NoName => string.IsNullOrWhiteSpace(link.LastName);

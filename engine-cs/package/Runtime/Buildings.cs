@@ -171,6 +171,75 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// The places of a map, on any storey, that open its inside to the outside with no door to close (M1, Arturo, cuadros
+        /// 133 and 134 of 23/11): a tile under a roof that sight goes through (not a wall, a window, bars, a door nor high:
+        /// a boarded-up door is high, and shut), beside one that is out of doors on that storey (no storey of a building
+        /// there that high) and not a wall, a window nor bars. A nave's loading bay, a breach a blast made (rubble, low), a
+        /// building's outline left open (a car parked into a shop's wall). As node, z × area + tile.
+        /// </summary>
+        private static IEnumerable<int> Holes(GameState s)
+        {
+            var area = s.Width * s.Height;
+            var storeys = s.Storeys!;
+            for (var z = 0; z < Grid.LevelCount(s); z++)
+            {
+                for (var i = 0; i < area; i++)
+                {
+                    if (storeys[i] <= z) continue;
+                    var kind = KindOn(s, z, i);
+                    if (kind == null || Shut(kind) || IsDoor(kind) || kind == TileKinds.High) continue;
+                    foreach (var j in Beside(s, i))
+                    {
+                        if (storeys[j] > z) continue;
+                        var there = KindOn(s, z, j);
+                        if (Shut(there) || IsDoor(there)) continue;
+                        yield return z * area + i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// M1 (Arturo, cuadros 133 and 134 of 23/11: «Que se vea dentro», «También a la vista», «Abre la casa entera»): a
+        /// building with a hole to the outside no door closes (Holes) is found, whole, every storey of it, as the street is
+        /// seen; on a map found room by room (ByRoom), the room of the hole. Kept in GameState.Discovered as what the squad
+        /// finds walking in, so whatever reads that (the fog, the walking range, the night's lights) has it, from the
+        /// mission's start, from a save's load (Setup.UpToDate) and from the event of the breach on (Events, TileChanged).
+        /// None in a siege, known whole. Whether anything was found.
+        /// </summary>
+        public static bool FindOpen(GameState s)
+        {
+            if (s.Mission?.Siege != null || s.Storeys == null) return false;
+            var area = s.Width * s.Height;
+            if (s.Storeys.Count != area || s.Tiles.Count != area) return false;
+            var holes = Holes(s).ToList();
+            if (holes.Count == 0) return false;
+            var known = new HashSet<int>(s.Discovered ?? new List<int>());
+            var added = false;
+            void Add(IEnumerable<int> nodes)
+            {
+                foreach (var n in nodes)
+                {
+                    if (!known.Add(n)) continue;
+                    (s.Discovered ??= new List<int>()).Add(n);
+                    added = true;
+                }
+            }
+            if (ByRoom(s))
+            {
+                var rooms = RoomPlanOf(s);
+                if (rooms.Of.Length == 0) return false;
+                foreach (var r in holes.SelectMany((n) => RoomsUnder(s, rooms, n)).Distinct().ToList()) Add(rooms.Nodes[r]);
+                return added;
+            }
+            var plan = PlanOf(s);
+            if (plan.Of.Length == 0) return false;
+            foreach (var b in holes.SelectMany((n) => Under(s, plan, n % area)).Distinct().ToList()) Add(plan.Tiles[b]);
+            return added;
+        }
+
+        /// <summary>
         /// Whether whoever stands on `p` is hidden from the squad: inside a building it has not found, under its roof and
         /// off its doors (who stands in a doorway shows). `viewers`, places of the squad that count as found too (where
         /// they stand now, or would: Los.CanSee's viewerPos).

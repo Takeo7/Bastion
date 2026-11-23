@@ -2788,6 +2788,128 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// The squad's figures made ahead (UnitViews.Prepare; Arturo's M2, 23/11), in play: BASTION_GENERAR's mission (city,7,
+        /// scavenge unless said) with its map built, then its figures a step a frame, each step's ms ([preparar]), and the
+        /// first Sync after them; with BASTION_SIN_PREPARAR=1 the Sync alone, as the game has it today.
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Preparar -shotPlay -shotCamera "Shot camera" -shotFrames 40 -shotFps 10
+        /// </summary>
+        public static void Preparar()
+        {
+            new GameObject("Shot camera").AddComponent<Camera>();
+            UnityEditor.EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
+                var made = (Environment.GetEnvironmentVariable("BASTION_GENERAR") ?? "city,7,scavenge").Split(',');
+                var seen = MapLab.Generated(made[0], int.Parse(made[1]), made[2], made.Length > 3 ? made[3] : null);
+                _ = FigureCatalog.Load();
+                MapLab.Map(seen, string.Join(" ", made));
+                new GameObject("Preparar").AddComponent<Preparing>().Seen = seen;
+            };
+        }
+
+        /// <summary>
+        /// A generated mission written as a room's save, for UI's play lab (BASTION_LAB_GUARDADO): BASTION_GENERAR=biome,seed,
+        /// kind[,site] to BASTION_GUARDAR (a path).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.CombatLab.Guardar
+        /// </summary>
+        public static void Guardar()
+        {
+            // (Several, «;» between them: each to the path with its «biome-seed-kind-site» for «{}».)
+            string path = Environment.GetEnvironmentVariable("BASTION_GUARDAR");
+            foreach (string spec in Environment.GetEnvironmentVariable("BASTION_GENERAR").Split(';'))
+            {
+                var made = spec.Split(',');
+                var state = MapLab.Generated(made[0], int.Parse(made[1]), made[2], made.Length > 3 ? made[3] : null);
+                string to = path.Replace("{}", string.Join("-", made));
+                System.IO.File.WriteAllText(to, Bastion.Net.Json.Write(new System.Collections.Generic.Dictionary<string, object> { ["state"] = state }));
+                Debug.Log($"[guardar] {state.MapId} {state.Width}×{state.Height} to {to}");
+            }
+        }
+
+        /// <summary>
+        /// The long frames of the game's own flow (M2: «Ir a esta etapa» to the battle, UI's real.sh): in play, each frame
+        /// longer than BASTION_FOTOGRAMA_MS (50) by the clock on the wall, with the scene it fell in, a line [fotograma]; kept
+        /// across the scenes. With a capture a frame, each carries the capture's own cost: compare runs alike.
+        ///   … -shotScene Assets/Bastion/UI/Scenes/Inicio.unity -shotSetup Bastion.EditorTools.CombatLab.Fotogramas -shotPlay …
+        /// </summary>
+        public static void Fotogramas()
+        {
+            UnityEditor.EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
+                var o = new GameObject("Fotogramas") { hideFlags = HideFlags.HideAndDontSave };
+                UnityEngine.Object.DontDestroyOnLoad(o);
+                o.AddComponent<LongFrames>();
+            };
+        }
+
+        sealed class LongFrames : MonoBehaviour
+        {
+            readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+            double last = -1;
+            readonly float least = float.TryParse(Environment.GetEnvironmentVariable("BASTION_FOTOGRAMA_MS"), out float ms) ? ms : 50;
+            System.Collections.Generic.List<(string name, Unity.Profiling.ProfilerRecorder recorder)> marks = Environment.GetEnvironmentVariable("BASTION_FOTOGRAMA_MARCAS") == "1" ? new System.Collections.Generic.List<(string, Unity.Profiling.ProfilerRecorder)>() : null;
+            readonly System.Collections.Generic.HashSet<string> marked = new System.Collections.Generic.HashSet<string>();
+
+            /// <summary>A recorder for every marker of time the profiler knows by now (more come as the game goes).</summary>
+            void Marks()
+            {
+                UnityEditorInternal.ProfilerDriver.enabled = true;
+                var handles = new System.Collections.Generic.List<Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle>();
+                Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle.GetAvailable(handles);
+                foreach (var h in handles)
+                {
+                    var d = Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle.GetDescription(h);
+                    if (d.UnitType != Unity.Profiling.ProfilerMarkerDataUnit.TimeNanoseconds || !marked.Add(d.Category.Name + "/" + d.Name)) continue;
+                    marks.Add((d.Name, Unity.Profiling.ProfilerRecorder.StartNew(d.Category, d.Name, 1)));
+                }
+            }
+
+            void Update()
+            {
+                double now = clock.Elapsed.TotalMilliseconds;
+                if (last >= 0 && now - last >= least)
+                {
+                    Debug.Log(FormattableString.Invariant($"[fotograma] {now - last:0} ms, ending {now / 1000:0.00} s in (frame {Time.frameCount}, game {Time.time:0.0} s), scene {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}"));
+                    // (BASTION_FOTOGRAMA_MARCAS=1: what it went in, the profiler's costliest markers of that frame, 300 ms on.)
+                    if (marks != null && now - last >= 300)
+                        Debug.Log("[fotograma] its markers: " + string.Join(", ", marks.Where(m => m.recorder.Valid && m.recorder.LastValue > 20000000)
+                            .OrderByDescending(m => m.recorder.LastValue).Take(28).Select(m => FormattableString.Invariant($"{m.name} {m.recorder.LastValue / 1e6:0}"))));
+                }
+                last = now;
+                if (marks != null && (Time.frameCount < 12 || Time.frameCount % 20 == 1)) Marks();
+            }
+        }
+
+        sealed class Preparing : MonoBehaviour
+        {
+            public GameState Seen;
+            int frame;
+            bool synced;
+            double longest, total;
+
+            void Update()
+            {
+                if (synced) return;
+                frame++;
+                if (frame == 2 && Environment.GetEnvironmentVariable("BASTION_SIN_PREPARAR") != "1") UnitViews.Prepare(Seen);
+                if (frame <= 2) return;
+                if (UnitViews.Preparing)
+                {
+                    longest = Math.Max(longest, SoldierFigure.LastStepMs);
+                    total += SoldierFigure.LastStepMs;
+                    return;
+                }
+                longest = Math.Max(longest, SoldierFigure.LastStepMs);
+                total += SoldierFigure.LastStepMs;
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                new GameObject("Unidades").AddComponent<UnitViews>().Sync(Seen);
+                synced = true;
+                Debug.Log(FormattableString.Invariant($"[preparar] {frame - 3} frames of steps, the longest {longest:0} ms, all about {total:0} ms; then Sync {watch.Elapsed.TotalMilliseconds:0} ms ({Seen.Units.Count} units)"));
+            }
+        }
+
+        /// <summary>
         /// A mission's load weighed (Gameplay, 10/11: a city mission loaded 0.6 s slower in the 0.12.20 app): BASTION_MAP
         /// (city-3-elimination unless said, step2's) built as the game builds it, in edit mode, BASTION_VUELTAS times (2 unless
         /// said: the first pays for what loads once), each a line [carga]: the catalog of figures loaded (the first time), the
@@ -2798,13 +2920,27 @@ namespace Bastion.EditorTools
         {
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "../step2/city-3-elimination";
             int rounds = int.TryParse(Environment.GetEnvironmentVariable("BASTION_VUELTAS"), out int n) && n > 0 ? n : 2;
+            // BASTION_CARGA_BASE=1: the base shown first, as the game has it before any stage (M2, 23/11: what of the first load the
+            // base has already paid for: its figures' catalog, the ground's, the map's).
+            if (Environment.GetEnvironmentVariable("BASTION_CARGA_BASE") == "1")
+            {
+                UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
+                var first = System.Diagnostics.Stopwatch.StartNew();
+                _ = FigureCatalog.Load();
+                double figuresCatalog = first.Elapsed.TotalMilliseconds;
+                SettlementLab.Clearing();
+                Debug.Log(FormattableString.Invariant($"[carga] the base first: figures' catalog {figuresCatalog:0} ms, the clearing {first.Elapsed.TotalMilliseconds - figuresCatalog:0} ms"));
+            }
             for (int round = 0; round < rounds; round++)
             {
                 UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 _ = FigureCatalog.Load();
                 double loaded = watch.Elapsed.TotalMilliseconds;
-                var seen = MapLab.Golden(name);
+                // (BASTION_GENERAR=biome,seed,kind[,site]: a generated mission instead, as MapLab's; M2, 23/11: by kind of place.)
+                var made0 = Environment.GetEnvironmentVariable("BASTION_GENERAR")?.Split(',');
+                if (made0 != null && made0.Length >= 3) name = string.Join(" ", made0);
+                var seen = made0 != null && made0.Length >= 3 ? MapLab.Generated(made0[0], int.Parse(made0[1]), made0[2], made0.Length > 3 ? made0[3] : null) : MapLab.Golden(name);
                 double read = watch.Elapsed.TotalMilliseconds;
                 MapLab.Map(seen, name);
                 double map = watch.Elapsed.TotalMilliseconds;

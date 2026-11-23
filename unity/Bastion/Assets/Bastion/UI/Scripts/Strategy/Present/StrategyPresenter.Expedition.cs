@@ -39,7 +39,18 @@ namespace Bastion.UI.Strategy
                 SquadHead = StrategyText.Runs.Squad,
                 Run = $"{run.Chapter}:{run.Seed}",
                 Fresh = run.At == null && run.Path.Count == 0,
+                Go = StrategyText.Runs.Go,
+                WhatHead = StrategyText.Runs.WhatHead,
+                WhereHead = StrategyText.Runs.WhereHead,
             };
+            v.Legend.AddRange(StrategyText.Runs.Legend);
+            // A stage proposed to the vote (two players): marked on the map in whose colour it is (cuadro 132).
+            if (c.Proposal?.Action is ChooseNodeAction proposed)
+            {
+                v.Proposed = proposed.Node;
+                v.ProposedLine = c.Proposal.By == Slot ? StrategyText.Runs.ProposedMine : StrategyText.Runs.ProposedBy(PlayerName(c.Proposal.By));
+                v.ProposedColor = PlayerColor(c.Proposal.By);
+            }
             foreach (var n in run.Nodes.OrderBy(n => n.Row).ThenBy(n => n.Col))
             {
                 var seen = RunMap.Visible(c, n);
@@ -58,6 +69,16 @@ namespace Bastion.UI.Strategy
                     nv.Name = StrategyText.Runs.NodeName(n.Kind, run.Chapter);
                     nv.Icon = NodeIcon(n.Kind);
                     nv.Stop = NodeKinds.IsStop(n.Kind);
+                    // The card in parts (cuadro 132): its row, its danger (a fight's), what to do, where.
+                    nv.Kicker = StrategyText.Runs.Kicker(n.Row);
+                    nv.What = StrategyText.Runs.StageLine(n);
+                    if (!nv.Stop && n.Kind != NodeKinds.Boss) nv.Danger = n.Difficulty;
+                    if (!nv.Stop && n.Site != null && Places.Names.TryGetValue(n.Site, out var where))
+                    {
+                        nv.Place = where;
+                        nv.PlaceIcon = Bastion.UI.Hud.LineIcon.Has("place:" + n.Site) ? "place:" + n.Site : null;
+                        nv.PlaceLine = Lore.SiteLine(n.Site);
+                    }
                     // Its line with what is known of it (Runs.StageLine: the alarm, the Asedio's turn, the Guarida's guard).
                     nv.Card.Add(StrategyText.Runs.StageLine(n));
                     // A Rescate with La Lata full (N2, 17/11): whoever doesn't fit is lost when it leaves, said before choosing it.
@@ -67,6 +88,7 @@ namespace Bastion.UI.Strategy
                     {
                         nv.Card.Add(Lore.RescueNoSeat);
                         nv.Warn = Lore.RescueNoSeatTag;
+                        nv.WarnLine = Lore.RescueNoSeat;
                     }
                     // A special map (H7, H9: not one of the six places a fight is in otherwise): its mark (Arturo, 17/11).
                     if (n.Site != null && !OrdinaryPlaces.Contains(n.Site) && Bastion.UI.Hud.LineIcon.Has("place:" + n.Site)) nv.SiteIcon = "place:" + n.Site;
@@ -83,6 +105,7 @@ namespace Bastion.UI.Strategy
                         nv.Modifier = StrategyText.Runs.ModifierName(n.Modifier);
                         nv.ModifierIcon = ModifierIcon(n.Modifier);
                         nv.Card.Add(ModifierCard(n.Modifier));
+                        nv.Notes.Add(ModifierCard(n.Modifier));
                     }
                     // What an event left (H4): on the stage it went to, or, still waiting (RunState.Pending), on the fights
                     // that can be chosen now, one of which takes it.
@@ -92,9 +115,15 @@ namespace Bastion.UI.Strategy
                         nv.AddedId = added;
                         nv.AddedIcon = ModifierIcon(added);
                         nv.Card.Add(ModifierCard(added) + StrategyText.Runs.ByEvent);
+                        nv.Notes.Add(ModifierCard(added) + StrategyText.Runs.ByEvent);
                     }
                 }
-                else nv.Card.Add(StrategyText.Runs.Unseen);
+                else
+                {
+                    nv.Card.Add(StrategyText.Runs.Unseen);
+                    nv.Kicker = StrategyText.Runs.Kicker(n.Row);
+                    nv.What = StrategyText.Runs.Unseen;
+                }
                 if (nv.Open) nv.Why = Runs.ChooseNodeRefusal(c, n.Id);
                 v.Nodes.Add(nv);
                 foreach (var next in n.Next)
@@ -150,6 +179,44 @@ namespace Bastion.UI.Strategy
                 v.Kit.BoardPulse = own && Campaign.CanSpendPoints(c, pick);
             }
             v.Stop = Stop(run, pick != null && mine.Contains(pick) ? pick : mine.FirstOrDefault(), mine);
+            return v;
+        }
+
+        /// <summary>
+        /// The stage the squad is going to, on paper, for the loading window (cuadro 136, the C): «Saliendo hacia», its name,
+        /// its place drawn, its danger, the map's notes (de noche, mal tiempo, horda despierta; «Sin plaza libre»), its line,
+        /// and who goes, each in their player's colour. Which stage: the campaign's once it says the squad is in its fight;
+        /// before that word comes (the room's phase first), the one proposed to the vote, else the one this player sent it to
+        /// (`chosen`). Null without a stage of an expedition under way.
+        /// </summary>
+        public Bastion.UI.App.LoadView StageSheet(string chosen)
+        {
+            var c = State;
+            var run = c?.Run;
+            var id = run == null ? null : run.Phase == RunPhases.Fight ? run.At : (c.Proposal?.Action as ChooseNodeAction)?.Node ?? chosen;
+            var n = id != null ? RunMap.Node(run, id) : null;
+            if (n == null || NodeKinds.IsStop(n.Kind)) return null;
+            var v = new Bastion.UI.App.LoadView
+            {
+                Paper = true,
+                Kicker = Bastion.UI.App.LoadText.Going,
+                Title = StrategyText.Runs.NodeName(n.Kind, run.Chapter),
+                Line = StrategyText.Runs.StageLine(n),
+
+            };
+            // The first stage of the expedition leaves from the base: La Lata is seen going (cuadro 138).
+            v.Departs = n.Row == 1;
+            var place = n.Site != null && Places.Names.TryGetValue(n.Site, out var where) ? where : null;
+            v.Place = place;
+            v.Symbol = n.Site != null && Bastion.UI.Hud.LineIcon.Has("place:" + n.Site) ? "place:" + n.Site : NodeIcon(n.Kind);
+            if (n.Kind != NodeKinds.Boss) v.Danger = StrategyText.Runs.Danger(n.Difficulty);
+            foreach (var m in new[] { n.Modifier, n.Added }.Where(x => x != null).Distinct())
+                v.Notes.Add((Lore.ModifierName(m).ToLowerInvariant(), m == Modifiers.Awake));
+            if ((n.Kind == NodeKinds.Rescue || n.Kind == NodeKinds.Bitten) && !Runs.SeatFree(c)) v.Notes.Add((Lore.RescueNoSeatTag, true));
+            var two = c.Players.Count > 1;
+            foreach (var s in run.Squad.Select(id => c.Soldiers.FirstOrDefault(x => x.Id == id)).Where(s => s != null && s.Alive))
+                v.Who.Add((FirstName(s), two ? PlayerColor(s.Owner) : null));
+            v.WhoHead = Bastion.UI.App.LoadText.Who(v.Who.Count);
             return v;
         }
 

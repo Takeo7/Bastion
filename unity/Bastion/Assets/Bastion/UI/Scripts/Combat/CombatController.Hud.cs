@@ -1629,15 +1629,14 @@ namespace Bastion.UI.Combat
         const string FeudColor = "#e8d8c0";
 
         /// <summary>
-        /// The arrival card (game.ts intro), XCOM-style: what kind of fight, the operation's name, the objective, the turns
-        /// under it and the briefing whole (playtest 13/10 #7, 19/10 #12). The log keeps a night's rules (Arturo, 22/10
-        /// #57), and says when the living are among the dead (18/10 #47).
+        /// A fresh mission's start, as the loading sheet goes: the log keeps a night's rules (Arturo, 22/10 #57), and says
+        /// when the living are among the dead (18/10 #47). No arrival card since the cuadro 139 (Arturo: «Entendido» out, the
+        /// sheet says the stage already); the objective's card opens it, to read again (IntroNow).
         /// </summary>
         public void Intro()
         {
             var s = State;
             if (Hud == null || s.Outcome != null) return;
-            Hud.Intro(IntroNow());
             if (s.Units.Any(u => u.Alive && u.Team == Teams.Alien && !u.Objective && !Content.Templates[u.Template].Undead))
             {
                 Hud.Log(Lore.LivingTip, FeudColor);
