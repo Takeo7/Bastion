@@ -223,6 +223,13 @@
     white-space: normal;
 }
 
+/* The level in words after the marks (B12). */
+.upgrade__level {
+    margin-left: 6px;
+    font-size: 11px;
+    color: #c4c9c0;
+}
+
 .upgrade__marks {
     flex-direction: row;
     margin-top: 4px;

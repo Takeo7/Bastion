@@ -165,6 +165,69 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void CarefulItTakesTheWayToTheNearestRefugeAndGoesHomeFromItAfterItsFights()
+        {
+            // For the bench (Red, 23/11; Producto): home after one fight, by the way with a Refuge just past it.
+            var c = Solo();
+            var run = Start(c);
+            var heard = Heard(c, 0);
+            heard.Care = new HeardGame.Carefulness { Fights = 1 };
+            var first = RunMap.Node(run, Assert.IsType<ChooseNodeCommand>(heard.BaseOrder(0, true)).Node)!;
+            Assert.True(RunMap.IsFight(first.Kind), first.Kind);
+            Assert.Contains(first.Next, (id) => RunMap.Node(run, id)!.Kind == NodeKinds.Refuge);
+            // Its fight played: to the Refuge, and home from it.
+            run.Path.Add(first.Id);
+            run.At = first.Id;
+            var go = Assert.IsType<ChooseNodeCommand>(Done(heard, c, 0, Zero));
+            Assert.Equal(NodeKinds.Refuge, RunMap.Node(run, go.Node)!.Kind);
+            Assert.IsType<EndRunCommand>(Done(heard, c, 0, Zero));
+            Assert.Null(c.Run);
+        }
+
+        [Fact]
+        public void FromTheExpeditionForElToroOnItsFightsDontSendItHome()
+        {
+            var c = Solo();
+            var run = Start(c);
+            run.HomeFromRefuge = null;
+            var heard = Heard(c, 0);
+            heard.Care = new HeardGame.Carefulness { Fights = 1, ToroFrom = 1 };
+            Assert.Equal(RunMap.Choices(run)[0].Id, Assert.IsType<ChooseNodeCommand>(heard.BaseOrder(0, true)).Node);
+            var first = RunMap.Choices(run)[0];
+            run.Path.Add(first.Id);
+            run.At = first.Id;
+            Assert.IsType<ChooseNodeCommand>(heard.BaseOrder(0, true));
+            heard.Care.ToroFrom = 2;
+            Assert.IsType<EndRunCommand>(heard.BaseOrder(0, true));
+        }
+
+        [Fact]
+        public void CarefulWithOneHurtItGoesHome()
+        {
+            var c = Solo();
+            var run = Start(c);
+            // A run of before G22's: home from the map, to see the wish alone.
+            run.HomeFromRefuge = null;
+            var heard = Heard(c, 0);
+            heard.Care = new HeardGame.Carefulness { Hurt = true };
+            Assert.IsType<ChooseNodeCommand>(heard.BaseOrder(0, true));
+            var first = RunMap.Choices(run)[0];
+            run.Path.Add(first.Id);
+            run.At = first.Id;
+            // All whole after a fight: on.
+            Assert.IsType<ChooseNodeCommand>(heard.BaseOrder(0, true));
+            // One short of their health: home. Without care, on (Homeward: at half the squad's health).
+            var s = Squad(c)[0];
+            run.Hp[s.Id] = Runs.MaxHp(s) - 1;
+            Assert.IsType<EndRunCommand>(heard.BaseOrder(0, true));
+            heard.Care = null;
+            Assert.IsType<ChooseNodeCommand>(heard.BaseOrder(0, true));
+            // Going for El Toro, still.
+            heard.Care = new HeardGame.Carefulness { Hurt = true, ToroFrom = 1 };
+            Assert.IsType<EndRunCommand>(heard.BaseOrder(0, true));
+        }
+
+        [Fact]
         public void AWoundedSoldierGetsAMedicineBeforeTheWayOn()
         {
             var c = Solo();

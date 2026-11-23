@@ -33,9 +33,9 @@
     font-size: 16px;
 }
 
+/* The name, and under it which of how many and how to change (B23). */
 .shot-target {
-    flex-direction: row;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
     flex-grow: 1;
 }
@@ -51,7 +51,6 @@
 
 .shot-target__index {
     font-size: 11px;
-    margin-left: 4px;
 }
 
 .shot-numbers {

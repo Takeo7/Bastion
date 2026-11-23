@@ -80,7 +80,8 @@ namespace Bastion.UI.Hud
             Ui.Show(host.Q("head"), !self);
             host.Q<Label>("target").text = v.TargetName ?? "";
             // With others to aim at, how to go to them (Arturo, 5/11 #11): the arrows, Tab, or a click on their odds.
-            host.Q<Label>("index").text = v.Total > 1 ? HudText.Shot.Index(v.Index + 1, v.Total) : v.Total > 0 ? $"{v.Index + 1}/{v.Total}" : "";
+            // A single target, nothing («1/1» said nothing; B23).
+            host.Q<Label>("index").text = v.Total > 1 ? HudText.Shot.Index(v.Index + 1, v.Total) : "";
 
             Ui.Show(host.Q("numbers"), attack);
             if (attack)

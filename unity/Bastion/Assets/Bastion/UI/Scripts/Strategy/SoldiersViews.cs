@@ -210,7 +210,7 @@ namespace Bastion.UI.Strategy
     public sealed class SkillRowView
     {
         public string Name;
-        /// <summary>«+8 %» growth from the last missions; null, none.</summary>
+        /// <summary>The growth from the last missions and what it raises, «Puntería cuerpo a cuerpo +8 %», «Esquiva +2»; null, none.</summary>
         public string Growth;
         /// <summary>The experience into the bar being filled, and how far that is of it (0–1).</summary>
         public int Value;

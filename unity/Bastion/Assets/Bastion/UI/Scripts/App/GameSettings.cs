@@ -495,6 +495,7 @@ namespace Bastion.UI.App
         {
             Id = RouterId,
             Label = RouterText.Label,
+            Hint = RouterText.Hint,
             About = RouterText.About,
             Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
             ChoiceTips = new System.Collections.Generic.List<string> { RouterText.YesTip, RouterText.NoTip },
@@ -502,11 +503,26 @@ namespace Bastion.UI.App
             Tail = true,
         };
 
+        /// <summary>
+        /// What a row does in a line, under its name, where the name alone didn't say it (Producto's review, 23/11, B7);
+        /// the cap's, only with the sync on (and a cap chosen). Lore's, 23/11.
+        /// </summary>
+        static class Hints
+        {
+            public const string Auto = "Baja los gráficos si el combate no va fluido.";
+            public const string Interface = "El tamaño de los textos y los paneles.";
+            public const string Cinema = "Más contraste y más bruma a lo lejos.";
+            public const string Sync = "Que la imagen no se parta al mover la cámara.";
+            public const string CapSynced = "Con la sincronía, el límite se redondea hacia arriba según la pantalla: con 60 en una de 144 Hz, va a 72.";
+        }
+
         /// <summary>The router's row's words (Lore, .dev-snapshots/lore/0.12.17/TEXTOS.md §5).</summary>
         public static class RouterText
         {
             public const string Label = "Abrir el puerto del router";
             public const string About = "Al alojar una partida, el juego abre su puerto en el router. Así, quien juegue contigo puede entrar por internet con la dirección y la clave. Con el puerto abierto, quien entra por primera vez desde tu red también necesita la clave. Con «No», el juego no toca el router: se entra desde tu red o con Tailscale.";
+            /// <summary>Under its name (B7; provisional, Lore reviews the five).</summary>
+            public const string Hint = "Para jugar por internet sin Tailscale.";
             public const string YesTip = "Se puede entrar por internet";
             public const string NoTip = "Desde tu red o con Tailscale";
         }
@@ -592,6 +608,7 @@ namespace Bastion.UI.App
             {
                 Id = CinemaId,
                 Label = "Aspecto de película",
+                Hint = Hints.Cinema,
                 About = "Más contraste y colores algo más oscuros, y más bruma a lo lejos de día. No cambia las reglas ni lo que se ve del combate.",
                 Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
                 On = Cinematic ? 0 : 1,
@@ -600,6 +617,12 @@ namespace Bastion.UI.App
             {
                 Id = CapId,
                 Label = "Límite de FPS",
+                // With the sync on it still counts, as a frame every so many refreshes (Pacing): said, not greyed (B7); only
+                // with a cap chosen (Lore), and following both rows as they are changed (Producto, 23/11: it didn't).
+                Hint = Application.platform != RuntimePlatform.IPhonePlayer ? Hints.CapSynced : null,
+                HintWith = VSyncId,
+                HintWithOn = 0,
+                HintNotOn = Array.IndexOf(Caps, 0),
                 About = "Menos imágenes por segundo: menos trabajo para la tarjeta gráfica y la batería.",
                 Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(Caps, c => c == 0 ? "Sin límite" : c.ToString())),
                 On = Math.Max(0, Array.IndexOf(Caps, FpsCap)),
@@ -609,6 +632,7 @@ namespace Bastion.UI.App
             {
                 Id = VSyncId,
                 Label = "Sincronía vertical",
+                Hint = Hints.Sync,
                 About = "Que la imagen no se vea partida en horizontal al mover la cámara. No da más imágenes por segundo que la pantalla, y con un límite de FPS puede pasarlo un poco.",
                 Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
                 On = VSync ? 0 : 1,
@@ -639,6 +663,7 @@ namespace Bastion.UI.App
             {
                 Id = InterfaceId,
                 Label = "Interfaz",
+                Hint = Hints.Interface,
                 About = "El tamaño de los textos y paneles del juego. La vista 3D no cambia.",
                 Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(InterfaceSizes, k => $"{Mathf.RoundToInt(k * 100)} %")),
                 On = Math.Max(0, Array.IndexOf(InterfaceSizes, InterfaceSize)),
@@ -651,6 +676,7 @@ namespace Bastion.UI.App
         {
             Id = AutoId,
             Label = "Ajuste auto",
+            Hint = Hints.Auto,
             About = "Si el combate va a menos de 45 imágenes por segundo, baja los gráficos un nivel cada vez. Si eliges tú los gráficos, no los toca.",
             Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
             ChoiceTips = new System.Collections.Generic.List<string> { "Baja la calidad si el combate no va fluido", "Siempre la calidad elegida" },

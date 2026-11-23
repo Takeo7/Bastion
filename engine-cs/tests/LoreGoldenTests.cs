@@ -4007,7 +4007,7 @@ namespace Bastion.Engine.Tests
 
             // premise and valley
             Assert.Equal("El claro", Lore.Premise.Title);
-            Assert.Equal(new string[] { "La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, **aunque salir sigue siendo peligroso**, quizá sea el momento de volver a intentarlo.", "Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en un claro del pinar, sobre Metsovo, con una autocaravana y lo puesto: **un cuchillo cada uno, dos pistolas, un machete y una palanca**. Ni granadas ni botiquín. Necesitamos **armas, comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.", "Toca volver a sacar **La Lata**, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta." }, Lore.Premise.Lines);
+            Assert.Equal(new string[] { "Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en un claro del pinar, sobre Metsovo, con **un cuchillo cada uno** y nada más.", "Este invierno, la nieve ha enterrado a muchos muertos: **es el momento de salir** a por armas, medicinas y suministros. Por ahora, **La Lata** es una moto, y caben dos." }, Lore.Premise.Lines);
             Assert.Equal("Coche patrulla", Lore.AlarmNames["police"]);
             Assert.Equal("Ambulancia", Lore.AlarmNames["ambulance"]);
             Assert.Equal("Alarma de la nave", Lore.AlarmNames["factory"]);

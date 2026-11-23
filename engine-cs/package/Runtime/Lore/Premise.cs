@@ -7,15 +7,19 @@ namespace Bastion.Engine
     {
         // ----------------------------------------------------------------- premise
 
-        /// <summary>The card before the first mission: who the players are and why they fight. One paragraph per line; the key words in **bold** (playtest 20/10 #15, UI renders it).</summary>
+        /// <summary>
+        /// The card before the first mission: who the players are and why they go out. One paragraph per line; the key words
+        /// in **bold** (playtest 20/10 #15, UI renders it). Two short paragraphs, true to the runs (Producto's review, 23/11
+        /// #13: it covered the soldiers and was the first screen's longest text): a knife each and nothing else
+        /// (CreateRunsCampaign), and La Lata a motorbike for two (Runs.Seats).
+        /// </summary>
         public static class Premise
         {
             public const string Title = "El claro";
             public static readonly IReadOnlyList<string> Lines = new[]
             {
-                "La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, **aunque salir sigue siendo peligroso**, quizá sea el momento de volver a intentarlo.",
-                "Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en un claro del pinar, sobre Metsovo, con una autocaravana y lo puesto: **un cuchillo cada uno, dos pistolas, un machete y una palanca**. Ni granadas ni botiquín. Necesitamos **armas, comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.",
-                "Toca volver a sacar **La Lata**, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta.",
+                "Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en un claro del pinar, sobre Metsovo, con **un cuchillo cada uno** y nada más.",
+                "Este invierno, la nieve ha enterrado a muchos muertos: **es el momento de salir** a por armas, medicinas y suministros. Por ahora, **La Lata** es una moto, y caben dos.",
             };
         }
 

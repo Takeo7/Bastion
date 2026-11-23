@@ -136,6 +136,8 @@ namespace Bastion.UI.Hud
         {
             layer.Clear();
             notes.Clear();
+            hints.Clear();
+            rowsById.Clear();
             var card = Ui.El("panel game-menu__card", layer);
             // mixta.css .game-menu-card: a big plate in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
             PlateFrame.Dress(card);
@@ -195,6 +197,7 @@ namespace Bastion.UI.Hud
                 }
                 else
                     foreach (var s in view.Settings) Setting(rows, s);
+                Hints();
                 // Only where there are keys to tell (the battle's): the base's and the start screen's had an empty page.
                 if (view.Controls.Count > 0) Entry(card, HudText.Menu.Controls, () => Page("controls"));
                 BackTo(card, "main");
@@ -345,9 +348,21 @@ namespace Bastion.UI.Hud
         /// <summary>The notes under the rows of the page open, and the rows whose change takes each away (SettingView.NoteGoesWith).</summary>
         readonly List<(VisualElement note, List<string> ids)> notes = new List<(VisualElement, List<string>)>();
 
+        /// <summary>The hints of the page open that hang on a choice (SettingView.HintWith), and its rows by id.</summary>
+        readonly List<(VisualElement hint, SettingView s)> hints = new List<(VisualElement, SettingView)>();
+        readonly Dictionary<string, SettingView> rowsById = new Dictionary<string, SettingView>();
+
+        /// <summary>Each hanging hint shown or not by the choices as they stand.</summary>
+        void Hints()
+        {
+            foreach (var (hint, s) in hints)
+                Ui.Show(hint, (!rowsById.TryGetValue(s.HintWith, out var with) || with.On == s.HintWithOn) && s.On != s.HintNotOn);
+        }
+
         /// <summary>A row changed: the notes it makes stale go (Ajuste auto's, as it gives back or the level is chosen), and it is said.</summary>
         void Change(string id, float value)
         {
+            Hints();
             notes.RemoveAll(n =>
             {
                 if (n.ids == null || !n.ids.Contains(id)) return false;
@@ -362,6 +377,17 @@ namespace Bastion.UI.Hud
         {
             var row = Ui.El("setting", rows);
             Ui.Text(s.Label.ToUpperInvariant(), "setting__name", row);
+            if (!string.IsNullOrEmpty(s.Id)) rowsById[s.Id] = s;
+            if (!string.IsNullOrEmpty(s.Hint))
+            {
+                var hint = Ui.Text(s.Hint, "setting__hint", row);
+                if (!string.IsNullOrEmpty(s.HintWith))
+                {
+                    hints.Add((hint, s));
+                    // Shown or not once its rows are all there (Page calls Hints after them too): hidden till then.
+                    Ui.Show(hint, false);
+                }
+            }
             tips?.Attach(row, s.About);
             var choices = Ui.El("setting__choices", row);
             if (!string.IsNullOrEmpty(s.Note)) notes.Add((Ui.Text(s.Note, "setting__note", row), s.NoteGoesWith));

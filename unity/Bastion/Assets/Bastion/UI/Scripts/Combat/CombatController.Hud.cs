@@ -778,8 +778,10 @@ namespace Bastion.UI.Combat
                     Short = !string.IsNullOrEmpty(u.Nickname) ? u.Nickname : u.Name.Split(' ')[0],
                     Mine = mine,
                     Selected = u.Id == picked,
-                    // (El herido carried, U25: not alive in the engine's sense while on someone's back, never fallen.)
-                    Dead = !u.Alive && !u.Evacuated && u.CarriedBy == null,
+                    // (El herido carried, U25: not alive in the engine's sense while on someone's back, never fallen.) Fallen as
+                    // soon as their health is gone, with the bar, not once their death has played (R19 of Red, 23/11: a jump that
+                    // kills, «CAÍDO» 2.6 s after the bar emptied); only mid-playback is anyone alive at 0.
+                    Dead = (!u.Alive || u.Hp <= 0) && !u.Evacuated && u.CarriedBy == null,
                     // Inside La Lata (T24) it plays on (Bajar, Evacuar): not greyed as one already gone.
                     Evacuated = u.Evacuated && u.Aboard != true,
                     InPlay = u.Id == inPlay,
@@ -959,8 +961,9 @@ namespace Bastion.UI.Combat
             }
             // The pistol carried beside a main gun counts its own rounds; the spares serve both.
             if (sidearm) view.Stats.Add(new StatView { Kind = "sidearm", Tip = $"{pistol}: {u.PistolAmmo ?? 0}/{Content.PistolClip}", Filled = u.PistolAmmo ?? 0, Total = Content.PistolClip });
-            if (gun) view.Stats.Add(new StatView { Kind = "aim", Tip = $"Puntería al disparar {aim + u.Mods.GunAim}", Value = (aim + u.Mods.GunAim).ToString() });
-            if (soldier) view.Stats.Add(new StatView { Kind = "melee", Tip = $"Puntería cuerpo a cuerpo {aim + u.Mods.MeleeAim}", Value = (aim + u.Mods.MeleeAim).ToString() });
+            // Their words always in sight (B24, Producto 23/11): «PUNT. 55», «CaC 58»; the blade's the spare one with a gun in hand.
+            if (gun) view.Stats.Add(new StatView { Kind = "aim", Tip = $"Puntería al disparar {aim + u.Mods.GunAim}", Value = (aim + u.Mods.GunAim).ToString(), Word = HudText.Stats.Aim });
+            if (soldier) view.Stats.Add(new StatView { Kind = "melee", Tip = $"Puntería cuerpo a cuerpo {aim + u.Mods.MeleeAim}", Value = (aim + u.Mods.MeleeAim).ToString(), Word = HudText.Stats.Melee, Spare = gun });
             if (u.Charges.TryGetValue(ChargeIds.Grenade, out var grenades)) view.Stats.Add(new StatView { Kind = "grenade", Tip = $"Granadas: {grenades}", Value = $"×{grenades}" });
             if (u.Charges.TryGetValue(ChargeIds.Molotov, out var molotovs)) view.Stats.Add(new StatView { Kind = "molotov", Tip = $"Cócteles molotov: {molotovs}", Value = $"×{molotovs}" });
             if (u.Armor > 0) view.Stats.Add(new StatView { Kind = "armor", Tip = $"Blindaje {u.Armor}", Value = u.Armor.ToString() });

@@ -172,6 +172,7 @@ namespace Bastion.UI.Hud
                 var pips = Ui.El("pips pips--" + (s.Kind == "ap" || s.Kind == "moves" ? s.Kind : s.Kind == "ammo" || s.Kind == "sidearm" ? "ammo" : "hp"), e);
                 Ui.Pips(pips, s.Filled, s.Total);
             }
+            if (!string.IsNullOrEmpty(s.Word)) Ui.Text(s.Word, s.Spare ? "stat__word stat__word--spare" : "stat__word", e);
             if (!string.IsNullOrEmpty(s.Value)) Ui.Text(s.Value, s.ValueBad ? "stat__value stat__value--bad" : "stat__value", e);
             tips.Attach(e, s.Tip);
             return e;

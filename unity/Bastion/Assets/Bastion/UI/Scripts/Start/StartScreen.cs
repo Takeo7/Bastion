@@ -14,7 +14,7 @@ namespace Bastion.UI.Start
     /// The start screen (Arturo's notes of 14/11, menu-inicial; 0.12.24), over Arte's scene. The main menu: BASTIÓN at the
     /// top left and under it Continuar partida (with a game saved), Nueva partida, Partida multijugador, Ajustes and Salir
     /// de Bastión, on a dark band fading into the scene. «Partida multijugador»: two cards, Alojar partida and, on the
-    /// right, «Unirte a la partida de Ana» when a game is heard on the network, else «Unirse por dirección», which asks
+    /// right, «Unirse a la partida de Ana» when a game is heard on the network, else «Unirse por dirección», which asks
     /// for the address and its key. The name is asked before a new game (and before anything while there is none); a new
     /// game over a saved one is asked first.
     ///
@@ -64,13 +64,13 @@ namespace Bastion.UI.Start
         string afterNameWaiting;
         /// <summary>
         /// The game's level (N9; cuadro 125, Arturo 23/11: the four as cards in the middle, Medio picked to start with), asked
-        /// with the name for a new game and to host one (the room makes it with this: RoomMenu, HostLevel).
+        /// with the name for a new game; a hosted one's, in the room (RoomMenu, HostLevel).
         /// </summary>
         string level = Bastion.Engine.LevelIds.Medium;
         bool askingLevel;
         VisualElement levelsBox;
         LevelPicker levelPicker;
-        /// <summary>The level the host picked before the room (cuadro 125: until the room asks it itself), for its «Nueva partida».</summary>
+        /// <summary>The level last picked in the room's «Nueva partida» (cuadro 124), marked there the next time.</summary>
         public static string HostLevel = Bastion.Engine.LevelIds.Medium;
         bool busy;
         NetLink link;
@@ -270,6 +270,10 @@ namespace Bastion.UI.Start
         void Update()
         {
             if (root == null) return;
+            // Ajustes over the title and the keys hid part of «BASTIÓN» (and, on the Duo, of «PARTIDA MULTIJUGADOR»; Producto's
+            // review, 23/11): they step out of sight while it is open, the band stays.
+            var under = settings.Open ? Visibility.Hidden : Visibility.Visible;
+            if (side.resolvedStyle.visibility != under) side.style.visibility = under;
             // Esc: Ajustes or its question first, then a step back (the form, Partida multijugador).
             if (UnityEngine.InputSystem.Keyboard.current?.escapeKey.wasPressedThisFrame != true) return;
             if (settings.Back() || busy) return;
@@ -364,12 +368,11 @@ namespace Bastion.UI.Start
 
         void OpenSettings() => settings.Show(new GameMenuView { Settings = App.GameSettings.Views(), SettingsNote = StartText.SettingsHere }, "settings");
 
-        /// <summary>«Alojar partida»: the name and the level first (cuadro 125), the level kept for the room's «Nueva partida».</summary>
-        void Host() => AskName(Page.Two, name =>
-        {
-            HostLevel = level;
-            return link.Host(name);
-        }, StartText.Opening, StartText.HostGo, true);
+        /// <summary>
+        /// The left card: the game hosted under the name last played with (asked first with none). Its level isn't asked here
+        /// but in the room, on «Nueva partida» (cuadro 124: going on with a game saved needs none).
+        /// </summary>
+        void Host() => WithName(Page.Two, name => link.Host(name), StartText.Opening, StartText.HostGo);
 
         /// <summary>The right card: into the game heard on the network; with none, the address and its key asked.</summary>
         void JoinCard()
@@ -462,7 +465,7 @@ namespace Bastion.UI.Start
             status.EnableInClassList("start__status--bad", bad);
         }
 
-        /// <summary>The games heard on the network: the right card joins the first of this version («Unirte a la partida de Ana»).</summary>
+        /// <summary>The games heard on the network: the right card joins the first of this version («Unirse a la partida de Ana»).</summary>
         void Heard(IReadOnlyList<LanGame> list)
         {
             heardList = list ?? new LanGame[0];
@@ -472,9 +475,10 @@ namespace Bastion.UI.Start
 
         /// <summary>
         /// The main menu's band (p1: «Fundir en diagonal el fondo oscuro de la columna con la escena»): dark from the left
-        /// to SolidTop of the width at the top and SolidFoot at the foot, then clear over Band more, on the same slant.
+        /// to SolidTop of the width at the top and SolidFoot at the foot, then clear over Band more, on the same slant. The
+        /// room's too (RoomMenu, cuadro 124).
         /// </summary>
-        static void Fade(MeshGenerationContext ctx)
+        internal static void Fade(MeshGenerationContext ctx)
         {
             var r = ctx.visualElement.contentRect;
             float w = r.width, h = r.height;

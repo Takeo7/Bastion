@@ -64,6 +64,56 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void ToThemInsideBesideAWindowItGoesRoundByTheDoor()
+        {
+            // Red's R2 by level (23/11, hard, 4 seats, seed 49): the wounded in a house of the field, a window beside them, the
+            // last soldier outside it. The place it chose to take them up from was the window, nowhere to stop on, and it
+            // crouched there 41 turns; now one inside, round by the door.
+            var s = Step1Helpers.StateFrom(new[]
+            {
+                "..........",
+                "..#####...",
+                "..+...#...",
+                "..#...#...",
+                "..=...#...",
+                "..#...#...",
+                "..#####...",
+                "..........",
+            });
+            s.Mission.Kind = MissionKinds.Rescue;
+            s.Run = new RunFight { NodeKind = NodeKinds.Wounded };
+            s.Mission.EvacZone = new List<Vec2> { new Vec2 { X = 0, Y = 7 }, new Vec2 { X = 1, Y = 7 } };
+            var u = Step1Helpers.AddUnit(s, "s1", TemplateIds.Rookie, 1, 4, extra: (x) => x.Arms = new Arms { Pistol = false });
+            var w = Step1Helpers.AddUnit(s, "v1", TemplateIds.Vip, 3, 5, extra: (x) =>
+            {
+                x.Lame = true;
+                x.Ap = 0;
+                x.Moves = 0;
+            });
+            s.Mission.ObjectiveUnit = w.Id;
+            s.Mission.Wounded = true;
+            s.Concealed = false;
+            Assert.Equal(TileKinds.Window, Grid.KindAt(s, new Pos { X = 2, Y = 4, Z = 0 }));
+            Assert.NotNull(Abilities.CarryTarget(s, u, new Pos { X = 2, Y = 4, Z = 0 }));
+            var rng = new Rng(5);
+            for (var turn = 0; turn < 3 && u.Carrying == null; turn++)
+            {
+                for (var k = 0; k < 20 && u.Carrying == null; k++)
+                {
+                    var cmd = MissionBot.Next(s, 0, Zero);
+                    if (cmd == null || cmd is EndTurnCommand) break;
+                    // Its first order goes for them (it crouched there for ever).
+                    if (turn == 0 && k == 0) Assert.True(cmd is MoveCommand, Json.Write(cmd));
+                    Assert.True(Rules.ExecuteCommand(s, cmd, 0, Zero, rng).Ok, Json.Write(cmd));
+                }
+                u.Ap = 2;
+                u.Moves = null;
+            }
+            Assert.True(u.Carrying == w.Id, $"at {u.Pos.X},{u.Pos.Y}");
+            Assert.True(Flights.CanStopAt(s, u.Pos));
+        }
+
+        [Fact]
         public void CarryingThemBesideLaLataItSetsThemDownInIt()
         {
             var (s, u, w) = Alone(3);

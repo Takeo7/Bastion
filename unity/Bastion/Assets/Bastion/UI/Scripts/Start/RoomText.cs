@@ -22,7 +22,19 @@ namespace Bastion.UI.Start
         /// </summary>
         public static string Invite(string name) => string.IsNullOrEmpty(name)
             ? "Quien juegue contigo verá tu partida en «Partida multijugador» de su app. Si no la ve, que pulse «Unirse por dirección» y escriba:"
-            : $"Quien juegue contigo verá «Unirte a la partida de {name}» en «Partida multijugador». Si no le sale, que pulse «Unirse por dirección» y escriba:";
+            : $"Quien juegue contigo verá «{StartText.JoinOf(name)}» en «Partida multijugador». Si no le sale, que pulse «Unirse por dirección» y escriba:";
+        /// <summary>
+        /// The room as a screen of the game (cuadro 124, Arturo 23/11): its title, the start screen's «Partida multijugador»;
+        /// this app's seat; Invite in two, its first half on the screen and the addresses behind «¿No le sale tu partida?»
+        /// (Arturo's words). Lore's, 23/11; the card quoted by StartText.JoinOf itself, so the two never part.
+        /// </summary>
+        public static string Title => StartText.Two;
+        public const string You = "Tú";
+        public static string InviteSeen(string name) => string.IsNullOrEmpty(name)
+            ? "Quien juegue contigo verá tu partida en «Partida multijugador» de su app."
+            : $"Quien juegue contigo verá «{StartText.JoinOf(name)}» en «Partida multijugador».";
+        public const string NotSeen = "¿No le sale tu partida?";
+        public const string InviteAddress = "Que pulse «Unirse por dirección» en su app y escriba:";
         /// <summary>On iOS the game isn't announced on the network (NetLink.LanBlind): the address is the only way in (Lore, 7/11).</summary>
         public const string InviteBlind = "Quien juegue contigo tiene que escribir en «Unirse por dirección» de su app:";
         /// <summary>Each of the host's addresses, by what it is (net.ts inviteLinks of the 0.10.1).</summary>
@@ -115,6 +127,18 @@ namespace Bastion.UI.Start
             if (s.InMission != null) return $"Misión a medias: {s.InMission}";
             var outings = Lore.OutingsMark(s.Missions);
             return $"{outings.Substring(0, 1)}{outings.Substring(1).ToLowerInvariant()} · Nivel {s.Level} · {Lore.DoomName(s.Level)} {s.Doom}/12";
+        }
+
+        /// <summary>
+        /// Under «Continuar partida», after the chapter and level (StartText.SavedLine; cuadro 124): where the game is, «Etapa 3
+        /// de 7 · 4 soldados · 245 §» or the stage left half played; a campaign of before the runs, as Saved.
+        /// </summary>
+        public static string SavedWhere(SavedCampaign s)
+        {
+            if (s.Chapter <= 0) return Saved(s);
+            if (s.InMission != null) return $"Etapa a medias: {s.InMission}";
+            var where = s.Row == null ? "En la base" : s.Row == 0 ? "Antes de la etapa 1" : $"Etapa {s.Row} de 7";
+            return $"{where} · {(s.Soldiers == 1 ? "1 soldado" : $"{s.Soldiers} soldados")} · {s.Supplies} §";
         }
 
         /// <summary>The saved campaign the new one replaces (renderConfirm).</summary>

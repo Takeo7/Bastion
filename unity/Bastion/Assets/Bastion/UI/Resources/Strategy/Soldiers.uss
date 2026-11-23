@@ -271,8 +271,30 @@
     margin: 2px 0 4px;
 }
 
+/* Each its word before it and its figure after (B9). */
+.sheet-lines__line {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 3px;
+}
+
+.sheet-lines__word {
+    width: 86px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #c4c9c0;
+}
+
+.sheet-lines__figure {
+    width: 22px;
+    margin-left: 4px;
+    font-size: 12px;
+    -unity-text-align: middle-right;
+    color: #ffffff;
+}
+
 .sheet-lines__row {
-    margin-bottom: 4px;
+    flex-grow: 1;
 }
 
 .sheet-lines__row .pip {
@@ -438,7 +460,7 @@
 }
 
 .skill-row__growth {
-    margin-left: 6px;
+    margin-top: 1px;
     font-size: 12px;
     color: #8fd05a;
 }

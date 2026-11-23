@@ -324,9 +324,20 @@
     color: #e2d6b4;
 }
 
-.runstop__ware-name {
+.runstop__ware-words {
     flex-grow: 1;
+    justify-content: center;
+}
+
+.runstop__ware-name {
     font-size: 15px;
+}
+
+/* Why it can't be had now (B18), amber and small under its name, as «Sin plaza libre» on the map. */
+.runstop__ware-why {
+    margin-top: 1px;
+    font-size: 12px;
+    color: rgb(242, 199, 115);
 }
 
 .runstop__price {

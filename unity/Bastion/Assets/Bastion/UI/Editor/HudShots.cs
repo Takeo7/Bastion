@@ -74,13 +74,17 @@ namespace Bastion.UI.EditorTools
             start.Preview(System.Array.IndexOf(parts, "guardada") >= 0, heard, parts[0]);
         }
 
-        /// <summary>The room menu with a made-up room (RoomLab): Arturo hosting, Ana to come, the addresses to give her.</summary>
+        /// <summary>
+        /// The room menu with a made-up room (RoomLab): Arturo hosting, Ana to come, the addresses to give her. Over Arte's
+        /// crossroads, which the room puts up itself (cuadro 124), shot from where its camera stands.
+        /// </summary>
         public static void Room()
         {
             var camera = new GameObject("Shot camera").AddComponent<Camera>();
             camera.tag = "MainCamera";
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.05f, 0.06f, 0.06f);
+            camera.gameObject.AddComponent<Bastion.UI.Start.StartScreen.BackdropShot>();
             var screen = new GameObject("Room");
             screen.AddComponent<UIDocument>().panelSettings = Panel();
             screen.AddComponent<Bastion.UI.Start.RoomMenu>();

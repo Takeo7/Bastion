@@ -22,6 +22,17 @@ namespace Bastion.Engine.Tests
             return ((IPEndPoint)probe.Client.LocalEndPoint!).Port;
         }
 
+        /// <summary>
+        /// Waits for what is heard. The ceiling is only reached when nothing comes: with the whole suite running, the
+        /// threads that listen and announce can wait seconds for their turn (5 s fell short on 23/11).
+        /// </summary>
+        private static async Task<IReadOnlyList<LanGame>> Heard(TaskCompletionSource<IReadOnlyList<LanGame>> heard)
+        {
+            var done = await Task.WhenAny(heard.Task, Task.Delay(60000));
+            Assert.True(done == heard.Task, "nothing heard in 60 s");
+            return await heard.Task;
+        }
+
         [Fact]
         public async Task AnAnnouncedGameIsHeard()
         {
@@ -29,9 +40,7 @@ namespace Bastion.Engine.Tests
             var heard = new TaskCompletionSource<IReadOnlyList<LanGame>>();
             using var listen = LanBeacon.Listen((games) => { if (games.Count > 0) heard.TrySetResult(games); }, null, udp);
             using var announce = LanBeacon.Announce(3999, "mac-de-arturo", "1.0.0", () => (new[] { "Arturo", "Ana" }, "mission"), udp);
-            var done = await Task.WhenAny(heard.Task, Task.Delay(5000));
-            Assert.True(done == heard.Task, "nothing heard in 5 s");
-            var game = (await heard.Task).Single();
+            var game = (await Heard(heard)).Single();
             Assert.Equal("Arturo", game.Name);
             Assert.EndsWith(":3999", game.Address);
             Assert.Equal(new[] { "Arturo", "Ana" }, game.Players);
@@ -80,22 +89,23 @@ namespace Bastion.Engine.Tests
         [Fact]
         public async Task AStrangePacketDoesNotStopTheListening()
         {
-            // A packet of another program, or one made by hand, then a game: the game is heard.
+            // A packet of another program, or one made by hand, then a game: the game is heard. All three from one socket,
+            // in that order, to the listening one, bound before Listen returns: they wait there, in order, for however long
+            // the listening thread takes to start, and no timer of Announce comes into it.
             int udp = FreeUdpPort();
             var heard = new TaskCompletionSource<IReadOnlyList<LanGame>>();
             using var listen = LanBeacon.Listen((games) => { if (games.Count > 0) heard.TrySetResult(games); }, null, udp);
             using (var other = new UdpClient(AddressFamily.InterNetwork))
             {
-                foreach (var text in new[] { "{\"game\":{\"a\":1},\"port\":3000}", "{\"game\":\"bastion-tcp\",\"port\":123456789012345678901234567890}" })
+                foreach (var text in new[] { "{\"game\":{\"a\":1},\"port\":3000}", "{\"game\":\"bastion-tcp\",\"port\":123456789012345678901234567890}", "{\"game\":\"bastion-tcp\",\"port\":3999,\"name\":\"Arturo\",\"players\":[\"Arturo\"],\"phase\":\"lobby\",\"version\":\"1.0.0\"}" })
                 {
                     var data = Encoding.UTF8.GetBytes(text);
                     await other.SendAsync(data, data.Length, new IPEndPoint(IPAddress.Loopback, udp));
                 }
             }
-            using var announce = LanBeacon.Announce(3999, "mac-de-arturo", "1.0.0", () => (new[] { "Arturo" }, "lobby"), udp);
-            var done = await Task.WhenAny(heard.Task, Task.Delay(5000));
-            Assert.True(done == heard.Task, "nothing heard in 5 s");
-            Assert.EndsWith(":3999", (await heard.Task).Single().Address);
+            var game = (await Heard(heard)).Single();
+            Assert.Equal("Arturo", game.Name);
+            Assert.EndsWith(":3999", game.Address);
         }
 
         [Fact]

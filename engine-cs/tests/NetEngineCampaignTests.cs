@@ -979,6 +979,35 @@ namespace Bastion.Engine.Tests
         }
 
         /// <summary>
+        /// Cuadro 130 (Arturo, 23/11): «Alojar partida» asks only the name, and the level is picked in the room, on «Nueva
+        /// partida» (RoomMenu), by either. Hosted with a game at Medio left for the menu (the room opens a save in its phase),
+        /// one who joins sees its level in the room before anything; then they start a new one at Supervivencia, and the room
+        /// makes it for both, the old kept aside.
+        /// </summary>
+        [Fact]
+        public void TheOneWhoJoinsSeesTheLevelAndMayStartAnother()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign", level = LevelIds.Medium });
+            Assert.Equal(LevelIds.Medium, host.Saved().GameLevel);
+            host.Say(ana, new { t = "backToMenu" });
+            host.Room = host.Make();
+            ana = host.Join("Ana", anaToken);
+            Assert.Equal("lobby", host.Room.Summary().phase);
+            var pepe = host.Join("Pepe");
+            Assert.Equal(LevelIds.Medium, (string?)pepe.Take("room").Last()["savedCampaign"]!["gameLevel"]);
+            host.Say(pepe, new { t = "newCampaign", level = LevelIds.Survival });
+            Assert.Equal("base", host.Room.Summary().phase);
+            Assert.Equal(LevelIds.Survival, CampaignOf(ana).GameLevel);
+            Assert.Equal(LevelIds.Survival, CampaignOf(pepe).GameLevel);
+            Assert.Equal(LevelIds.Survival, host.Saved().GameLevel);
+            Assert.Contains(host.Log, (l) => l.StartsWith("[save] La campaña anterior queda en"));
+            Assert.Contains("[campaña] Nueva partida, nivel survival, con 2 jugador(es).", host.Log);
+        }
+
+        /// <summary>
         /// N9: a new game without a level, and a save from before N9 (no field at all), are Difícil, as every game before: never
         /// Medio, the level a new one starts marked at (cuadro 125, UI's). Opened again and saved again by the room, still no
         /// level in the file, and Difícil for the lobby and the start screen (SaveStore.Peek).

@@ -1026,10 +1026,11 @@ namespace Bastion.Net
             }
             if (w.CarriedBy != null && Grid.GetUnit(s, w.CarriedBy) is Unit carrier) return carrier.Pos;
             if (!w.Alive) return null;
-            // A free place beside them that takes them up, by the walk past the squad.
+            // A free place beside them that takes them up, by the walk past the squad; one to stop on (R2 by level, 23/11, hard,
+            // 4 seats, seed 49: a window beside them, and the soldier crouched by it 41 turns).
             var past = Paths.ComputeReach(s, u, double.MaxValue, null, (o) => o.Id != u.Id);
             return Grid.Dirs8.Select((d) => new Pos { X = w.Pos.X + d.X, Y = w.Pos.Y + d.Y, Z = w.Pos.Z })
-                .Where((p) => Grid.InBounds(s, p.X, p.Y) && (Grid.UnitAt(s, p) == null || Grid.UnitAt(s, p) == u) && Abilities.CarryTarget(s, u, p) != null && past.Cost.ContainsKey(Grid.NodeOf(s, p)))
+                .Where((p) => Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p) && (Grid.UnitAt(s, p) == null || Grid.UnitAt(s, p) == u) && Abilities.CarryTarget(s, u, p) != null && past.Cost.ContainsKey(Grid.NodeOf(s, p)))
                 .OrderBy((p) => past.Cost[Grid.NodeOf(s, p)]).ThenBy((p) => Grid.NodeOf(s, p)).Select((p) => (Pos?)p).FirstOrDefault() ?? w.Pos;
         }
 

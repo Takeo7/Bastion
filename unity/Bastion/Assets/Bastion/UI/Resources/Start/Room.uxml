@@ -1,40 +1,47 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <!--
-        The room menu (lobby.ts's skirmish sheet, 0.10.1), for the first milestone: the commanders, where the partner joins
-        (the host's addresses), the mission, the map (the city), day or night, start. Filled by RoomMenu.cs.
+        The room (cuadro 124, Arturo 23/11: «una pantalla del juego»), as the start screen it comes from: over Arte's crossroads,
+        the main menu's dark band on the left with the title and the room's keys (go on with the game saved, with its chapter
+        and level; a new one; a skirmish; to the start); the two players big in the middle, as «Partida multijugador»'s cards;
+        under them how the partner joins, the addresses folded behind «¿No le sale tu partida?». A new game's level and the
+        skirmish's sheet in a plate in the middle, as the start screen's form. Filled by RoomMenu.cs.
     -->
     <Style src="../Hud/Mixta.uss" />
     <Style src="Start.uss" />
     <Style src="Room.uss" />
-    <ui:VisualElement name="room" class="start font-text">
-        <ui:VisualElement class="room__sheet">
-            <ui:VisualElement class="room__side panel">
-                <ui:Label name="seats-head" class="room__head font-title" />
-                <ui:VisualElement name="seats" class="room__seats" />
-                <ui:VisualElement name="invite" class="room__invite" />
-            </ui:VisualElement>
-            <ui:VisualElement class="room__main panel">
-                <!-- The main page (lobby.ts renderMain): the campaign to go on with, a new one, a skirmish; or a new one's question. -->
-                <ui:VisualElement name="menu" class="room__menu" />
-                <!-- The skirmish's sheet (lobby.ts renderSkirmish). -->
+    <ui:VisualElement name="room" class="start room font-text">
+        <ui:VisualElement name="fade" class="start__fade" picking-mode="Ignore" />
+
+        <ui:VisualElement name="side" class="start__side" picking-mode="Ignore">
+            <ui:Label name="title" class="room__title font-title" picking-mode="Ignore" />
+            <ui:VisualElement name="menu" class="start__menu room__menu" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="players" class="room__players" picking-mode="Ignore">
+            <ui:VisualElement name="seats" class="room__seats" picking-mode="Ignore" />
+            <ui:VisualElement name="invite" class="room__invite" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="center" class="start__center" picking-mode="Ignore">
+            <!-- A new game's level (LevelPicker) and what it replaces; or the skirmish's sheet (lobby.ts renderSkirmish). -->
+            <ui:VisualElement name="sheet" class="start__form room__sheet">
+                <ui:VisualElement name="levels" class="room__levels" />
                 <ui:VisualElement name="skirmish" class="room__skirmish">
-                    <ui:Label name="mission-head" class="room__head font-title" />
+                    <ui:Label name="mission-head" class="start__label" />
                     <ui:VisualElement name="missions" class="room__options" />
-                    <ui:Label name="map-head" class="room__head font-title" />
+                    <ui:Label name="map-head" class="start__label" />
                     <ui:VisualElement name="maps" class="room__options" />
-                    <ui:Label name="hour-head" class="room__head font-title" />
+                    <ui:Label name="hour-head" class="start__label" />
                     <ui:VisualElement name="hours" class="room__options" />
                 </ui:VisualElement>
-                <ui:VisualElement class="room__foot">
-                    <ui:Button name="start" class="start__choice btn-primary room__start">
-                        <ui:Label name="start-title" class="start__choice-title font-title" picking-mode="Ignore" />
-                        <ui:Label name="start-about" class="start__choice-about" picking-mode="Ignore" />
-                    </ui:Button>
-                    <ui:Button name="back" class="room__leave" />
-                    <ui:Button name="leave" class="room__leave" />
+                <ui:VisualElement name="ask" class="room__ask" />
+                <ui:VisualElement class="start__row">
+                    <ui:Button name="start" class="start__key start__key--go font-title" />
+                    <ui:Button name="back" class="start__key font-title" />
                 </ui:VisualElement>
-                <ui:Label name="status" class="start__status" />
             </ui:VisualElement>
         </ui:VisualElement>
+
+        <ui:Label name="status" class="start__status" picking-mode="Ignore" />
     </ui:VisualElement>
 </ui:UXML>

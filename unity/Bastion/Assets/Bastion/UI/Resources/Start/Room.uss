@@ -1,59 +1,160 @@
-/* The room menu (lobby.ts): the commanders on the left, the mission's sheet on the right, start at its foot. */
+/*
+   The room (cuadro 124, Arturo 23/11), as the start screen (Start.uss): the main menu's band on the left with the title and
+   the keys; the two players big in the middle-right, as «Partida multijugador»'s cards; under them how the partner joins,
+   on a dark plate; a new game's level and the skirmish's sheet in the form's plate, in the middle.
+*/
 
-.room__sheet {
-    flex-direction: row;
-    align-items: flex-start;
-}
-
-/* 24 px apart: the two steel frames (8 px out of each plate) keep a gap between them. */
-.room__side {
-    width: 300px;
-    padding: 16px 18px;
-    margin-right: 24px;
-}
-
-.room__main {
-    width: 560px;
-    padding: 16px 20px 14px;
-}
-
-.room__head {
-    font-size: 13px;
+.room__title {
+    margin-bottom: 24px;
+    font-size: 46px;
     letter-spacing: 2px;
-    color: var(--t-accent);
-    margin: 6px 0 6px;
+    color: #ffffff;
+    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.6);
 }
 
-/* A seat: its player's colour, name and state; empty, waiting. */
-.room__seat {
-    flex-direction: row;
+/* Under a key: the game saved (its chapter and level, where it is), or why it can't be pressed. */
+.room__note {
+    margin: -6px 0 12px 6px;
+    font-size: 15px;
+    white-space: normal;
+    max-width: 380px;
+    color: #c4c9c0;
+}
+
+.room__note--level {
+    -unity-font-style: bold;
+    color: #eceee8;
+}
+
+/* The two players, side by side in the middle of what the band leaves. */
+.room__players {
+    position: absolute;
+    left: 38%;
+    right: 3%;
+    top: 17%;
     align-items: center;
-    margin-bottom: 6px;
-    padding: 6px 8px;
-    background-color: var(--t-panel-hi);
-    border-left-width: 3px;
+}
+
+.room__seats {
+    flex-direction: row;
+}
+
+/* A player (as «Partida multijugador»'s cards): dark, its edge in the player's colour, the icon in it, the name in a band. */
+.room__seat {
+    width: 270px;
+    height: 262px;
+    margin: 0 12px;
+    background-color: rgba(10, 11, 12, 0.9);
+    background-image: url("../../Textures/steel-plate.png");
+    background-repeat: repeat repeat;
+    background-size: 256px 256px;
+    -unity-background-image-tint-color: rgba(34, 36, 38, 0.9);
+    border-width: 2px;
+    border-color: rgba(196, 198, 194, 0.55);
 }
 
 .room__seat--empty {
-    opacity: 0.55;
+    opacity: 0.62;
 }
 
 .room__seat--offline {
-    opacity: 0.7;
+    opacity: 0.75;
+}
+
+.room__seat-face {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.room__seat-icon {
+    width: 124px;
+    height: 124px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.room__seat-band {
+    padding: 10px 8px 12px;
+    align-items: center;
+    border-top-width: 2px;
+    border-top-color: rgba(196, 198, 194, 0.55);
 }
 
 .room__seat-name {
-    font-size: 15px;
-    -unity-font-style: bold;
-    flex-grow: 1;
+    font-size: 26px;
+    letter-spacing: 1.2px;
+    -unity-text-align: middle-center;
+    color: #eceee8;
 }
 
 .room__seat-state {
-    font-size: 11px;
-    color: var(--t-muted);
+    margin-top: 2px;
+    font-size: 13px;
+    color: #c4c9c0;
 }
 
-.room__invite > * {
+.room__seat--empty .room__seat-name {
+    font-size: 19px;
+    color: #c4c9c0;
+}
+
+/* Whose seat this app's is. */
+.room__you {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    padding: 2px 7px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    -unity-font-style: bold;
+    color: #15181a;
+    background-color: rgba(236, 235, 230, 0.92);
+}
+
+/* How the partner joins: a line, and the addresses behind «¿No le sale tu partida?». */
+.room__invite {
+    width: 564px;
+    margin-top: 18px;
+}
+
+.room__invite-plate {
+    padding: 10px 14px 10px;
+    background-color: rgba(10, 11, 12, 0.86);
+    border-width: 1px;
+    border-color: rgba(196, 198, 194, 0.3);
+}
+
+.room__invite-line {
+    font-size: 15px;
+    white-space: normal;
+    color: #dfe2dc;
+}
+
+.room__more {
+    align-self: flex-start;
+    margin: 6px 0 0 0;
+    padding: 2px 0;
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--t-accent);
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0;
+}
+
+.room__more:hover {
+    color: #ffffff;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.room__addresses {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top-width: 1px;
+    border-top-color: rgba(196, 198, 194, 0.2);
+}
+
+.room__addresses > * {
     margin-top: 6px;
 }
 
@@ -65,144 +166,98 @@
 .room__address-text {
     flex-grow: 1;
     padding: 3px 8px;
-    font-size: 14px;
+    font-size: 15px;
     background-color: var(--m-well);
 }
 
 .room__address-kind {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--t-muted);
     margin-bottom: 1px;
 }
 
-/* The router's port while it opens (muted), or why it won't (amber): a short line under the first address. */
+/* The router's port while it opens (muted), or why it won't (amber); the room's key. */
 .room__router {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--t-muted);
     white-space: normal;
 }
 
+/* The amber of the stage map's «Sin plaza libre»: the theme's --t-warn is white. */
 .room__router--off {
-    color: var(--t-warn);
+    color: rgb(242, 199, 115);
 }
 
 .room__copy {
     margin-left: 6px;
-    padding: 3px 8px;
-    font-size: 11px;
+    padding: 3px 10px;
+    font-size: 12px;
 }
 
-/* The options, two a row: a name and a line of what it is; the chosen one in the accent. */
+/* The plate in the middle: a new game's four levels wide, the skirmish's sheet narrower. */
+.room__sheet {
+    width: 640px;
+    padding: 16px 18px 6px;
+}
+
+.room__sheet--levels {
+    width: 92%;
+    max-width: 1000px;
+}
+
+.room__ask-text {
+    margin-bottom: 8px;
+    font-size: 14px;
+    white-space: normal;
+    color: #dfe2dc;
+}
+
+.room__ask-text--warn {
+    color: rgb(242, 199, 115);
+}
+
+/* The skirmish's options, two a row: a name and a line of what it is; the chosen one lit. */
 .room__options {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: space-between;
-}
-
-.room__option {
-    width: 49%;
-    margin-bottom: 6px;
-    padding: 6px 10px;
-    align-items: flex-start;
-}
-
-.room__option--on {
-    border-width: 2px;
-    border-color: var(--t-accent);
-    background-color: var(--t-accent-soft);
-}
-
-.room__option-name {
-    font-size: 14px;
-    -unity-font-style: bold;
-}
-
-.room__option-about {
-    font-size: 11px;
-    white-space: normal;
-    -unity-text-align: upper-left;
-    color: var(--t-muted);
-}
-
-/* The main page's choices, one under another as the 0.10.1's menu (lobby.ts .menu-item), and a new campaign's question. */
-.room__menu > .start__choice {
     margin-bottom: 8px;
 }
 
-/*
- * A choice: its name big, what it does small under it; and a line of help (how to join, the campaign set aside). Start.uss
- * had them till the 0.12.24's start screen, which no longer uses them; the room still does (U7, 17/11: unstyled, the line
- * of the campaign set aside ran out of the panel, a lit choice's name white on white).
- */
-.start__choice {
-    padding: 10px 14px;
+.room__option {
+    width: 49.5%;
+    margin: 0 0 6px 0;
+    padding: 7px 10px;
     align-items: flex-start;
+    background-image: none;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.1);
+    border-radius: 0;
 }
 
-.start__choice-title {
-    font-size: 20px;
-    letter-spacing: 2px;
+.room__option:hover {
+    background-color: rgba(255, 255, 255, 0.09);
 }
 
-.btn-primary .start__choice-title,
-.btn-primary .start__choice-about {
-    color: var(--t-primary-ink);
+.room__option--on {
+    background-color: rgba(236, 235, 230, 0.16);
+    border-color: rgba(236, 235, 230, 0.85);
 }
 
-.start__choice-about {
+.room__option-name {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--t-text);
+}
+
+.room__option-about {
     font-size: 12px;
     white-space: normal;
     -unity-text-align: upper-left;
-    margin-top: 2px;
-}
-
-.start__hint {
-    font-size: 12px;
-    white-space: normal;
     color: var(--t-muted);
-    margin-bottom: 4px;
 }
 
-.room__ask-kicker {
-    font-size: 12px;
-    letter-spacing: 2px;
-    color: var(--t-accent);
-    margin-top: 4px;
-}
-
-.room__ask-title {
-    font-size: 24px;
-    margin: -4px 0 4px;
-}
-
-.room__ask-text {
-    font-size: 13px;
-    white-space: normal;
-    margin-bottom: 6px;
-}
-
-.room__ask-actions {
-    flex-direction: row;
-    justify-content: flex-end;
-    margin-top: 6px;
-}
-
-.room__ask-actions > Button {
-    padding: 6px 16px;
-    margin-left: 8px;
-}
-
-.room__foot {
-    flex-direction: row;
-    align-items: stretch;
-    margin-top: 10px;
-}
-
-.room__start {
-    flex-grow: 1;
-    margin-right: 8px;
-}
-
-.room__leave {
-    padding: 0 14px;
+.room__option--on .room__option-about {
+    color: var(--t-text);
 }

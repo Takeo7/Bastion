@@ -294,7 +294,8 @@ namespace Bastion.UI.Strategy
                 };
             // A new game from the base of one lost (N8): its level first, the last one marked.
             if (choosingLevel && c.Outcome != null) return p.LevelChoice(levelPick);
-            return p.End() ?? p.Event(view) ?? (alerts.Count > 0 && view != BaseViews.Debrief ? alerts[0] : null);
+            // The game lost (N8) after the squad's report, once it is read (R19 of Red, 23/11: the two at once, one over the other).
+            return (view != BaseViews.Debrief ? p.End() : null) ?? p.Event(view) ?? (alerts.Count > 0 && view != BaseViews.Debrief ? alerts[0] : null);
         }
 
         /// <summary>

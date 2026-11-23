@@ -26,7 +26,8 @@ namespace Bastion.UI.Start
         // «Partida multijugador» (p2): to host; to join the game heard on the network, or by address when there is none
         // (Arturo's choice, 14/11).
         public const string Host = "Alojar partida";
-        public static string JoinOf(string name) => $"Unirte a la partida de {name}";
+        /// <summary>In the infinitive as «Unirse por dirección» and «Alojar partida» (Lore, 23/11; Producto's review: two forms of the verb side by side).</summary>
+        public static string JoinOf(string name) => $"Unirse a la partida de {name}";
         public const string ByAddress = "Unirse por dirección";
 
         // What is asked: the name (before a new game; before anything else while there is none), an address and its key.

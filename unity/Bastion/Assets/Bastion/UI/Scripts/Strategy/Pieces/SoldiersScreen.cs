@@ -512,9 +512,9 @@ namespace Bastion.UI.Strategy
             var title = Ui.Text(s.Name.ToUpperInvariant(), "sheet__name font-title", parent);
             tips.Attach(title, s.NameTip);
             var lines = Ui.El("sheet-lines", parent);
-            Line(lines, "pips--hp", s.Hp, s.HpTip);
-            Line(lines, "pips--ap", s.Ap, s.ApTip);
-            Line(lines, "pips--moves", s.Moves, s.MovesTip);
+            Line(lines, "pips--hp", StrategyText.Sheet.Health, s.Hp, s.HpTip);
+            Line(lines, "pips--ap", StrategyText.Sheet.Actions, s.Ap, s.ApTip);
+            Line(lines, "pips--moves", StrategyText.Sheet.Moves, s.Moves, s.MovesTip);
             if (!string.IsNullOrEmpty(s.Note)) Ui.Text(s.Note, "sheet__note", parent);
             if (!string.IsNullOrEmpty(s.Health))
             {
@@ -547,12 +547,18 @@ namespace Bastion.UI.Strategy
             if (s.Experience != null) Experience(s.Experience, parent);
         }
 
-        /// <summary>One of the battle's lines (its squad cards'): `n` pieces as wide as the sheet, all lit.</summary>
-        void Line(VisualElement parent, string kind, int n, string tip)
+        /// <summary>
+        /// One of the battle's lines (its squad cards'): `n` pieces, all lit, with its word before them and the figure after
+        /// (Producto's review, 23/11, B9: three rows of colour nobody could read without the pointer).
+        /// </summary>
+        void Line(VisualElement parent, string kind, string word, int n, string tip)
         {
-            var row = Ui.El("pips sheet-lines__row " + kind, parent);
+            var line = Ui.El("sheet-lines__line", parent);
+            Ui.Text(word.ToUpperInvariant(), "sheet-lines__word font-title", line);
+            var row = Ui.El("pips sheet-lines__row " + kind, line);
             Ui.Pips(row, n, n);
-            tips.Attach(row, tip);
+            Ui.Text(n.ToString(), "sheet-lines__figure font-title", line);
+            tips.Attach(line, tip);
         }
 
         static Label SubHead(string text, VisualElement parent) => Ui.Text(text.ToUpperInvariant(), "sheet__head font-title", parent);
@@ -749,12 +755,13 @@ namespace Bastion.UI.Strategy
                 var row = Ui.El("skill-row", parent);
                 var top = Ui.El("skill-row__top", row);
                 Ui.Text(r.Name, "skill-row__name font-title", top);
+                Ui.Text(r.Value.ToString(), "skill-row__value font-title", top);
+                // What the growth raises, said (B10: a «+10 %» on its own, of what?): «Puntería cuerpo a cuerpo +10 %», under the name.
                 if (!string.IsNullOrEmpty(r.Growth))
                 {
-                    var growth = Ui.Text(r.Growth, "skill-row__growth font-title", top);
+                    var growth = Ui.Text(r.Growth, "skill-row__growth font-title", row);
                     if (!string.IsNullOrEmpty(r.GrowthTip)) tips.Attach(growth, r.GrowthTip);
                 }
-                Ui.Text(r.Value.ToString(), "skill-row__value font-title", top);
                 var bar = Ui.El("skill-row__bar", row);
                 Ui.El("skill-row__fill", bar).style.width = Length.Percent(Mathf.Clamp01(r.Share) * 100);
                 if (!string.IsNullOrEmpty(r.Tip)) tips.Attach(row, r.Tip);

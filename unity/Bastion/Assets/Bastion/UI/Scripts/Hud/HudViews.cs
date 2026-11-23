@@ -162,6 +162,12 @@ namespace Bastion.UI.Hud
         public string Value;
         /// <summary>The spare magazines are none: their number in red.</summary>
         public bool ValueBad;
+        /// <summary>
+        /// Its word before the number, always in sight (Producto's review, 23/11, B24; cuadro: «PUNT. 55»): the two aims. `Spare`,
+        /// the one not of the weapon in hand: its word goes when the strip doesn't fit (the Duo with the finger).
+        /// </summary>
+        public string Word;
+        public bool Spare;
     }
 
     /// <summary>The picked soldier's panel (hud.ts setSelected), without the backpack (after the first milestone).</summary>
@@ -812,6 +818,18 @@ namespace Bastion.UI.Hud
         public bool Sound;
         /// <summary>Each choice's own help, besides the row's (settingsPanel.ts autoQualityRow: «Sí», «No»).</summary>
         public List<string> ChoiceTips;
+        /// <summary>
+        /// What it does in a line, under its name, always in sight (Producto's review, 23/11, B7: a few names didn't say it
+        /// without the pointer); null, the name says it. The whole help stays on the pointer (About).
+        /// </summary>
+        public string Hint;
+        /// <summary>
+        /// The hint only while the row `HintWith` has `HintWithOn` chosen and this one isn't on `HintNotOn` (−1, any), following
+        /// them as they are changed (the FPS cap's, with the sync on and a cap chosen); null `HintWith`, always.
+        /// </summary>
+        public string HintWith;
+        public int HintWithOn;
+        public int HintNotOn = -1;
         /// <summary>A line under the row (Ajuste auto's: what it has lowered); gone as soon as one of `NoteGoesWith` changes.</summary>
         public string Note;
         public List<string> NoteGoesWith;

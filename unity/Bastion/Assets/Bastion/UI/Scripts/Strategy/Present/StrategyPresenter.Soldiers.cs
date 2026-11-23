@@ -638,8 +638,9 @@ namespace Bastion.UI.Strategy
                 v.Rows.Add(new SkillRowView
                 {
                     Name = skill.Name, Tip = $"{skill.Line}\n{bars.Into} de {bars.Need} para la siguiente barra. {r.Long}",
-                    Growth = grown == 0 ? null : id == SkillIds.Fitness ? $"+{dodge}" : $"+{grown} %",
-                    GrowthTip = id == SkillIds.Fitness ? $"{skill.Stat}: +{dodge} de sus barras" : skill.Stat,
+                    // Its stat with it (B10): «+10 %» alone didn't say of what.
+                    Growth = grown == 0 ? null : id == SkillIds.Fitness ? $"{skill.Stat} +{dodge}" : $"{skill.Stat} +{grown} %",
+                    GrowthTip = id == SkillIds.Fitness ? $"{skill.Stat}: +{dodge} de sus barras" : null,
                     Value = bars.Into, Share = bars.Need > 0 ? (float)bars.Into / bars.Need : 1,
                 });
             }

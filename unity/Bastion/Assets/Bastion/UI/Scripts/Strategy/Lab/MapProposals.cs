@@ -20,6 +20,18 @@ namespace Bastion.UI.Strategy
     {
         public static string Kind => Environment.GetEnvironmentVariable("BASTION_MAPA_PROPUESTA");
 
+        /// <summary>
+        /// The C reworked (cuadro 126, Arturo 23/11: «se mezclan los caminos con los iconos»): «valle-senda» a thin solid trail,
+        /// «valle-carretera» A's road thinner, «valle-cerca» the trail with only the way taken and the next choices strong and
+        /// the far rows quieter. All three: the ways end at the marks' edge, straight columns spread over the field (no two
+        /// cross: the engine's Next keeps them in order), the names on plates, the small badges at the marks' sides, the
+        /// ground quieter and its river along the top.
+        /// </summary>
+        static bool Calm(string k) => k != null && k.StartsWith("valle-");
+        static bool Vale(string k) => k == "valle" || Calm(k);
+        /// <summary>A mark's half side by what it is (the ways stop there).</summary>
+        static float Radius(RunNodeView n) => n.Boss ? 38 : 28;
+
         static readonly Color Ink = new Color(0.93f, 0.93f, 0.9f), Muted = new Color(0.62f, 0.64f, 0.63f), Dim = new Color(0.38f, 0.4f, 0.4f);
         static readonly Color Accent = new Color(0.55f, 0.85f, 0.35f), Danger = new Color(0.88f, 0.39f, 0.31f), Plate = new Color(0.04f, 0.045f, 0.05f, 0.94f);
 
@@ -66,9 +78,10 @@ namespace Bastion.UI.Strategy
             field.style.flexGrow = 1;
             field.style.marginTop = 8;
             field.style.overflow = Overflow.Hidden;
-            field.style.backgroundColor = kind == "valle" ? new Color(0.09f, 0.11f, 0.09f) : kind == "carretera" ? new Color(0.1f, 0.1f, 0.085f) : new Color(0.075f, 0.08f, 0.085f);
+            field.style.backgroundColor = Paper(kind) ? SheetOf(kind).Paper : Calm(kind) ? new Color(0.075f, 0.088f, 0.075f) : kind == "valle" ? new Color(0.09f, 0.11f, 0.09f) : kind == "carretera" ? new Color(0.1f, 0.1f, 0.085f) : new Color(0.075f, 0.08f, 0.085f);
             left.Add(field);
-            Legend(left, icon);
+            if (Paper(kind)) PaperLegend(left, kind, icon);
+            else Legend(left, icon);
             // The right column: the squad folded, the stage's card.
             var col = new VisualElement();
             col.style.width = Mathf.Min(340, screen.layout.width * 0.3f);
@@ -83,9 +96,40 @@ namespace Bastion.UI.Strategy
                 if (float.IsNaN(r.width) || r.width <= 0) return;
                 field.UnregisterCallback<GeometryChangedEvent>(Lay);
                 var at = Layout(kind, v, new Rect(30, 30, r.width - 60, r.height - 60));
+                if (Paper(kind))
+                {
+                    // The map on paper (cuadro 131): the sheet and the valley, the ink, then the stages' symbols and words.
+                    var sheet = new VisualElement { pickingMode = PickingMode.Ignore };
+                    Abs(sheet, 0, 0, 0, 0);
+                    PaperGround(sheet, r, kind);
+                    field.Add(sheet);
+                    var ink = new VisualElement { pickingMode = PickingMode.Ignore };
+                    Abs(ink, 0, 0, 0, 0);
+                    ink.generateVisualContent += ctx => PaperInk(ctx, kind, v, at, pick);
+                    field.Add(ink);
+                    foreach (var n in v.Nodes) PaperNode(field, kind, n, at[n.Id], n.Id == pick?.Id, run, icon);
+                    PaperStart(field, kind, v, at["start"], icon);
+                    return;
+                }
                 var ground = new VisualElement { pickingMode = PickingMode.Ignore };
                 Abs(ground, 0, 0, 0, 0);
-                if (kind == "valle") ground.generateVisualContent += ctx => Valley(ctx, r);
+                // Arte's valley under the C3 (cuadro 129: «el valle de verdad, que se vea»), when there is one: the picture
+                // filling the field, cropped, under a veil only as dark as the marks and plates need; else the drawn ground.
+                var backdrop = Calm(kind) ? Backdrop(run.Chapter) : null;
+                onPicture = backdrop != null;
+                if (backdrop != null)
+                {
+                    ground.style.backgroundImage = backdrop;
+#pragma warning disable CS0618
+                    ground.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+#pragma warning restore CS0618
+                    var veil = new VisualElement { pickingMode = PickingMode.Ignore };
+                    Abs(veil, 0, 0, 0, 0);
+                    veil.style.backgroundColor = new Color(0.03f, 0.035f, 0.03f, Veil());
+                    ground.Add(veil);
+                }
+                else if (Calm(kind)) ground.generateVisualContent += ctx => ValleyCalm(ctx, r);
+                else if (kind == "valle") ground.generateVisualContent += ctx => Valley(ctx, r);
                 else if (kind == "carretera") ground.generateVisualContent += ctx => Verge(ctx, r);
                 field.Add(ground);
                 var paint = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -126,8 +170,9 @@ namespace Bastion.UI.Strategy
             foreach (var n in v.Nodes)
             {
                 var y = r.yMax - 20 - dy * n.Row;
-                var gap = Mathf.Min(170, r.width / Math.Max(1, n.Cols + 0.5f));
-                var swing = kind == "carretera" ? Mathf.Sin(n.Row * 1.1f) * 36 : Mathf.Sin(n.Row * 2.3f + n.Col) * 18;
+                // The C reworked: the columns spread over the whole width, straight (a swing reordered them and the ways crossed).
+                var gap = Spread(kind) ? r.width / Math.Max(1, n.Cols) : Mathf.Min(170, r.width / Math.Max(1, n.Cols + 0.5f));
+                var swing = Spread(kind) ? 0 : kind == "carretera" ? Mathf.Sin(n.Row * 1.1f) * 36 : Mathf.Sin(n.Row * 2.3f + n.Col) * 18;
                 var x = r.center.x + (n.Col - (n.Cols - 1) / 2f) * gap + swing;
                 at[n.Id] = new Vector2(x, y);
             }
@@ -204,15 +249,20 @@ namespace Bastion.UI.Strategy
             g.lineCap = LineCap.Round;
             var starts = v.Nodes.Where(n => n.Row == 1).ToList();
             // (The start's ways have no stage to come from: drawn from «start» below.)
-            var all = v.Links.Where(l => l.From != null && l.To != null && at.ContainsKey(l.From) && at.ContainsKey(l.To)).Select(l => (a: at[l.From], b: at[l.To], l.Taken, l.Open, l.Dim)).ToList();
-            foreach (var n in starts) all.Add((at["start"], at[n.Id], v.Nodes.Any(x => x.Row == 1 && x.Done) && n.Done, v.AtStart, false));
+            var byId = v.Nodes.ToDictionary(n => n.Id);
+            // The calm kinds: each end at its mark's edge (below the upper one, over the lower one).
+            Vector2 From(string id, Vector2 p) => Calm(kind) ? p - new Vector2(0, id == "start" ? 24 : Radius(byId[id]) + 2) : p;
+            Vector2 To(string id, Vector2 p) => Calm(kind) ? p + new Vector2(0, Radius(byId[id]) + 2) : p;
+            var all = v.Links.Where(l => l.From != null && l.To != null && at.ContainsKey(l.From) && at.ContainsKey(l.To)).Select(l => (a: From(l.From, at[l.From]), b: To(l.To, at[l.To]), l.Taken, l.Open, l.Dim)).ToList();
+            foreach (var n in starts) all.Add((From("start", at["start"]), To(n.Id, at[n.Id]), v.Nodes.Any(x => x.Row == 1 && x.Done) && n.Done, v.AtStart, false));
             // The unseen and the plain first, the open next, the way taken on top.
             foreach (var pass in new[] { 0, 1, 2 })
                 foreach (var (a, b, taken, open, dim) in all)
                 {
                     var tier = taken ? 2 : open ? 1 : 0;
                     if (tier != pass) continue;
-                    if (kind == "carretera") Road(g, a, b, taken, open, dim);
+                    if (Calm(kind)) CalmWay(g, kind, a, b, taken, open, dim);
+                    else if (kind == "carretera") Road(g, a, b, taken, open, dim);
                     else if (kind == "valle") Trail(g, a, b, taken, open, dim);
                     else Line(g, a, b, taken, open, dim);
                 }
@@ -284,6 +334,127 @@ namespace Bastion.UI.Strategy
             }
         }
 
+        /// <summary>
+        /// The C reworked's way: a solid line on a dark casing, ending at the marks' edges. The way taken in bone, the ones that
+        /// can be taken now in the accent, all the rest faint («valle-cerca»: fainter still); «valle-carretera», as A's road thinner.
+        /// </summary>
+        static void CalmWay(Painter2D g, string kind, Vector2 a, Vector2 b, bool taken, bool open, bool dim)
+        {
+            var strong = taken || open;
+            if (kind == "valle-carretera")
+            {
+                g.strokeColor = strong ? new Color(0.06f, 0.06f, 0.06f, 0.9f) : new Color(0.06f, 0.06f, 0.06f, 0.35f);
+                g.lineWidth = 9;
+                Curve(g, a, b, false);
+                g.Stroke();
+                g.strokeColor = taken ? new Color(0.85f, 0.82f, 0.7f) : open ? new Color(0.6f, 0.62f, 0.58f) : new Color(0.4f, 0.4f, 0.38f, dim ? 0.18f : 0.32f);
+                g.lineWidth = 6;
+                Curve(g, a, b, false);
+                g.Stroke();
+                if (!strong) return;
+                g.strokeColor = taken ? new Color(0.95f, 0.85f, 0.45f) : Accent;
+                g.lineWidth = 1.5f;
+                var steps = Mathf.CeilToInt(Vector2.Distance(a, b) / 7);
+                for (var i = 0; i < steps; i += 2)
+                {
+                    g.BeginPath();
+                    g.MoveTo(Bez(a, b, i / (float)steps));
+                    g.LineTo(Bez(a, b, Mathf.Min(1, (i + 1) / (float)steps)));
+                    g.Stroke();
+                }
+                return;
+            }
+            var faint = kind == "valle-cerca" ? (dim ? 0.06f : 0.12f) : (dim ? 0.14f : 0.28f);
+            if (!strong && onPicture)
+            {
+                // Over Arte's picture: a dark casing, the line a little stronger, so the far ways stay there on a light ground.
+                g.strokeColor = new Color(0.02f, 0.02f, 0.02f, 0.4f);
+                g.lineWidth = 4;
+                Curve(g, a, b, false);
+                g.Stroke();
+                faint = Mathf.Max(faint * 2.5f, 0.3f);
+            }
+            if (strong)
+            {
+                g.strokeColor = new Color(0.03f, 0.03f, 0.03f, 0.75f);
+                g.lineWidth = 7;
+                Curve(g, a, b, false);
+                g.Stroke();
+            }
+            g.strokeColor = taken ? new Color(0.95f, 0.93f, 0.85f) : open ? Accent : new Color(0.85f, 0.8f, 0.65f, faint);
+            g.lineWidth = taken ? 3.5f : open ? 3 : 2;
+            Curve(g, a, b, false);
+            g.Stroke();
+        }
+
+        /// <summary>
+        /// Arte's picture of the valley (cuadro 129), if any: BASTION_MAPA_FONDO, a PNG's path (to try them without Assets), else
+        /// Resources/Strategy/mapa-etapas-fondo-{chapter} or mapa-etapas-fondo. Null, none: the drawn ground.
+        /// </summary>
+        static Texture2D Backdrop(int chapter)
+        {
+            var path = System.Environment.GetEnvironmentVariable("BASTION_MAPA_FONDO");
+            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+            {
+                var t = new Texture2D(2, 2);
+                if (t.LoadImage(System.IO.File.ReadAllBytes(path))) return t;
+                Debug.LogWarning($"[mapa] no se lee {path}");
+            }
+            return Resources.Load<Texture2D>($"Strategy/mapa-etapas-fondo-{chapter}") ?? Resources.Load<Texture2D>("Strategy/mapa-etapas-fondo");
+        }
+
+        /// <summary>How dark the veil over Arte's picture is (0 none, 1 black): BASTION_MAPA_FONDO_VELO, else 0.35.</summary>
+        static float Veil() => float.TryParse(System.Environment.GetEnvironmentVariable("BASTION_MAPA_FONDO_VELO"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? Mathf.Clamp01(v) : 0.35f;
+
+        /// <summary>Arte's picture under the network (Backdrop): the faint ways get a dark casing, or a light picture swallows them.</summary>
+        static bool onPicture;
+
+        /// <summary>The C reworked's ground: the valley's woods and heights quieter, its river along the top, out of the network.</summary>
+
+        static void ValleyCalm(MeshGenerationContext ctx, Rect r)
+        {
+            var g = ctx.painter2D;
+            var rng = new System.Random(7);
+            g.fillColor = new Color(0.066f, 0.08f, 0.066f);
+            for (var i = 0; i < 22; i++)
+            {
+                var c = new Vector2((float)rng.NextDouble() * r.width, (float)rng.NextDouble() * r.height);
+                var rad = 40 + (float)rng.NextDouble() * 80;
+                g.BeginPath();
+                for (var k = 0; k <= 12; k++)
+                {
+                    var a = k / 12f * Mathf.PI * 2;
+                    var rr = rad * (0.75f + 0.25f * Mathf.Sin(a * 3 + i));
+                    var q = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * rr;
+                    if (k == 0) g.MoveTo(q); else g.LineTo(q);
+                }
+                g.ClosePath();
+                g.Fill();
+            }
+            g.strokeColor = new Color(0.75f, 0.72f, 0.55f, 0.035f);
+            g.lineWidth = 1;
+            foreach (var hill in new[] { new Vector2(r.width * 0.12f, r.height * 0.55f), new Vector2(r.width * 0.9f, r.height * 0.35f) })
+                for (var ring = 1; ring <= 4; ring++)
+                {
+                    g.BeginPath();
+                    for (var k = 0; k <= 24; k++)
+                    {
+                        var a = k / 24f * Mathf.PI * 2;
+                        var rr = ring * 20 * (1 + 0.18f * Mathf.Sin(a * 2 + ring));
+                        var q = hill + new Vector2(Mathf.Cos(a) * rr * 1.3f, Mathf.Sin(a) * rr);
+                        if (k == 0) g.MoveTo(q); else g.LineTo(q);
+                    }
+                    g.Stroke();
+                }
+            g.strokeColor = new Color(0.26f, 0.36f, 0.44f, 0.35f);
+            g.lineWidth = 7;
+            g.lineCap = LineCap.Round;
+            g.BeginPath();
+            g.MoveTo(new Vector2(-10, 26));
+            g.BezierCurveTo(new Vector2(r.width * 0.3f, 6), new Vector2(r.width * 0.6f, 44), new Vector2(r.width + 10, 18));
+            g.Stroke();
+        }
+
         static void Line(Painter2D g, Vector2 a, Vector2 b, bool taken, bool open, bool dim)
         {
             g.strokeColor = taken ? new Color(0.95f, 0.95f, 0.9f) : open ? Accent : new Color(1, 1, 1, dim ? 0.08f : 0.22f);
@@ -298,7 +469,16 @@ namespace Bastion.UI.Strategy
         {
             var mark = Round(layer, p, 44, new Color(0.16f, 0.17f, 0.18f), v.AtStart ? Ink : Muted, 2);
             IconIn(mark, "map:lata", icon, 28, Ink);
-            var l = Text(layer, (v.Start ?? "La base").ToUpperInvariant(), 11, Muted, true);
+            var l = Text(layer, (v.AtStart && Calm(kind) ? "AQUÍ · " : "") + (v.Start ?? "La base").ToUpperInvariant(), 11, Muted, true);
+            if (Calm(kind))
+            {
+                // On a plate at its right, as the stages' names (cuadro 126).
+                Abs(l, p.x + 28, p.y - 9);
+                l.style.whiteSpace = WhiteSpace.NoWrap;
+                l.style.backgroundColor = new Color(0.04f, 0.045f, 0.05f, 0.88f);
+                l.style.paddingLeft = l.style.paddingRight = 6;
+                return;
+            }
             Abs(l, p.x - 60, p.y + 24);
             l.style.width = 120;
             l.style.unityTextAlign = TextAnchor.UpperCenter;
@@ -370,7 +550,8 @@ namespace Bastion.UI.Strategy
             {
                 // The place drawn big; the kind small on its rim, top left.
                 IconIn(mark, place, icon, side * 0.62f, Ink);
-                var k = Round(layer, p + new Vector2(-side / 2 + 6, -side / 2 + 6), 24, new Color(0.08f, 0.085f, 0.09f), ring, 1);
+                // (The C reworked: on the mark's left side, off the ways that leave from its top and come into its foot.)
+                var k = Round(layer, Calm(kind) ? p + new Vector2(-side / 2 - 8, -11) : p + new Vector2(-side / 2 + 6, -side / 2 + 6), 24, new Color(0.08f, 0.085f, 0.09f), ring, 1);
                 IconIn(k, n.Icon, icon, 15, Ink);
             }
             else IconIn(mark, n.Icon, icon, side * 0.55f, n.Boss ? new Color(1, 0.6f, 0.5f) : Ink);
@@ -380,8 +561,35 @@ namespace Bastion.UI.Strategy
             if (n.AddedId != null) mods.Add(n.AddedId);
             for (var i = 0; i < mods.Count; i++)
             {
-                var m = Round(layer, p + new Vector2(side / 2 - 6, -side / 2 + 6 + i * 22), 22, ModColor(mods[i]), new Color(0, 0, 0, 0.6f), 1);
+                var m = Round(layer, Calm(kind) ? p + new Vector2(-side / 2 - 8, 13 + i * 22) : p + new Vector2(side / 2 - 6, -side / 2 + 6 + i * 22), 22, ModColor(mods[i]), new Color(0, 0, 0, 0.6f), 1);
                 IconIn(m, ModIcon(mods[i]), icon, 14, Color.white);
+            }
+            // The C reworked: the name on a plate at the mark's right, «AQUÍ» in it; the far ones quieter («valle-cerca»).
+            if (Calm(kind))
+            {
+                // The far ones' marks at half light; their names not (cuadro 129: one plans looking at what comes), on the
+                // same plate as the rest, in the muted grey.
+                var quiet = kind == "valle-cerca" && !n.Open && !n.At && !n.Done && !n.Boss;
+                if (quiet) mark.style.opacity = 0.5f;
+                if (!n.Hidden)
+                {
+                    var plate = new VisualElement { pickingMode = PickingMode.Ignore };
+                    Abs(plate, p.x + side / 2 + 6, p.y - 11);
+                    plate.style.backgroundColor = new Color(0.04f, 0.045f, 0.05f, 0.88f);
+                    plate.style.paddingLeft = plate.style.paddingRight = 6;
+                    plate.style.paddingTop = plate.style.paddingBottom = 2;
+                    if (picked) Border(plate, Accent, 1);
+                    layer.Add(plate);
+                    var line = (n.At ? "AQUÍ · " : "") + (n.Boss ? n.Name?.ToUpperInvariant() : n.Name);
+                    Text(plate, line, n.Boss ? 13 : 11, picked ? Accent : n.Open || n.At ? Ink : Muted, n.Boss || picked || n.At).style.whiteSpace = WhiteSpace.NoWrap;
+                    if (!string.IsNullOrEmpty(n.Warn)) Text(plate, n.Warn, 9, new Color(0.95f, 0.78f, 0.45f), false).style.whiteSpace = WhiteSpace.NoWrap;
+                }
+                if (n.Boss)
+                {
+                    var end = Text(layer, "FIN DEL CAPÍTULO", 10, new Color(1, 0.6f, 0.5f), true);
+                    Abs(end, p.x + side / 2 + 6, p.y + 8);
+                }
+                return;
             }
             if (!n.Hidden)
             {
@@ -601,6 +809,441 @@ namespace Bastion.UI.Strategy
         {
             var l = Text(into, text, 12, Ink, false);
             l.style.whiteSpace = WhiteSpace.Normal;
+        }
+
+        // ------------------------------------------------------------ the map on paper (cuadro 131)
+
+        /// <summary>
+        /// The map drawn on paper (cuadro 131, Arturo 23/11: «que parezca un mapa dibujado y los iconos y las líneas también, en
+        /// un papel»), on the C3's layout: «papel-claro» aged light paper in dark ink with a red marker, «papel-kraft» brown kraft
+        /// in black marker with a white one, «papel-carretera» a folded road map whose ways are roads. The stages and the ways are
+        /// part of the drawing: the place's symbol ringed by hand, the way taken gone over twice, the ones to take now in the
+        /// marker, the far ones in pencil; the night, the weather and the horde noted beside the symbol; «AQUÍ» a pin. Arte's paper
+        /// and valley when given (BASTION_MAPA_PAPEL, BASTION_MAPA_DIBUJO; Resources/Strategy/mapa-papel-{style},
+        /// mapa-dibujo-{style} or mapa-dibujo); till then a paper of our own, with a few strokes of the valley at its edges.
+        /// </summary>
+        static bool Paper(string k) => k != null && k.StartsWith("papel-");
+        /// <summary>The C3's straight columns over the whole width: the calm kinds and the paper ones.</summary>
+        static bool Spread(string k) => Calm(k) || Paper(k);
+        static float PaperRadius(RunNodeView n) => n.Boss ? 30 : 22;
+
+        sealed class Sheet
+        {
+            public Color Paper, Edge, Ink, Pencil, Mark, Note, Red;
+            public bool Folds, Roads, Fibres;
+        }
+
+        static Sheet SheetOf(string k) => k == "papel-kraft"
+            ? new Sheet { Paper = new Color(0.69f, 0.55f, 0.39f), Edge = new Color(0.36f, 0.25f, 0.14f), Ink = new Color(0.08f, 0.07f, 0.06f), Pencil = new Color(0.14f, 0.1f, 0.06f, 0.78f), Mark = new Color(0.98f, 0.97f, 0.92f), Note = new Color(0.12f, 0.1f, 0.08f), Red = new Color(0.62f, 0.09f, 0.05f), Fibres = true }
+            : k == "papel-carretera"
+            ? new Sheet { Paper = new Color(0.95f, 0.94f, 0.88f), Edge = new Color(0.55f, 0.52f, 0.44f), Ink = new Color(0.14f, 0.16f, 0.19f), Pencil = new Color(0.42f, 0.44f, 0.47f, 0.75f), Mark = new Color(0.98f, 0.76f, 0.12f), Note = new Color(0.1f, 0.28f, 0.58f), Red = new Color(0.8f, 0.16f, 0.1f), Folds = true, Roads = true }
+            : new Sheet { Paper = new Color(0.9f, 0.86f, 0.75f), Edge = new Color(0.5f, 0.4f, 0.26f), Ink = new Color(0.15f, 0.12f, 0.09f), Pencil = new Color(0.38f, 0.33f, 0.27f, 0.62f), Mark = new Color(0.76f, 0.14f, 0.09f), Note = new Color(0.14f, 0.25f, 0.52f), Red = new Color(0.7f, 0.1f, 0.06f) };
+
+        static string Style(string k) => k.Substring("papel-".Length);
+
+        /// <summary>A steady number from an id (string.GetHashCode isn't steady from one run to the next).</summary>
+        static float Seed(string id)
+        {
+            var h = 17;
+            foreach (var ch in id ?? "") h = unchecked(h * 31 + ch);
+            return (h & 0xffff) / 6553.5f;
+        }
+
+        /// <summary>A way drawn by hand: the C3's curve, a little unsteady in the middle, steady at its ends.</summary>
+        static List<Vector2> Wobble(Vector2 a, Vector2 b, float seed, float amp)
+        {
+            var pts = new List<Vector2>();
+            var len = Vector2.Distance(a, b);
+            var steps = Mathf.Max(8, Mathf.CeilToInt(len / 6));
+            for (var i = 0; i <= steps; i++)
+            {
+                var t = i / (float)steps;
+                var d = Bez(a, b, Mathf.Min(1, t + 0.01f)) - Bez(a, b, Mathf.Max(0, t - 0.01f));
+                var normal = new Vector2(-d.y, d.x).normalized;
+                var w = (Mathf.PerlinNoise(t * len / 45f, seed) - 0.5f) * 2 * amp * Mathf.Sin(t * Mathf.PI);
+                pts.Add(Bez(a, b, t) + normal * w);
+            }
+            return pts;
+        }
+
+        /// <summary>A ring drawn by hand: not quite round, a little past where it began.</summary>
+        static List<Vector2> Ring(Vector2 c, float r, float seed)
+        {
+            var pts = new List<Vector2>();
+            var from = Mathf.PerlinNoise(seed, 0.3f) * Mathf.PI * 2;
+            const int n = 44;
+            for (var i = 0; i <= n; i++)
+            {
+                var a = from + (Mathf.PI * 2 + 0.5f) * i / n;
+                var k = 1 + (Mathf.PerlinNoise(i * 0.3f, seed) - 0.5f) * 0.12f + 0.05f * i / n;
+                pts.Add(c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r * k);
+            }
+            return pts;
+        }
+
+        static void Stroke(Painter2D g, List<Vector2> pts, Color colour, float width)
+        {
+            g.strokeColor = colour;
+            g.lineWidth = width;
+            g.BeginPath();
+            g.MoveTo(pts[0]);
+            for (var i = 1; i < pts.Count; i++) g.LineTo(pts[i]);
+            g.Stroke();
+        }
+
+        static void Dot(Painter2D g, Vector2 c, float r, Color colour)
+        {
+            g.fillColor = colour;
+            g.BeginPath();
+            g.Arc(c, r, 0, 360);
+            g.Fill();
+        }
+
+        /// <summary>Arte's picture for this style, if any: the env's path, else Resources/Strategy/{name}-{style}, else {name}.</summary>
+        static Texture2D ArtOf(string env, string name, string style)
+        {
+            var path = Environment.GetEnvironmentVariable(env);
+            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+            {
+                var t = new Texture2D(2, 2);
+                if (t.LoadImage(System.IO.File.ReadAllBytes(path))) return t;
+            }
+            return Resources.Load<Texture2D>($"Strategy/{name}-{style}") ?? Resources.Load<Texture2D>($"Strategy/{name}");
+        }
+
+        /// <summary>
+        /// The sheet: Arte's paper, or ours (its colour, a grain, darker towards its edges; kraft with fibres, the road map folded in
+        /// six); then Arte's valley in the style's ink, or a few strokes of ours at the edges, out of the network: a river down
+        /// the left, woods in the corners the rows leave free.
+        /// </summary>
+        static void PaperGround(VisualElement ground, Rect r, string kind)
+        {
+            var s = SheetOf(kind);
+            var paper = ArtOf("BASTION_MAPA_PAPEL", "mapa-papel", Style(kind));
+            if (paper != null)
+            {
+                ground.style.backgroundImage = paper;
+#pragma warning disable CS0618
+                ground.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+#pragma warning restore CS0618
+            }
+            else ground.generateVisualContent += ctx => OwnPaper(ctx, r, s);
+            var drawing = ArtOf("BASTION_MAPA_DIBUJO", "mapa-dibujo", Style(kind));
+            var valley = new VisualElement { pickingMode = PickingMode.Ignore };
+            Abs(valley, 0, 0, 0, 0);
+            if (drawing != null)
+            {
+                valley.style.backgroundImage = drawing;
+#pragma warning disable CS0618
+                valley.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+#pragma warning restore CS0618
+                // How strong the valley's ink is (BASTION_MAPA_DIBUJO_TINTA, 0–1; 0.55 if not said): Arte's woods are faint at 0.55.
+                var strength = float.TryParse(Environment.GetEnvironmentVariable("BASTION_MAPA_DIBUJO_TINTA"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var k) ? Mathf.Clamp01(k) : 0.55f;
+                valley.style.unityBackgroundImageTintColor = new Color(s.Ink.r, s.Ink.g, s.Ink.b, strength);
+            }
+            else valley.generateVisualContent += ctx => OwnValley(ctx, r, s);
+            ground.Add(valley);
+        }
+
+        static void OwnPaper(MeshGenerationContext ctx, Rect r, Sheet s)
+        {
+            var g = ctx.painter2D;
+            float w = r.width, h = r.height;
+            g.fillColor = s.Paper;
+            g.BeginPath();
+            g.MoveTo(Vector2.zero);
+            g.LineTo(new Vector2(w, 0));
+            g.LineTo(new Vector2(w, h));
+            g.LineTo(new Vector2(0, h));
+            g.ClosePath();
+            g.Fill();
+            var rnd = new System.Random(7);
+            // The grain, and kraft's fibres.
+            for (var i = 0; i < 1100; i++)
+                Dot(g, new Vector2((float)rnd.NextDouble() * w, (float)rnd.NextDouble() * h), 0.4f + (float)rnd.NextDouble() * 0.9f, new Color(s.Edge.r, s.Edge.g, s.Edge.b, 0.05f + (float)rnd.NextDouble() * 0.08f));
+            if (s.Fibres)
+                for (var i = 0; i < 260; i++)
+                {
+                    var p = new Vector2((float)rnd.NextDouble() * w, (float)rnd.NextDouble() * h);
+                    var a = (float)rnd.NextDouble() * Mathf.PI;
+                    var l = 4 + (float)rnd.NextDouble() * 10;
+                    Stroke(g, new List<Vector2> { p, p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * l }, new Color(s.Edge.r, s.Edge.g, s.Edge.b, 0.1f), 0.8f);
+                }
+            // Darker towards the edges, as handled paper.
+            for (var i = 0; i < 16; i++)
+            {
+                var inset = i * 3f + 1.5f;
+                g.strokeColor = new Color(s.Edge.r, s.Edge.g, s.Edge.b, 0.11f * (1 - i / 16f));
+                g.lineWidth = 3;
+                g.BeginPath();
+                g.MoveTo(new Vector2(inset, inset));
+                g.LineTo(new Vector2(w - inset, inset));
+                g.LineTo(new Vector2(w - inset, h - inset));
+                g.LineTo(new Vector2(inset, h - inset));
+                g.ClosePath();
+                g.Stroke();
+            }
+            if (!s.Folds) return;
+            // Folded in six: each panel a shade apart, the creases light with their shadow.
+            for (var c = 0; c < 3; c++)
+                for (var row = 0; row < 2; row++)
+                {
+                    if ((c + row) % 2 == 0) continue;
+                    g.fillColor = new Color(s.Edge.r, s.Edge.g, s.Edge.b, 0.045f);
+                    g.BeginPath();
+                    g.MoveTo(new Vector2(w * c / 3, h * row / 2));
+                    g.LineTo(new Vector2(w * (c + 1) / 3, h * row / 2));
+                    g.LineTo(new Vector2(w * (c + 1) / 3, h * (row + 1) / 2));
+                    g.LineTo(new Vector2(w * c / 3, h * (row + 1) / 2));
+                    g.ClosePath();
+                    g.Fill();
+                }
+            foreach (var x in new[] { w / 3, w * 2 / 3 })
+            {
+                Stroke(g, new List<Vector2> { new Vector2(x, 0), new Vector2(x, h) }, new Color(1, 1, 1, 0.55f), 2);
+                Stroke(g, new List<Vector2> { new Vector2(x + 1.5f, 0), new Vector2(x + 1.5f, h) }, new Color(s.Edge.r, s.Edge.g, s.Edge.b, 0.28f), 1);
+            }
+            Stroke(g, new List<Vector2> { new Vector2(0, h / 2), new Vector2(w, h / 2) }, new Color(1, 1, 1, 0.55f), 2);
+            Stroke(g, new List<Vector2> { new Vector2(0, h / 2 + 1.5f), new Vector2(w, h / 2 + 1.5f) }, new Color(s.Edge.r, s.Edge.g, s.Edge.b, 0.28f), 1);
+        }
+
+        /// <summary>Ours till Arte's comes: a river down the left edge, woods as little firs in the corners, hills along the top.</summary>
+        static void OwnValley(MeshGenerationContext ctx, Rect r, Sheet s)
+        {
+            var g = ctx.painter2D;
+            g.lineCap = LineCap.Round;
+            g.lineJoin = LineJoin.Round;
+            float w = r.width, h = r.height;
+            var water = new Color(s.Note.r, s.Note.g, s.Note.b, 0.5f);
+            var river = new List<Vector2>();
+            for (var i = 0; i <= 40; i++)
+            {
+                var t = i / 40f;
+                river.Add(new Vector2(14 + Mathf.Sin(t * 5.5f) * 7 + (Mathf.PerlinNoise(t * 6, 2) - 0.5f) * 6, t * h));
+            }
+            Stroke(g, river, water, 2.4f);
+            Stroke(g, river.Select(p => p + new Vector2(6, 0)).ToList(), new Color(water.r, water.g, water.b, 0.3f), 1.2f);
+            var tree = new Color(s.Ink.r, s.Ink.g, s.Ink.b, 0.28f);
+            var rnd = new System.Random(11);
+            void Wood(Rect area, int count)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var p = new Vector2(area.x + (float)rnd.NextDouble() * area.width, area.y + (float)rnd.NextDouble() * area.height);
+                    var k = 4 + (float)rnd.NextDouble() * 3;
+                    Stroke(g, new List<Vector2> { p + new Vector2(-k, k * 1.2f), p + new Vector2(0, -k * 1.2f), p + new Vector2(k, k * 1.2f) }, tree, 1.1f);
+                    Stroke(g, new List<Vector2> { p + new Vector2(0, k * 1.2f), p + new Vector2(0, k * 1.9f) }, tree, 1.1f);
+                }
+            }
+            Wood(new Rect(w * 0.05f, h * 0.04f, w * 0.26f, h * 0.22f), 26);
+            Wood(new Rect(w * 0.68f, h * 0.04f, w * 0.27f, h * 0.22f), 26);
+            Wood(new Rect(w * 0.05f, h * 0.86f, w * 0.3f, h * 0.11f), 16);
+            Wood(new Rect(w * 0.64f, h * 0.86f, w * 0.32f, h * 0.11f), 16);
+            // Hills along the top: little arcs with their hatching.
+            for (var x = w * 0.36f; x < w * 0.62f; x += 26)
+            {
+                var hill = new List<Vector2>();
+                for (var i = 0; i <= 8; i++) hill.Add(new Vector2(x + i * 3, 22 - Mathf.Sin(i / 8f * Mathf.PI) * 10));
+                Stroke(g, hill, tree, 1.1f);
+            }
+        }
+
+        /// <summary>
+        /// The ink: the ways (the far ones in pencil, the ones to take now in the marker, the way taken in ink gone over twice;
+        /// on the road map, roads: grey, yellow, red), the rings round the stages and the base (the boss in red, the far ones in
+        /// pencil, the picked and the open in the marker), «AQUÍ»'s pin.
+        /// </summary>
+        static void PaperInk(MeshGenerationContext ctx, string kind, RunMapView v, Dictionary<string, Vector2> at, RunNodeView pick)
+        {
+            var s = SheetOf(kind);
+            var g = ctx.painter2D;
+            g.lineCap = LineCap.Round;
+            g.lineJoin = LineJoin.Round;
+            var byId = v.Nodes.ToDictionary(n => n.Id);
+            Vector2 From(string id, Vector2 p) => p - new Vector2(0, id == "start" ? 21 : PaperRadius(byId[id]) + 3);
+            Vector2 To(string id, Vector2 p) => p + new Vector2(0, PaperRadius(byId[id]) + 3);
+            var all = v.Links.Where(l => l.From != null && l.To != null && at.ContainsKey(l.From) && at.ContainsKey(l.To)).Select(l => (a: From(l.From, at[l.From]), b: To(l.To, at[l.To]), seed: Seed(l.From + l.To), l.Taken, l.Open, l.Dim)).ToList();
+            foreach (var n in v.Nodes.Where(n => n.Row == 1)) all.Add((From("start", at["start"]), To(n.Id, at[n.Id]), Seed("start" + n.Id), v.Nodes.Any(x => x.Row == 1 && x.Done) && n.Done, v.AtStart, false));
+            foreach (var pass in new[] { 0, 1, 2 })
+                foreach (var (a, b, seed, taken, open, dim) in all)
+                {
+                    if ((taken ? 2 : open ? 1 : 0) != pass) continue;
+                    var line = Wobble(a, b, seed, s.Roads ? 0.6f : 1.6f);
+                    if (s.Roads)
+                    {
+                        // A road map's roads: a cased road, the way taken red, the ones to take yellow, the rest thin grey.
+                        if (taken) { Stroke(g, line, s.Ink, 7); Stroke(g, line, s.Red, 4.5f); }
+                        else if (open) { Stroke(g, line, s.Ink, 7); Stroke(g, line, s.Mark, 4.5f); }
+                        else { Stroke(g, line, new Color(s.Pencil.r, s.Pencil.g, s.Pencil.b, dim ? 0.35f : 0.6f), 3); Stroke(g, line, s.Paper, 1.4f); }
+                        continue;
+                    }
+                    if (taken)
+                    {
+                        Stroke(g, line, s.Ink, 2.4f);
+                        Stroke(g, Wobble(a, b, seed + 5, 1.8f), new Color(s.Ink.r, s.Ink.g, s.Ink.b, 0.75f), 1.6f);
+                    }
+                    else if (open) Stroke(g, line, s.Mark, 3.4f);
+                    else Stroke(g, line, new Color(s.Pencil.r, s.Pencil.g, s.Pencil.b, s.Pencil.a * (dim ? 0.55f : 0.85f)), 1.3f);
+                }
+            // The rings.
+            foreach (var n in v.Nodes)
+            {
+                var p = at[n.Id];
+                var r = PaperRadius(n);
+                var seed = Seed(n.Id);
+                if (n.Hidden)
+                {
+                    // Not known yet: a dashed pencil ring.
+                    var ring = Ring(p, r - 4, seed);
+                    for (var i = 0; i + 1 < ring.Count; i += 3) Stroke(g, new List<Vector2> { ring[i], ring[i + 1] }, s.Pencil, 1.2f);
+                    continue;
+                }
+                var picked = n.Id == pick?.Id;
+                var quiet = !n.Open && !n.At && !n.Done && !n.Boss;
+                var colour = n.Boss ? s.Red : picked || n.Open ? (s.Roads ? s.Ink : s.Mark) : quiet ? s.Pencil : s.Ink;
+                var width = quiet ? 1.3f : n.Boss || picked ? 2.6f : 2f;
+                // Paper under the ring, so the drawing doesn't show through the symbol.
+                Dot(g, p, r, new Color(s.Paper.r, s.Paper.g, s.Paper.b, 0.85f));
+                Stroke(g, Ring(p, r, seed), colour, width);
+                if (n.Boss || picked || n.At) Stroke(g, Ring(p, r + 3, seed + 7), colour, width * 0.7f);
+                if (s.Roads && (picked || n.Open)) Stroke(g, Ring(p, r + 3, seed + 7), s.Mark, 2.5f);
+            }
+            // The base: a double ring in ink.
+            var home = at["start"];
+            Dot(g, home, 19, new Color(s.Paper.r, s.Paper.g, s.Paper.b, 0.85f));
+            Stroke(g, Ring(home, 19, 3), s.Ink, 2.2f);
+            Stroke(g, Ring(home, 22, 9), s.Ink, 1.4f);
+            // «AQUÍ»: a pin stuck at the ring's top right, its shadow on the paper.
+            var here = v.AtStart ? home + new Vector2(14, -14) : v.Nodes.FirstOrDefault(n => n.At) is RunNodeView at0 ? at[at0.Id] + new Vector2(PaperRadius(at0) * 0.7f, -PaperRadius(at0) * 0.7f) : (Vector2?)null;
+            if (here is Vector2 pin)
+            {
+                Stroke(g, new List<Vector2> { pin + new Vector2(2, 3), pin + new Vector2(9, 13) }, new Color(0, 0, 0, 0.25f), 2);
+                Stroke(g, new List<Vector2> { pin, pin + new Vector2(-5, 9) }, new Color(0.35f, 0.35f, 0.38f), 1.6f);
+                Dot(g, pin + new Vector2(2, 2), 7.5f, new Color(0, 0, 0, 0.25f));
+                Dot(g, pin, 7.5f, s.Red);
+                Dot(g, pin + new Vector2(-2.5f, -2.5f), 2.4f, new Color(1, 1, 1, 0.55f));
+            }
+        }
+
+        /// <summary>An icon in a colour: our drawings (LineIcon) take their holder's tint, the sprites their own.</summary>
+        static void PaperIcon(VisualElement layer, Vector2 centre, string id, Func<string, Sprite> icon, float size, Color colour)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            var holder = new VisualElement { pickingMode = PickingMode.Ignore };
+            Abs(holder, centre.x - size / 2, centre.y - size / 2);
+            holder.style.width = holder.style.height = size;
+            holder.style.unityBackgroundImageTintColor = colour;
+            if (LineIcon.Has(id)) holder.Add(new LineIcon(id) { pickingMode = PickingMode.Ignore });
+            else if (icon?.Invoke(id) is Sprite sprite) holder.style.backgroundImage = new StyleBackground(sprite);
+            layer.Add(holder);
+        }
+
+        static string NoteWord(string id) => id == Modifiers.Night ? "de noche" : id == Modifiers.Storm ? "mal tiempo" : "horda despierta";
+
+        /// <summary>
+        /// A stage written on the map: its place's symbol in the ring (the kind's, for a stop and the boss), the kind small at its
+        /// left; at its right the name («AQUÍ · Rescate»), under it the notes (de noche, mal tiempo, horda despierta) and «Sin
+        /// plaza libre», in their inks; the far ones in pencil.
+        /// </summary>
+        static void PaperNode(VisualElement layer, string kind, RunNodeView n, Vector2 p, bool picked, RunState run, Func<string, Sprite> icon)
+        {
+            var s = SheetOf(kind);
+            if (n.Hidden)
+            {
+                var q = Text(layer, "?", 18, s.Pencil, true);
+                Abs(q, p.x - 5, p.y - 13);
+                return;
+            }
+            var node = run.Nodes.First(x => x.Id == n.Id);
+            var place = !n.Stop && !n.Boss && node.Site != null && LineIcon.Has("place:" + node.Site) ? "place:" + node.Site : null;
+            var quiet = !n.Open && !n.At && !n.Done && !n.Boss;
+            var ink = n.Boss ? s.Red : quiet ? s.Pencil : s.Ink;
+            var r = PaperRadius(n);
+            PaperIcon(layer, p, place ?? n.Icon, icon, r * 1.2f, ink);
+            if (place != null) PaperIcon(layer, p + new Vector2(-r - 12, -r * 0.45f), n.Icon, icon, 17, ink);
+            var words = new VisualElement { pickingMode = PickingMode.Ignore };
+            Abs(words, p.x + r + 8, p.y - 10);
+            layer.Add(words);
+            var name = Text(words, (n.At ? "AQUÍ · " : "") + (n.Boss ? n.Name?.ToUpperInvariant() : n.Name), n.Boss ? 15 : 13, ink, n.Boss || picked || n.At);
+            name.style.whiteSpace = WhiteSpace.NoWrap;
+            if (picked) name.style.unityFontStyleAndWeight = FontStyle.Bold;
+            foreach (var id in new[] { n.ModifierId, n.AddedId }.Where(x => x != null))
+            {
+                var line = new VisualElement { pickingMode = PickingMode.Ignore };
+                line.style.flexDirection = FlexDirection.Row;
+                line.style.alignItems = Align.Center;
+                words.Add(line);
+                var mark = new VisualElement { pickingMode = PickingMode.Ignore };
+                mark.style.width = mark.style.height = 12;
+                mark.style.marginRight = 3;
+                mark.style.unityBackgroundImageTintColor = id == Modifiers.Awake ? s.Red : s.Note;
+                if (LineIcon.Has(ModIcon(id))) mark.Add(new LineIcon(ModIcon(id)) { pickingMode = PickingMode.Ignore });
+                else if (icon?.Invoke(ModIcon(id)) is Sprite sprite) mark.style.backgroundImage = new StyleBackground(sprite);
+                line.Add(mark);
+                Text(line, NoteWord(id), 11, id == Modifiers.Awake ? s.Red : s.Note, false).style.whiteSpace = WhiteSpace.NoWrap;
+            }
+            if (!string.IsNullOrEmpty(n.Warn)) Text(words, n.Warn, 10, s.Red, false).style.whiteSpace = WhiteSpace.NoWrap;
+            if (n.Boss) Text(words, "FIN DEL CAPÍTULO", 10, s.Red, true);
+        }
+
+        static void PaperStart(VisualElement layer, string kind, RunMapView v, Vector2 p, Func<string, Sprite> icon)
+        {
+            var s = SheetOf(kind);
+            PaperIcon(layer, p, "map:lata", icon, 24, s.Ink);
+            var l = Text(layer, (v.AtStart ? "AQUÍ · " : "") + (v.Start ?? "La base").ToUpperInvariant(), 13, s.Ink, true);
+            Abs(l, p.x + 28, p.y - 9);
+            l.style.whiteSpace = WhiteSpace.NoWrap;
+        }
+
+        /// <summary>The legend on the same paper, in the same inks: the notes, and the three ways.</summary>
+        static void PaperLegend(VisualElement layer, string kind, Func<string, Sprite> icon)
+        {
+            var s = SheetOf(kind);
+            var row = new VisualElement();
+            row.style.marginTop = 8;
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.flexWrap = Wrap.Wrap;
+            row.style.backgroundColor = s.Paper;
+            row.style.paddingLeft = 12;
+            row.style.paddingTop = row.style.paddingBottom = 6;
+            layer.Add(row);
+            Text(row, "LEYENDA", 10, s.Ink, true).style.marginRight = 14;
+            foreach (var id in new[] { Modifiers.Night, Modifiers.Storm, Modifiers.Awake })
+            {
+                var m = new VisualElement();
+                m.style.width = m.style.height = 13;
+                m.style.marginRight = 4;
+                m.style.unityBackgroundImageTintColor = id == Modifiers.Awake ? s.Red : s.Note;
+                if (LineIcon.Has(ModIcon(id))) m.Add(new LineIcon(ModIcon(id)));
+                else if (icon?.Invoke(ModIcon(id)) is Sprite sprite) m.style.backgroundImage = new StyleBackground(sprite);
+                row.Add(m);
+                var word = NoteWord(id);
+                Text(row, char.ToUpperInvariant(word[0]) + word.Substring(1) + ": más botín", 11, s.Ink, false).style.marginRight = 14;
+            }
+            void Sample(Color colour, float height, string words, Color? casing = null)
+            {
+                var sw = new VisualElement();
+                sw.style.width = 28;
+                sw.style.height = height;
+                sw.style.backgroundColor = colour;
+                if (casing is Color c) Border(sw, c, 1.5f);
+                sw.style.marginRight = 5;
+                row.Add(sw);
+                Text(row, words, 11, s.Ink, false).style.marginRight = 14;
+            }
+            if (s.Roads)
+            {
+                Sample(s.Mark, 6, "Se puede ir", s.Ink);
+                Sample(s.Red, 6, "Recorrido", s.Ink);
+                Sample(s.Paper, 4, "Más adelante", s.Pencil);
+            }
+            else
+            {
+                Sample(s.Mark, 3, "Se puede ir");
+                Sample(s.Ink, 3, "Recorrido");
+                Sample(s.Pencil, 1.5f, "Más adelante");
+            }
         }
 
         // ------------------------------------------------------------ helpers

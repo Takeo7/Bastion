@@ -244,6 +244,9 @@ namespace Bastion.UI.Hud
             var head = Ui.El("ac-head", card);
             Ui.Text(a.Name, "ac-head__name font-title", head);
             if (!string.IsNullOrEmpty(a.Hotkey)) Ui.Text(a.Hotkey, "ac-head__key", head);
+            // What it does in a sentence, first and in bold; the detail at the foot (Producto's review, 23/11, B22).
+            var (lead, detail) = Lead(a.Description);
+            if (lead != null) Ui.Text(lead, "ac-lead", card);
             if (a.Stats.Count > 0)
             {
                 var stats = Ui.El("ac-stats", card);
@@ -263,9 +266,25 @@ namespace Bastion.UI.Hud
                 if (!string.IsNullOrEmpty(a.Damage)) Ui.Text(a.Damage, "ac-dmg", card);
             }
             // (None: only why it's off, El herido's La Lata, U25.)
-            if (!string.IsNullOrEmpty(a.Description)) Ui.Text(a.Description, "ac-desc", card);
+            if (!string.IsNullOrEmpty(detail)) Ui.Text(detail, "ac-desc", card);
             if (!string.IsNullOrEmpty(a.Reason)) Ui.Text(a.Reason, "ac-why", card);
             return card;
+        }
+
+        /// <summary>
+        /// A description's first sentence and the rest: up to its first «. » or «: » (a colon's sentence closed with a stop, the
+        /// rest begun in capitals); all of it, a single sentence.
+        /// </summary>
+        static (string lead, string detail) Lead(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return (null, null);
+            var stop = text.IndexOf(". ", System.StringComparison.Ordinal);
+            var colon = text.IndexOf(": ", System.StringComparison.Ordinal);
+            var at = stop < 0 ? colon : colon < 0 ? stop : System.Math.Min(stop, colon);
+            if (at < 0) return (text, null);
+            var rest = text.Substring(at + 2).TrimStart();
+            if (rest.Length == 0) return (text, null);
+            return (text.Substring(0, at) + ".", char.ToUpperInvariant(rest[0]) + rest.Substring(1));
         }
 
         /// <summary>A menu's choice with the number it is picked by in place of its own key.</summary>

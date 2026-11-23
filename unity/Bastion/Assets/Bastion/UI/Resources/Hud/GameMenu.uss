@@ -325,6 +325,14 @@
 }
 
 /* «Ajuste auto»: what it has lowered, under its switch. */
+/* What the row does in a line, under its name (B7). */
+.setting__hint {
+    margin: -2px 0 4px;
+    font-size: 12px;
+    color: #c4c9c0;
+    white-space: normal;
+}
+
 .setting__note {
     margin-top: 3px;
     font-size: 12px;

@@ -101,6 +101,14 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>The runs' base (16/11; Lore's names: «Expedición», «Etapa», «Capítulo»).</summary>
+        /// <summary>The soldier sheet's three lines, each its word (Producto's review, 23/11, B9): the battle HUD's own.</summary>
+        public static class Sheet
+        {
+            public const string Health = "Salud";
+            public const string Actions = "Acciones";
+            public const string Moves = "Movimiento";
+        }
+
         public static class Runs
         {
             public static string Chapter(int n) => $"CAPÍTULO {n}";
@@ -125,6 +133,10 @@ namespace Bastion.UI.Strategy
             public const string UpgradesHead = "Mejoras";
             public const string Upgrade = "Mejorar";
             public const string UpgradeTop = "Al máximo";
+            /// <summary>An upgrade's level in words beside its marks (Producto's review, 23/11, B12; Lore's yes).</summary>
+            public static string UpgradeLevel(int level, int levels) => level <= 0 ? "Sin mejorar" : level >= levels ? $"Nivel {level} de {levels}: al máximo" : $"Nivel {level} de {levels}";
+            /// <summary>Under the Trueque's purse (B18): only what the soldiers carry counts out there (Lore, 23/11).</summary>
+            public const string PurseOnly = "En una expedición solo cuenta lo que llevan encima: lo del almacén se queda en la base.";
             public static string UpgradeTip(int price) => $"Se gastan {price} § del almacén.";
 
             public static string UpgradeName(string id) => Lore.UpgradeNames.TryGetValue(id, out var n) ? n : id;

@@ -309,6 +309,15 @@
     font-size: 12px;
 }
 
+/* What it does, in a sentence, first and in bold (B22). */
+.ac-lead {
+    margin-top: 4px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: #ffffff;
+    white-space: normal;
+}
+
 .ac-desc {
     margin-top: 4px;
     font-size: 12px;

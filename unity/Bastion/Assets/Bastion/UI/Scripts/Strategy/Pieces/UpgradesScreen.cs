@@ -46,6 +46,8 @@ namespace Bastion.UI.Strategy
                 Ui.Text(r.Line, "upgrade__line muted", text);
                 var marks = Ui.El("upgrade__marks", text);
                 for (var i = 0; i < r.Levels; i++) Ui.El(i < r.Level ? "upgrade__mark upgrade__mark--on" : "upgrade__mark", marks);
+                // Its level in words beside the marks (Producto's review, 23/11, B12: the marks alone read badly).
+                if (!string.IsNullOrEmpty(r.LevelText)) Ui.Text(r.LevelText, "upgrade__level", marks);
                 var side = Ui.El("upgrade__side", row);
                 if (!string.IsNullOrEmpty(r.Price)) SuppliesMark.Make(side, r.Price, "supplies-mark--small upgrade__price");
                 var id = r.Id;

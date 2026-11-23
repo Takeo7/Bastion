@@ -170,6 +170,8 @@ namespace Bastion.UI.Strategy
         public string Purse;
         /// <summary>Whose pack a ware goes into («Va a la mochila de Rafael»: the soldier chosen on the right).</summary>
         public string For;
+        /// <summary>That only what the soldiers carry counts on an expedition, not the stash (B18).</summary>
+        public string PurseNote;
         /// <summary>«Seguir»; on, this player has asked; why not yet (answer first); the partner awaited.</summary>
         public string Leave;
         public bool LeaveOn;
@@ -220,6 +222,8 @@ namespace Bastion.UI.Strategy
         /// <summary>What the next level does (or, at the top, what it does now).</summary>
         public string Line;
         public int Level, Levels;
+        /// <summary>The level in words beside its marks (B12): «Sin mejorar», «Nivel 1 de 3», «Nivel 3 de 3: al máximo».</summary>
+        public string LevelText;
         /// <summary>«120 §»; null at the top.</summary>
         public string Price;
         /// <summary>«Mejorar», «Al máximo».</summary>

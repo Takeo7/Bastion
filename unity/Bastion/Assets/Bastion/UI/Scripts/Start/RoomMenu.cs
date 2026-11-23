@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Bastion.Client.Menu;
 using Bastion.Client.Net;
 using Bastion.Engine;
 using Bastion.Net;
@@ -10,14 +11,15 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Start
 {
     /// <summary>
-    /// The room menu, between joining and the mission or the base (lobby.ts; docs/UNITY-UI.md): the commanders and their
-    /// state, where the partner joins (the host's addresses, with «Copiar», and the router's: open, its address on the
-    /// internet; else how it goes); its main page, «Continuar campaña» (the
-    /// saved one's outings, level and Marea, or the mission left half played), «Nueva campaña» (asked first over a saved
-    /// one or without the partner) and «Escaramuza»; and the skirmish's sheet: the mission, the map (the city alone in
-    /// the first milestone), day or night, and start (the `start` message). It reads NetLink.LastRoom and never listens to
-    /// NetLink.Message: what the host sends waits there for the game, its snapshot first (AppFlow loads the battle when
-    /// the room's phase is mission). «Ir al inicio» leaves; a host with the partner in is warned first.
+    /// The room, between joining and the mission or the base (lobby.ts; docs/UNITY-UI.md), remade as a screen of the game
+    /// (cuadro 124, Arturo 23/11) after the start screen it comes from: over Arte's crossroads, the main menu's band with the
+    /// title and the room's keys: «Continuar partida» (the saved one's chapter and level, where it is, or the mission left
+    /// half played), «Nueva partida» (its level, on the four cards, and what it replaces or that the partner isn't in),
+    /// «Escaramuza» (its sheet: the mission, the map, day or night, start: the `start` message) and «Ir al inicio» (a host
+    /// with the partner in is warned first). The two players big in the middle, each in its colour; under them how the
+    /// partner joins, the addresses (the host's, the router's open, the room's key) folded behind «¿No le sale tu partida?».
+    /// It reads NetLink.LastRoom and never listens to NetLink.Message: what the host sends waits there for the game, its
+    /// snapshot first (AppFlow loads the battle when the room's phase is mission).
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class RoomMenu : MonoBehaviour
@@ -31,14 +33,18 @@ namespace Bastion.UI.Start
         string mission;
         bool night;
         bool warned;
-        /// <summary>main, ask (a new campaign's question) or skirmish.</summary>
+        /// <summary>The addresses unfolded («¿No le sale tu partida?»).</summary>
+        bool addresses;
+        /// <summary>main, new (a new game's level and question) or skirmish.</summary>
         string page = "main";
+        LevelPicker levels;
         /// <summary>Made-up room and addresses for a capture (Preview); null, NetLink's.</summary>
         RoomMessage previewRoom;
         IReadOnlyList<HostAddress> previewAddresses;
         bool previewHosting;
         RouterState? previewRouter;
         string previewInternet;
+        int previewSlot;
 
         void OnEnable()
         {
@@ -52,40 +58,47 @@ namespace Bastion.UI.Start
             doc.rootVisualElement.Clear();
             tree.CloneTree(doc.rootVisualElement);
             root = doc.rootVisualElement.Q("room");
-            // mixta.css .menu-column, .menu-squad: the room's two plates framed, «Empezar» slanted (as the 0.10.1).
-            PlateFrame.Dress(root.Q(className: "room__side"));
-            PlateFrame.Dress(root.Q(className: "room__main"));
-            root.Query<Button>(className: "btn-primary").ForEach(Slant.Dress);
+            root.Q("fade").generateVisualContent += StartScreen.Fade;
+            // The crossroads of «Partida multijugador», where the room is hosted or joined from; again when the room comes back
+            // after a mission or the base (the start scene loaded anew).
+            if (MenuBackdrop.Current == null || MenuBackdrop.Current.Shown != MenuBackdrop.Scene.Crossroads) MenuBackdrop.Show(MenuBackdrop.Scene.Crossroads);
             link = NetLink.Instance;
             mission = PlayerPrefs.GetString(MissionKey, "elimination");
             if (!RoomText.Missions.Any(m => m.Id == mission)) mission = "elimination";
             night = PlayerPrefs.GetInt(NightKey, 0) == 1;
             warned = false;
+            addresses = false;
             page = "main";
             key = null;
+            root.Q<Label>("title").text = RoomText.Title.ToUpperInvariant();
             root.Q<Label>("mission-head").text = RoomText.Mission.ToUpperInvariant();
             root.Q<Label>("map-head").text = RoomText.Map.ToUpperInvariant();
             root.Q<Label>("hour-head").text = RoomText.Hour.ToUpperInvariant();
-            root.Q<Button>("start").clicked += StartMission;
-            root.Q<Button>("leave").clicked += Leave;
+            root.Q<Button>("start").clicked += Begin;
             var back = root.Q<Button>("back");
-            back.text = RoomText.Back;
+            back.text = RoomText.Back.ToUpperInvariant();
             back.clicked += () => Go("main");
+            levels = new LevelPicker(StartScreen.HostLevel);
+            levels.Picked += id => StartScreen.HostLevel = id;
+            root.Q("levels").Add(levels.Root);
             Draw();
         }
 
         /// <summary>
-        /// A room to show without a connection (HudShots.Room): its players, the host's addresses, hosting or not, the page;
-        /// the router's state and, open, its address on the internet.
+        /// A room to show without a connection (HudShots.Room): its players, the host's addresses, hosting or not, the page
+        /// (main, new, skirmish; «direcciones», main with the addresses unfolded); the router's state and, open, its address on
+        /// the internet; this app's seat.
         /// </summary>
-        public void Preview(RoomMessage room, IReadOnlyList<HostAddress> addresses, bool hosting, string page = "main", RouterState? router = null, string internet = null)
+        public void Preview(RoomMessage room, IReadOnlyList<HostAddress> addresses, bool hosting, string page = "main", RouterState? router = null, string internet = null, int slot = 0)
         {
             previewRoom = room;
             previewAddresses = addresses;
             previewHosting = hosting;
             previewRouter = router;
             previewInternet = internet;
-            this.page = page;
+            previewSlot = slot;
+            this.addresses = page == "direcciones";
+            this.page = page == "direcciones" ? "main" : page;
             key = null;
         }
 
@@ -99,16 +112,17 @@ namespace Bastion.UI.Start
         /// · KXRT5», shown and copied whole, to paste as it is in «Unirse por dirección».
         /// </summary>
         string Internet => previewRoom != null ? previewInternet : link.Invite ?? link.Internet;
-        int Slot => previewRoom != null ? 0 : link.Slot;
+        int Slot => previewRoom != null ? previewSlot : link.Slot;
+        string RoomKey => previewRoom != null ? (previewRouter == RouterState.Open ? "KXRT5" : null) : link.Key;
 
         void Update()
         {
             if (root == null) return;
             var room = Room;
             // Drawn again only when who is in, their state, or the choices change.
-            var k = room == null ? "" : string.Join("|", room.Players.Select(p => $"{p.Slot}:{p.Name}:{p.Connected}:{p.Away}"));
+            var k = room == null ? "" : string.Join("|", room.Players.Select(p => $"{p.Slot}:{p.Name}:{p.Connected}:{p.Away}:{p.Color}"));
             var saved = room?.SavedCampaign;
-            k += $"#{Hosting}#{mission}#{night}#{warned}#{page}#{(saved != null ? RoomText.Saved(saved) : "")}#{room?.SetAside}#{room?.Restored}#{Router}#{Internet}#{link.Key}";
+            k += $"#{Hosting}#{mission}#{night}#{warned}#{addresses}#{page}#{(saved != null ? RoomText.Saved(saved) + saved.GameLevel : "")}#{room?.SetAside}#{room?.Restored}#{Router}#{Internet}#{RoomKey}";
             if (k == key) return;
             key = k;
             Draw();
@@ -118,26 +132,118 @@ namespace Bastion.UI.Start
         {
             var room = Room;
             var players = room?.Players ?? new List<PlayerInfo>();
-            root.Q<Label>("seats-head").text = (room != null ? RoomText.Commanders : RoomText.Connecting).ToUpperInvariant();
+            var main = page == "main";
+            Ui.Show(root.Q("menu"), main);
+            Ui.Show(root.Q("players"), main);
+            Ui.Show(root.Q("center"), !main);
+            DrawSeats(room, players);
+            DrawInvite(players);
+            DrawMenu(room, players);
+            DrawSheet(room, players);
+            Say(warned ? Lore.QuitHostWarning(Partner(players)) : "");
+        }
+
+        /// <summary>
+        /// The two players (cuadro 124: big), as «Partida multijugador»'s cards: the host's flag and the partner's two soldiers
+        /// in each one's colour, the name in the band with whether they are in; this app's marked «TÚ»; the seat still empty,
+        /// faint, waiting.
+        /// </summary>
+        void DrawSeats(RoomMessage room, List<PlayerInfo> players)
+        {
             var seats = root.Q("seats");
             seats.Clear();
             for (var slot = 0; slot < 2; slot++)
             {
                 var p = players.FirstOrDefault(x => x.Slot == slot);
+                Color grey = new Color32(0xc4, 0xc6, 0xc2, 0xff);
+                var colour = p != null ? Ui.Hex(p.Color, grey) : grey;
                 var seat = Ui.El("room__seat", seats);
                 seat.EnableInClassList("room__seat--empty", p == null);
                 seat.EnableInClassList("room__seat--offline", p != null && !p.Connected);
-                seat.style.borderLeftColor = Ui.Hex(p?.Color, new Color32(0x3a, 0x46, 0x52, 0xff));
-                Ui.Text(p != null ? p.Name : RoomText.WaitingPlayer, "room__seat-name", seat);
-                if (p != null) Ui.Text(!p.Connected ? RoomText.Offline : p.Away == true ? RoomText.Away : RoomText.Connected, "room__seat-state", seat);
+                if (p != null) SetBorder(seat, colour);
+                var face = Ui.El("room__seat-face", seat);
+                var icon = Ui.El("room__seat-icon", face);
+                var art = Resources.Load<Texture2D>(slot == 0 ? "Start/icono-alojar" : "Start/icono-unirse");
+                if (art != null) icon.style.backgroundImage = art;
+                icon.style.unityBackgroundImageTintColor = p != null ? colour : new Color(0.77f, 0.78f, 0.76f, 0.7f);
+                var band = Ui.El("room__seat-band", seat);
+                if (p != null) band.style.borderTopColor = colour;
+                Ui.Text((p != null ? p.Name : room != null ? RoomText.WaitingPlayer : RoomText.Connecting).ToUpperInvariant(), "room__seat-name font-title", band);
+                if (p != null) Ui.Text(!p.Connected ? RoomText.Offline : p.Away == true ? RoomText.Away : RoomText.Connected, "room__seat-state", band);
+                if (p != null && p.Slot == Slot) Ui.Text(RoomText.You.ToUpperInvariant(), "room__you", seat);
             }
-            DrawInvite(players);
-            var sheet = page == "skirmish";
-            Ui.Show(root.Q("skirmish"), sheet);
-            Ui.Show(root.Q<Button>("start"), sheet);
-            Ui.Show(root.Q<Button>("back"), sheet);
-            DrawMenu(room, players, sheet);
+        }
 
+        static void SetBorder(VisualElement e, Color c)
+        {
+            e.style.borderTopColor = c;
+            e.style.borderRightColor = c;
+            e.style.borderBottomColor = c;
+            e.style.borderLeftColor = c;
+        }
+
+        /// <summary>
+        /// The room's keys on the band (lobby.ts renderMain): «Continuar partida» with the saved game's chapter and level and
+        /// where it is (the level in view, cuadro 124); «Nueva partida»; «Escaramuza» (not with a mission half played: why,
+        /// under it); the notes of a campaign kept aside or a save that wouldn't start; «Ir al inicio».
+        /// </summary>
+        void DrawMenu(RoomMessage room, List<PlayerInfo> players)
+        {
+            var menu = root.Q("menu");
+            menu.Clear();
+            var saved = room?.SavedCampaign;
+            var ok = room != null && players.Any(p => p.Connected);
+            if (saved != null)
+            {
+                Key(menu, RoomText.Continue, ok, () => Send(new ContinueCampaignMessage()));
+                if (saved.Chapter > 0) Ui.Text(StartText.SavedLine(saved.Chapter, Lore.GameLevelText.NameOf(saved.GameLevel)), "room__note room__note--level", menu);
+                Ui.Text(RoomText.SavedWhere(saved), "room__note", menu);
+            }
+            Key(menu, RoomText.NewCampaign, ok, () => Go("new"));
+            var blocked = saved?.InMission != null;
+            Key(menu, RoomText.Skirmish, ok && !blocked, () => Go("skirmish"));
+            if (blocked) Ui.Text(RoomText.SkirmishBlocked, "room__note", menu);
+            if (!string.IsNullOrEmpty(room?.SetAside)) Ui.Text(RoomText.SetAside(room.SetAside), "start__old", menu);
+            // The save wouldn't start: which copy the game goes on from (the host's words, Red 0.12.17).
+            if (!string.IsNullOrEmpty(room?.Restored)) Ui.Text(room.Restored, "start__old", menu);
+            Key(menu, warned ? Lore.QuitText.Accept : Lore.HostClosed.Home, true, Leave);
+        }
+
+        static void Key(VisualElement menu, string text, bool enabled, System.Action click)
+        {
+            var b = new Button(click) { text = text.ToUpperInvariant() };
+            b.AddToClassList("start__key");
+            b.AddToClassList("font-title");
+            b.SetEnabled(enabled);
+            menu.Add(b);
+        }
+
+        /// <summary>
+        /// The plate in the middle. A new game (cuadro 124: its level in view): the four levels (LevelPicker, the one last picked
+        /// marked), the saved game it replaces, that the partner isn't in yet; «Empezar» or «Empezar de cero». The skirmish's
+        /// sheet (lobby.ts renderSkirmish): the mission, the map, day or night; «Empezar en solitario» or «Empezar escaramuza».
+        /// </summary>
+        void DrawSheet(RoomMessage room, List<PlayerInfo> players)
+        {
+            var saved = room?.SavedCampaign;
+            var alone = players.Count(p => p.Connected) < 2;
+            var connected = players.Count(p => p.Connected);
+            var isNew = page == "new";
+            var skirmish = page == "skirmish";
+            root.Q("sheet").EnableInClassList("start__form--levels", isNew);
+            root.Q("sheet").EnableInClassList("room__sheet--levels", isNew);
+            Ui.Show(root.Q("levels"), isNew);
+            Ui.Show(root.Q("skirmish"), skirmish);
+            if (isNew) levels.Set(StartScreen.HostLevel);
+            var ask = root.Q("ask");
+            ask.Clear();
+            if (isNew && saved != null) Ui.Text(RoomText.Replaces(saved), "room__ask-text room__ask-text--warn", ask);
+            if (isNew && alone) Ui.Text(RoomText.AloneText, "room__ask-text", ask);
+            if (skirmish) Ui.Text(connected < 2 ? RoomText.StartAloneAbout : RoomText.StartTwoAbout, "room__ask-text", ask);
+            var start = root.Q<Button>("start");
+            start.text = (isNew ? (saved != null ? RoomText.StartAgain : RoomText.StartNew) : connected < 2 ? RoomText.StartAlone : RoomText.StartTwo).ToUpperInvariant();
+            start.SetEnabled(room != null && connected > 0);
+            if (!skirmish) return;
             Options(root.Q("missions"), RoomText.Missions.Select(m => (m.Id, m.Name, m.About)), mission, id =>
             {
                 mission = id;
@@ -149,77 +255,12 @@ namespace Bastion.UI.Start
                 night = id == "night";
                 PlayerPrefs.SetInt(NightKey, night ? 1 : 0);
             });
-
-            var connected = players.Count(p => p.Connected);
-            var start = root.Q<Button>("start");
-            start.SetEnabled(room != null && connected > 0);
-            root.Q<Label>("start-title").text = (connected < 2 ? RoomText.StartAlone : RoomText.StartTwo).ToUpperInvariant();
-            root.Q<Label>("start-about").text = connected < 2 ? RoomText.StartAloneAbout : RoomText.StartTwoAbout;
-            var leave = root.Q<Button>("leave");
-            leave.text = warned ? Lore.QuitText.Accept : Lore.HostClosed.Home;
-            Say(warned ? Lore.QuitHostWarning(Partner(players)) : "");
-        }
-
-        /// <summary>
-        /// The main page (lobby.ts renderMain): «Continuar campaña» with how far it went, «Nueva campaña», «Escaramuza»
-        /// (not with a campaign mission half played), and the note of a campaign kept aside; or, on «Nueva campaña» over a
-        /// saved one or without the partner, its question (renderConfirm).
-        /// </summary>
-        void DrawMenu(RoomMessage room, List<PlayerInfo> players, bool sheet)
-        {
-            var menu = root.Q("menu");
-            menu.Clear();
-            Ui.Show(menu, !sheet);
-            if (sheet) return;
-            var saved = room?.SavedCampaign;
-            var alone = players.Count(p => p.Connected) < 2;
-            var ok = room != null && players.Any(p => p.Connected);
-            if (page == "ask")
-            {
-                Ui.Text(RoomText.NewCampaign.ToUpperInvariant(), "room__ask-kicker font-title", menu);
-                Ui.Text((saved != null ? RoomText.AskAgain : RoomText.AskAlone).ToUpperInvariant(), "room__ask-title font-title", menu);
-                if (saved != null) Ui.Text(RoomText.Replaces(saved), "room__ask-text", menu);
-                if (alone) Ui.Text(RoomText.AloneText, "room__ask-text", menu);
-                var actions = Ui.El("room__ask-actions", menu);
-                actions.Add(new Button(() => Go("main")) { text = alone && saved == null ? RoomText.Wait : RoomText.Cancel });
-                var yes = new Button(() =>
-                {
-                    Go("main");
-                    Send(new NewCampaignMessage { Level = StartScreen.HostLevel });
-                }) { text = saved != null ? RoomText.StartAgain : RoomText.StartNew };
-                yes.AddToClassList("btn-primary");
-                actions.Add(yes);
-                Slant.Dress(yes);
-                return;
-            }
-            if (saved != null) Choice(menu, RoomText.Continue, RoomText.Saved(saved), true, ok, () => Send(new ContinueCampaignMessage()));
-            Choice(menu, RoomText.NewCampaign, RoomText.NewCampaignAbout, saved == null, ok, () =>
-            {
-                if (saved == null && !alone) Send(new NewCampaignMessage { Level = StartScreen.HostLevel });
-                else Go("ask");
-            });
-            Choice(menu, RoomText.Skirmish, saved?.InMission != null ? RoomText.SkirmishBlocked : RoomText.SkirmishAbout, false, ok && saved?.InMission == null, () => Go("skirmish"));
-            if (!string.IsNullOrEmpty(room?.SetAside)) Ui.Text(RoomText.SetAside(room.SetAside), "start__hint", menu);
-            // The save wouldn't start: which copy the game goes on from (the host's words, Red 0.12.17).
-            if (!string.IsNullOrEmpty(room?.Restored)) Ui.Text(room.Restored, "start__hint", menu);
-        }
-
-        /// <summary>A choice of the main page (lobby.ts .menu-item): its name big, what it is small under it.</summary>
-        static void Choice(VisualElement menu, string title, string about, bool primary, bool enabled, System.Action click)
-        {
-            var b = new Button(click);
-            b.AddToClassList("start__choice");
-            if (primary) b.AddToClassList("btn-primary");
-            Ui.Text(title.ToUpperInvariant(), "start__choice-title font-title", b).pickingMode = PickingMode.Ignore;
-            Ui.Text(about, "start__choice-about", b).pickingMode = PickingMode.Ignore;
-            b.SetEnabled(enabled);
-            menu.Add(b);
-            if (primary) Slant.Dress(b);
         }
 
         void Go(string to)
         {
             page = to;
+            warned = false;
             key = null;
         }
 
@@ -228,33 +269,64 @@ namespace Bastion.UI.Start
             if (previewRoom == null) link.Send(msg);
         }
 
+        /// <summary>The plate's go key: the new game at the level picked, or the skirmish.</summary>
+        void Begin()
+        {
+            if (page == "new")
+            {
+                Go("main");
+                Send(new NewCampaignMessage { Level = levels.Level });
+                return;
+            }
+            if (previewRoom != null) return;
+            link.Send(new StartMessage { Mission = mission, Map = "city", Night = night });
+        }
+
         /// <summary>
-        /// How the partner joins (lobby.ts invite): the host's addresses, the default route's first; then the router's (Arturo,
-        /// 01/11: over the internet without Tailscale), its address once the port is open, a line while it opens or why it
-        /// won't; the rest folded.
+        /// How the partner joins, hosting while they aren't in (lobby.ts invite; cuadro 124: the address hidden): the line of
+        /// where they will see this game, and «¿No le sale tu partida?», which unfolds the addresses: the host's, the default
+        /// route's first; the router's (Arturo, 01/11: over the internet without Tailscale), its address once the port is open,
+        /// a line while it opens or why it won't; the room's key; the rest folded. On iOS nothing is announced (NetLink.LanBlind):
+        /// the addresses at once, the only way in.
         /// </summary>
         void DrawInvite(List<PlayerInfo> players)
         {
             var invite = root.Q("invite");
             invite.Clear();
             if (!Hosting || players.Count(p => p.Connected) >= 2) return;
-            var addresses = Addresses ?? new List<HostAddress>();
+            var list = Addresses ?? new List<HostAddress>();
             var router = Router;
             var internet = router == RouterState.Open ? Internet : null;
-            if (addresses.Count == 0 && internet == null) return;
-            Ui.Text(Bastion.Client.Net.NetLink.LanBlind ? RoomText.InviteBlind : RoomText.Invite(players.FirstOrDefault(p => p.Slot == Slot)?.Name), "start__hint", invite);
-            if (addresses.Count > 0) Address(invite, addresses[0]);
-            if (internet != null) Address(invite, new HostAddress { Address = internet, Kind = "internet" });
-            else if (router != null && router != RouterState.Open) Ui.Text(RoomText.RouterLine(router.Value), router == RouterState.Trying ? "room__router" : "room__router room__router--off", invite);
+            if (list.Count == 0 && internet == null) return;
+            var blind = NetLink.LanBlind;
+            var plate = Ui.El("room__invite-plate", invite);
+            if (blind) Ui.Text(RoomText.InviteBlind, "room__invite-line", plate);
+            else
+            {
+                Ui.Text(RoomText.InviteSeen(players.FirstOrDefault(p => p.Slot == Slot)?.Name), "room__invite-line", plate);
+                var more = new Button(() =>
+                {
+                    addresses = !addresses;
+                    key = null;
+                }) { text = (addresses ? "▾ " : "▸ ") + RoomText.NotSeen };
+                more.AddToClassList("room__more");
+                plate.Add(more);
+                if (!addresses) return;
+            }
+            var box = Ui.El("room__addresses", plate);
+            if (!blind) Ui.Text(RoomText.InviteAddress, "room__invite-line", box);
+            if (list.Count > 0) Address(box, list[0]);
+            if (internet != null) Address(box, new HostAddress { Address = internet, Kind = "internet" });
+            else if (router != null && router != RouterState.Open) Ui.Text(RoomText.RouterLine(router.Value), router == RouterState.Trying ? "room__router" : "room__router room__router--off", box);
             // The room's key on its own line, with the internet's address or without it: asked of whoever comes from the
             // internet (an IPv6 address too, the port closed or not), and from the house while the router's port is open, where
             // what is typed is the house's address and the key (Red, 0.12.17 and 0.12.18; Gameplay's review, 10/11, #9; Lore).
-            if (previewRoom == null && link.Key is string key) Ui.Text(RoomText.KeyLine(key), "room__router", invite);
-            if (addresses.Count > 1)
+            if (RoomKey is string k) Ui.Text(RoomText.KeyLine(k), "room__router", box);
+            if (list.Count > 1)
             {
-                var more = new Foldout { text = RoomText.OtherAddresses(addresses.Count - 1), value = false };
-                for (var i = 1; i < addresses.Count; i++) Address(more, addresses[i]);
-                invite.Add(more);
+                var others = new Foldout { text = RoomText.OtherAddresses(list.Count - 1), value = false };
+                for (var i = 1; i < list.Count; i++) Address(others, list[i]);
+                box.Add(others);
             }
         }
 
@@ -293,12 +365,6 @@ namespace Bastion.UI.Start
             }
         }
 
-        void StartMission()
-        {
-            if (previewRoom != null) return;
-            link.Send(new StartMessage { Mission = mission, Map = "city", Night = night });
-        }
-
         /// <summary>Back to the start screen; a host whose partner is in is told what happens first, and presses again.</summary>
         void Leave()
         {
@@ -306,6 +372,7 @@ namespace Bastion.UI.Start
             if (partnerIn && !warned)
             {
                 warned = true;
+                key = null;
                 return;
             }
             warned = false;
@@ -319,6 +386,7 @@ namespace Bastion.UI.Start
         {
             var status = root.Q<Label>("status");
             status.text = text;
+            status.EnableInClassList("start__status--on", !string.IsNullOrEmpty(text));
             status.EnableInClassList("start__status--bad", !string.IsNullOrEmpty(text));
         }
     }

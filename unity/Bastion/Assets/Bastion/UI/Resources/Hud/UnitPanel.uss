@@ -115,6 +115,18 @@
     -unity-background-image-tint-color: var(--t-muted);
 }
 
+/* An aim's word before its number (B24): «PUNT. 55»; with the finger, only the weapon in hand's (the strip is tight). */
+.stat__word {
+    margin-left: 2px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--t-muted);
+}
+
+.touch .stat__word--spare {
+    display: none;
+}
+
 .stat__value {
     font-size: 12px;
     -unity-font-style: bold;

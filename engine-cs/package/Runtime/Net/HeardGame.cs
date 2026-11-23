@@ -133,7 +133,7 @@ namespace Bastion.Net
         /// wounded enough (MedicineOrder), then the host proposes the first node in sight. At a stop, the host answers yes
         /// (a survivor with no bed for them, no); at a Trade each buys one ware (WareOrder); then each asks to go on, again
         /// if the partner has gone meanwhile (alone, it counts at once). Back to the base before the boss only when the squad
-        /// is broken (Homeward); else the run comes back by itself after it, or when the squad falls. In a fight, nothing. Each order is one the engine would take now, by
+        /// is broken (Homeward), or as Care says; else the run comes back by itself after it, or when the squad falls. In a fight, nothing. Each order is one the engine would take now, by
         /// its own refusals on what was heard. Null: wait.
         /// </summary>
         private CampaignCommand? RunOrder(CampaignState c, int slot, bool hosting)
@@ -164,7 +164,9 @@ namespace Bastion.Net
                 if (Homeward(c, run) && Runs.EndRunRefusal(c) == null) return new EndRunCommand();
                 var choices = RunMap.Choices(run);
                 // Wanting home where it can't go (G22: only from a Refuge), toward one: a Refuge to choose, or one just past.
+                // Careful (Care.Fights), always toward the nearest, to go home from it once the fights are played.
                 var refuge = Homeward(c, run) ? choices.FirstOrDefault((n) => n.Kind == NodeKinds.Refuge) ?? choices.FirstOrDefault((n) => n.Next.Any((id) => RunMap.Node(run, id)?.Kind == NodeKinds.Refuge)) : null;
+                if (refuge == null && Care?.Fights != null && Capped()) refuge = TowardRefuge(run, choices);
                 var next = refuge ?? choices.FirstOrDefault((n) => RunMap.Visible(c, n)) ?? choices.FirstOrDefault();
                 return next != null && Runs.ChooseNodeRefusal(c, next.Id) == null ? new ChooseNodeCommand { Node = next.Id } : null;
             }
@@ -216,7 +218,54 @@ namespace Bastion.Net
             var left = run.Squad.Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id)).Where((s) => s != null && s.Alive).Select((s) => s!).ToList();
             var went = wentOut.TryGetValue(run.Seed, out var n) ? n : Runs.SeatsOf(c);
             if (left.Count * 2 <= went) return true;
-            return left.Sum((s) => Runs.HpOf(c, s)) * 2 <= left.Sum(Runs.MaxHp);
+            if (left.Sum((s) => Runs.HpOf(c, s)) * 2 <= left.Sum(Runs.MaxHp)) return true;
+            if (Care == null) return false;
+            if (Care.Fights is int fights && Capped() && run.Path.Count((id) => RunMap.Node(run, id) is RunNode p && RunMap.IsFight(p.Kind)) >= fights) return true;
+            return Care.Hurt && (left.Count < went || left.Any((s) => Runs.HpOf(c, s) < Runs.MaxHp(s)));
+        }
+
+        /// <summary>
+        /// For the bench (Red, 23/11; Producto: the measure the levels lacked, since this bot went home only once broken and
+        /// lost every game before El Toro): a careful player's way home, besides Homeward's. Null, as before.
+        /// </summary>
+        public Carefulness? Care { get; set; }
+
+        public sealed class Carefulness
+        {
+            /// <summary>Home after this many fights of the run, by the nearest Refuges all the way (TowardRefuge). Null: no limit.</summary>
+            public int? Fights { get; set; }
+
+            /// <summary>Home after a node with one of the squad fallen, or one left short of their health (after any mending).</summary>
+            public bool Hurt { get; set; }
+
+            /// <summary>From this expedition on (1 the first), Fights no more: for El Toro, home only as Hurt says. Null: Fights always.</summary>
+            public int? ToroFrom { get; set; }
+        }
+
+        /// <summary>Whether Care.Fights holds now: not yet the expedition it goes for El Toro from (those this app saw go out, wentOut, this one too).</summary>
+        private bool Capped() => Care != null && (Care.ToroFrom == null || wentOut.Count < Care.ToroFrom);
+
+        /// <summary>
+        /// Of `choices`, the one with the fewest fights before a Refuge (a Refuge itself none); the first of those tied. Null if no
+        /// way from any leads to one.
+        /// </summary>
+        private static RunNode? TowardRefuge(RunState run, List<RunNode> choices)
+        {
+            var known = new Dictionary<string, int?>();
+            int? Fights(RunNode n)
+            {
+                if (known.TryGetValue(n.Id, out var had)) return had;
+                int? found = null;
+                if (n.Kind == NodeKinds.Refuge) found = 0;
+                else
+                {
+                    var on = n.Next.Select((id) => RunMap.Node(run, id)).Where((x) => x != null).Select((x) => Fights(x!)).Where((f) => f != null).Select((f) => f!.Value).ToList();
+                    if (on.Count > 0) found = on.Min() + (RunMap.IsFight(n.Kind) ? 1 : 0);
+                }
+                known[n.Id] = found;
+                return found;
+            }
+            return choices.Select((n) => (Node: n, Fights: Fights(n))).Where((x) => x.Fights != null).OrderBy((x) => x.Fights!.Value).Select((x) => x.Node).FirstOrDefault();
         }
 
         /// <summary>The soldiers `slot` sees to: those it controls (Runs.Controls) of the squad out, or, on the base, of the one that will go.</summary>

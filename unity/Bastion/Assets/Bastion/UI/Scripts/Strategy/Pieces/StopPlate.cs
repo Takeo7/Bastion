@@ -58,6 +58,7 @@ namespace Bastion.UI.Strategy
                 SuppliesMark.Make(line, v.Purse, "supplies-mark--small runstop__purse-amount" + (tail.Length > 0 && char.IsPunctuation(tail[0]) ? " runstop__purse-amount--end" : ""));
                 Ui.Text(StrategyText.Runs.PurseAfter, "runstop__purse-text font-title", line);
                 if (!string.IsNullOrEmpty(v.For)) Ui.Text(v.For, "runstop__for muted", purse);
+                if (!string.IsNullOrEmpty(v.PurseNote)) Ui.Text(v.PurseNote, "runstop__for muted", purse);
                 var list = Ui.El("runstop__wares", Root);
                 foreach (var w in v.Wares) Ware(list, w);
             }
@@ -86,15 +87,21 @@ namespace Bastion.UI.Strategy
             if (!string.IsNullOrEmpty(v.Leave))
             {
                 var foot = Ui.El("runstop__foot", Root);
-                var leave = new Button(() => handlers.OnLeaveStop());
-                Ui.AddClasses(leave, "runstop__leave font-title");
-                leave.EnableInClassList("runstop__leave--on", v.LeaveOn);
-                leave.text = v.Leave.ToUpperInvariant();
-                foot.Add(leave);
-                if (v.LeaveWhy != null)
+                // An event not answered yet: no «Seguir» greyed under its two cards, which are what is pressed (Producto's
+                // review, 23/11, B19); why, in its place.
+                if (v.LeaveWhy != null && v.Options.Count > 0) Ui.Text(v.LeaveWhy, "runstop__waiting muted", foot);
+                else
                 {
-                    leave.SetEnabled(false);
-                    tips.Attach(leave, v.LeaveWhy);
+                    var leave = new Button(() => handlers.OnLeaveStop());
+                    Ui.AddClasses(leave, "runstop__leave font-title");
+                    leave.EnableInClassList("runstop__leave--on", v.LeaveOn);
+                    leave.text = v.Leave.ToUpperInvariant();
+                    foot.Add(leave);
+                    if (v.LeaveWhy != null)
+                    {
+                        leave.SetEnabled(false);
+                        tips.Attach(leave, v.LeaveWhy);
+                    }
                 }
                 // A Refugio's way home (G22, U21), after «Seguir la expedición»: OnEndRun asks first (EndAsk), never at once.
                 if (!string.IsNullOrEmpty(v.Home))
@@ -126,8 +133,12 @@ namespace Bastion.UI.Strategy
             else if (id != null && id.Length == 1) Ui.Text(id, "runstop__glyph font-title", tile);
             else if (LineIcon.Has(id)) tile.Add(new LineIcon(id) { pickingMode = PickingMode.Ignore });
             else Ui.Icon(icon, id, "runstop__icon", tile);
-            var name = Ui.Text(w.Gear.Name, "runstop__ware-name", row);
+            // The name, and under it why it can't be had now (B18: «Faltan 25 §.», «No cabe en la mochila de Anja.»), not only on
+            // the greyed key's help.
+            var words = Ui.El("runstop__ware-words", row);
+            var name = Ui.Text(w.Gear.Name, "runstop__ware-name", words);
             tips.Attach(name, w.Gear.Tip);
+            if (w.Why != null) Ui.Text(w.Why, "runstop__ware-why", words);
             SuppliesMark.Make(row, w.Price, "supplies-mark--small runstop__price");
             var ware = w.Gear.Id;
             var b = new Button(() => handlers.OnBuy(ware)) { text = StrategyText.Runs.Swap };

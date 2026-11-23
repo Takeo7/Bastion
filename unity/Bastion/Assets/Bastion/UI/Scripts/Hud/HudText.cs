@@ -131,7 +131,8 @@ namespace Bastion.UI.Hud
             public static string NextTip => Keyed("Siguiente objetivo", "Tab");
 
             /// <summary>Which of how many targets, and how to change (Arturo, 5/11 #11); with the finger, the arrows.</summary>
-            public static string Index(int n, int of) => Bastion.Client.GameInput.Touch ? $"{n}/{of}" : $"{n}/{of} · Tab";
+            /// <remarks>«1 de 13 · Tab: siguiente», under the name (Producto's review, 23/11, B23: «1/13 · Tab» was cryptic; Lore's yes).</remarks>
+            public static string Index(int n, int of) => Bastion.Client.GameInput.Touch ? $"{n} de {of}" : $"{n} de {of} · Tab: siguiente";
             public const string LockedTip = "Sin el mando solo se puede apuntar: el porcentaje sirve para planear";
             public const string SelfLocked = "Sin el mando solo puedes consultarla";
             public static string SelfHint => Bastion.Client.GameInput.Touch ? "Pulsa otra vez para usarla" : "Otra vez, Espacio o Intro: usar · Esc: cancelar";
@@ -400,6 +401,13 @@ namespace Bastion.UI.Hud
         }
 
         /// <summary>Arco y ballesta (U29; till Lore's words): the arrows in the pack, on the soldier's panel.</summary>
+        /// <summary>The soldier strip's words before its aims (B24): the gun's and the blade's, short.</summary>
+        public static class Stats
+        {
+            public const string Aim = "PUNT.";
+            public const string Melee = "CaC";
+        }
+
         public static class Arrows
         {
             public static string Tip(int n) => n == 0 ? "Sin flechas" : n == 1 ? "1 flecha en la mochila" : $"{n} flechas en la mochila";

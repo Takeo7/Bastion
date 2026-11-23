@@ -32,6 +32,7 @@ namespace Bastion.UI.Strategy
                     Line = StrategyText.Runs.UpgradeLine(id, Runs.SeatsOf(c), level + 1 < Runs.Seats.Count ? Runs.Seats[level + 1] : Runs.SeatsOf(c)),
                     Level = level,
                     Levels = prices.Count,
+                    LevelText = StrategyText.Runs.UpgradeLevel(level, prices.Count),
                     Price = price?.ToString(),
                     Button = price != null ? StrategyText.Runs.Upgrade : StrategyText.Runs.UpgradeTop,
                     Why = price == null ? "" : Runs.UpgradeRefusal(c, id),
@@ -44,7 +45,9 @@ namespace Bastion.UI.Strategy
         /// <summary>
         /// La Lata's seats in the runs (Runs.SeatsOf): the first commander's half, then the second's, each with their own of
         /// the squad and the rest free (null); alone, or with the partner away, the squad and the free ones (as
-        /// Runs.SquadLimit: N4, 17/11, with 2 seats the one here took both and the cards showed one of them).
+        /// Runs.SquadLimit: N4, 17/11, with 2 seats the one here took both and the cards showed one of them). Also with one
+        /// of the two without soldiers (N8; R19 of Red, 23/11: two «LIBRE» while the partner's four went out): the engine
+        /// halves the seats only when both bring someone.
         /// </summary>
         List<CampaignSoldier> RunPads()
         {
@@ -52,7 +55,7 @@ namespace Bastion.UI.Strategy
             var seats = Runs.SeatsOf(c);
             var squad = c.Squad.Select(id => c.Soldiers.FirstOrDefault(s => s.Id == id)).Where(s => s != null && s.Alive).ToList();
             var pads = new List<CampaignSoldier>();
-            if (c.Players.Count < 2 || Connected.Count < 2)
+            if (c.Players.Count < 2 || Connected.Count < 2 || Runs.SquadLimit(c, Connected) >= seats)
             {
                 pads.AddRange(squad.Take(seats));
                 while (pads.Count < seats) pads.Add(null);

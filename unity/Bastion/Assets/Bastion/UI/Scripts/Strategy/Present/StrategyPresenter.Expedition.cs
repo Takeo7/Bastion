@@ -182,6 +182,7 @@ namespace Bastion.UI.Strategy
                 case NodeKinds.Trade:
                     v.Purse = mine.Sum(s => Gears.Supplies(s.Kit.Pack)).ToString();
                     if (buyer != null) v.For = StrategyText.Runs.For(FirstName(buyer));
+                    v.PurseNote = StrategyText.Runs.PurseOnly;
                     foreach (var w in stop.Wares ?? new List<Ware>())
                         v.Wares.Add(new WareView
                         {
