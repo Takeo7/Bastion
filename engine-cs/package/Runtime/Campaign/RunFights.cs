@@ -190,7 +190,8 @@ namespace Bastion.Engine
             var name = RunTexts.FightName(node, run.Chapter);
             // Cuadro 122 (Producto's review of 23/11): never a fight with no way out. A map whose La Lata the squad can't walk
             // to from where it comes in (or with none: the mission would fall back to a Limpieza without it) is made again
-            // from the next seed, MapRetries at most.
+            // from the next seed, MapRetries at most. Looked at once La Lata's zone is by its doors (SeatZone): a door's tile
+            // may be walled in where the zone drawn first wasn't (Red, R2 of 23/11: a camping's van among the trees).
             GameState state = null!;
             for (var attempt = 0; ; attempt++)
             {
@@ -236,11 +237,11 @@ namespace Bastion.Engine
                     // Cuadro 122: La Lata in every fight, a Limpieza's too (out on it, a retreat): no abandoning, so a way to end each.
                     EvacAlways = true,
                 });
+                // As many tiles to get out by as La Lata has seats, by its doors (T21, Arturo 18/11).
+                SeatZone(state);
                 if ((state.Mission.EvacZone.Count > 0 && Paths.Cut(state).Count == 0) || attempt >= MapRetries) break;
                 map = RunMap.MapOf(new RunNode { Kind = node.Kind, Site = node.Site, Seed = unchecked((node.Seed ?? 0) + (attempt + 1) * 7919) })!;
             }
-            // As many tiles to get out by as La Lata has seats, by its doors (T21, Arturo 18/11).
-            SeatZone(state);
             // No hollow to drop into and never get out of to La Lata (cuadro 122): pits nobody walks into, against La Lata's
             // zone as it stays (Producto's review of 23/11).
             Setup.NoPits(state);

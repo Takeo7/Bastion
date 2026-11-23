@@ -61,6 +61,18 @@ namespace Bastion.Engine.Tests
             }
         }
 
+        [Fact]
+        public void LaLataByItsDoorsIsWhereTheSquadGets()
+        {
+            // Red's R2 of 23/11: a Saqueadores' camping (gen-camping-420098296) whose van stands among the trees. The zone drawn
+            // first had a way to it; moved to the van's doors (SeatZone) it was walled in by the trees, and the fight was
+            // launched with no way out. Looked at once by the doors, the map is made again.
+            var (_, s) = LaunchAt(NodeKinds.Raiders, node: (n) => { n.Site = Places.Camping; n.Seed = 420098296; n.Difficulty = 3; });
+            Assert.NotEmpty(s.Mission.EvacZone);
+            Assert.Empty(Paths.Cut(s));
+            Assert.True(WayOutTests.WaysOut(s).Ok);
+        }
+
         // ------------------------------------------------------------------ 9. the survivor's new place
 
         [Fact]
