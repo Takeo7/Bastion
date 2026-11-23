@@ -229,8 +229,11 @@ namespace Bastion.Engine.Tests
             Assert.Equal(Paths.CostOrtho + Paths.CostVault, Paths.StepBetween(s, At(6, 3, 1), At(7, 3, 1)));
             Assert.Equal(Paths.CostOrtho + Paths.CostDrop, Paths.StepBetween(s, At(7, 3, 1), At(8, 3)));
             var jumper = AddUnit(s, "s0", TemplateIds.Assault, 6, 3, 1);
-            var out_ = Paths.BuildPath(s, jumper, Paths.ComputeReach(s, jumper, 1000), At(9, 3))!;
+            // A soldier jumps only where the stairs don't get it this turn (N2, cuadro 122): with the window's way only, out
+            // of it; with more, down the stairs.
+            var out_ = Paths.BuildPath(s, jumper, Paths.ComputeReach(s, jumper, 10), At(9, 3))!;
             SamePlaces(new[] { At(7, 3, 1), At(8, 3) }, out_.Take(2));
+            Assert.Equal(0, Paths.FallAlong(s, jumper.Pos, Paths.BuildPath(s, jumper, Paths.ComputeReach(s, jumper, 1000), At(9, 3))!));
             s.Units = s.Units.Where((o) => o != jumper).ToList();
             // A ladder up the side of a flat one-storey roof (decision 1), and a drop back off its edge.
             Assert.Equal(Paths.CostOrtho + Paths.CostClimb, Paths.StepBetween(s, At(9, 7), At(10, 7, 1)));

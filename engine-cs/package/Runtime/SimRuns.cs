@@ -506,6 +506,23 @@ namespace Bastion.Engine
         /// the squad on `p`, as the rules do (Sim's Noticer and SpottedFrom; UI, 21/11): in its notice cone (Los.InNoticeCone:
         /// hidden, not one behind or beside one unaware), within NoticeRange, in its line of sight.
         /// </summary>
+        /// <summary>N7: a door's or a window's tile (open, shut or broken), nowhere to wait.</summary>
+        public static bool DoorSpot(GameState s, Pos p)
+        {
+            var k = Grid.KindAt(s, p);
+            return k == TileKinds.Door || k == TileKinds.Window || k == TileKinds.WindowBroken || k == TileKinds.DoorOpen;
+        }
+
+        /// <summary>N7: a pass, a tile shut on two opposite sides (a doorway, a gap one tile wide), where a survivor would block the way.</summary>
+        public static bool InPass(GameState s, Pos p)
+        {
+            bool Shut(int x, int y) => !Grid.InBounds(s, x, y) || !Grid.IsWalkable(Grid.KindAt(s, new Pos { X = x, Y = y, Z = p.Z }));
+            return (Shut(p.X, p.Y - 1) && Shut(p.X, p.Y + 1)) || (Shut(p.X - 1, p.Y) && Shut(p.X + 1, p.Y));
+        }
+
+        /// <summary>N7: where a Rescate's survivor never waits: a door or a window, or a pass.</summary>
+        public static bool BadSpot(GameState s, Pos p) => DoorSpot(s, p) || InPass(s, p);
+
         /// <summary>
         /// Arco y ballesta (cuadro 102), for UI and the bots: whether `shooter`'s shot at `target`, if it kills, keeps the squad
         /// hidden: it fires arrows, and nobody else of the enemy notices it where it stands (Los.Watchers, the rules' own

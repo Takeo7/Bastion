@@ -147,18 +147,42 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain(s.Lights!, (l) => l.Id == "m1");
         }
 
-        [Fact(DisplayName = "molotov › on the ground only, and it burns no wall")]
-        public void OnTheGroundOnly()
+        [Fact(DisplayName = "molotov › it burns no wall")]
+        public void ItBurnsNoWall()
         {
             var s = StateFrom(new[] { "..........", "....#.....", "..........", "..........", ".........." });
             var u = AddUnit(s, "s1", TemplateIds.Rookie, 1, 1, extra: (v) => v.Arms = new Arms { Pistol = false });
             AddUnit(s, "a1", TemplateIds.Zombie, 9, 4);
             u.Gear = new List<string> { ItemIds.Molotov };
             u.Charges[ChargeIds.Molotov] = 2;
-            Assert.False(Abilities.CanTargetTile(s, u, AbilityIds.Molotov, P(4, 2, 1)));
             Assert.True(Rules.ExecuteCommand(s, Ability("s1", AbilityIds.Molotov, tile: P(4, 2)), Ctx()).Ok);
             Assert.DoesNotContain(Grid.TileIndex(s, 4, 1), s.Fires!.Single().Tiles);
             Assert.Equal(8, s.Fires!.Single().Tiles.Count);
+        }
+
+        [Fact(DisplayName = "molotov › on any floor seen, its fire on that floor only (N4, cuadro 120)")]
+        public void OnAnyFloorItsFireOnThatFloor()
+        {
+            // A storey over the middle of the field, open at its edge to the soldier below.
+            var s = StateFrom(new[] { "..........", "..........", "..........", "..........", ".........." });
+            WithLevels(s, new[] { new[] { "          ", "     .... ", "     .... ", "     .... ", "          " } });
+            var u = AddUnit(s, "s1", TemplateIds.Rookie, 1, 2, extra: (v) => v.Arms = new Arms { Pistol = false });
+            var up = AddUnit(s, "a1", TemplateIds.Zombie, 7, 2, 1);
+            var below = AddUnit(s, "a2", TemplateIds.Zombie, 7, 3);
+            u.Gear = new List<string> { ItemIds.Molotov };
+            u.Charges[ChargeIds.Molotov] = 2;
+            var at = P(7, 2, 1);
+            Assert.True(Abilities.CanTargetTile(s, u, AbilityIds.Molotov, at));
+            Assert.True(Rules.ExecuteCommand(s, Ability("s1", AbilityIds.Molotov, tile: at), Ctx()).Ok);
+            var fire = s.Fires!.Single();
+            Assert.Contains(Grid.NodeOf(s, at), fire.Tiles);
+            Assert.True(Burning.At(s, at));
+            Assert.False(Burning.At(s, P(7, 2)));
+            Assert.All(fire.Tiles, (n) => Assert.True(n >= s.Width * s.Height));
+            Assert.Equal(Grid.NodeOf(s, at), fire.Source);
+            // The one up there burns; the one below, not.
+            Assert.True(up.Hp < Content.Templates[TemplateIds.Zombie].Hp);
+            Assert.Equal(Content.Templates[TemplateIds.Zombie].Hp, below.Hp);
         }
 
         [Fact(DisplayName = "molotov › before the grenades: from the Bastión's first level, the grenades from its third")]

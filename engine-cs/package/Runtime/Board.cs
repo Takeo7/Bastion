@@ -102,8 +102,8 @@ namespace Bastion.Engine
         {
             [SkillIds.Shooting] = new[]
             {
-                Stat("steadyHand", "Pulso firme", "+3 de puntería con armas de fuego.", mods: new UnitMods { GunAim = 3 }),
-                Stat("lightTrigger", "Dedo ligero", "+5 de crítico con armas de fuego.", mods: new UnitMods { GunCrit = 5 }),
+                Stat("steadyHand", "Pulso firme", "+3 de puntería al disparar.", mods: new UnitMods { GunAim = 3 }),
+                Stat("lightTrigger", "Dedo ligero", "+5 de crítico al disparar.", mods: new UnitMods { GunCrit = 5 }),
                 Stat("sidearm", "Pistolero", "+5 de puntería con la pistola.", mods: new UnitMods { PistolAim = 5 }),
                 Active("aimedShot", "A la cabeza", "Un disparo con −25 de puntería que hace la mitad más de daño. Enfriamiento 3.", PerkIds.AimedShot, AbilityIds.AimedShot),
                 Stat("closeIn", "A quemarropa", "+10 de puntería a 4 casillas o menos.", mods: new UnitMods { CloseRangeAim = 10 }),
@@ -120,7 +120,7 @@ namespace Bastion.Engine
                 Active("lightningHands", "Manos rápidas", "Sin gastar acción, un disparo de pistola. Enfriamiento 4.", PerkIds.LightningHands, AbilityIds.LightningHands),
                 Stat("apRounds", "Al hueco", "Los disparos ignoran 1 de blindaje.", mods: new UnitMods { Pierce = 1 }),
                 Stat("shredder", "Desgarro", "Cada impacto quita 1 de blindaje más.", mods: new UnitMods { Shred = 1 }),
-                Passive("serenity", "Sin rozaduras", "Con armas de fuego, un impacto nunca se queda en rozadura.", perk: PerkIds.Serenity),
+                Passive("serenity", "Sin rozaduras", "Disparando con el arma larga, un impacto nunca se queda en rozadura.", perk: PerkIds.Serenity),
                 Passive("coveringFire", "Fuego de cobertura", "En vigilancia, dispara también a quien ataque a la vista.", perk: PerkIds.CoveringFire),
                 Stat("noEscape", "Sin escapatoria", "+10 de crítico a 4 casillas o menos.", mods: new UnitMods { CloseRangeCrit = 10 }),
                 Active("killZone", "Nadie pasa", "Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno. Enfriamiento 4.", PerkIds.KillZone, AbilityIds.KillZone),
@@ -129,7 +129,7 @@ namespace Bastion.Engine
                 Active("suppression", "Supresión", "Inmoviliza al objetivo: −50 de puntería hasta tu turno, y si se mueve, le disparas. Gasta dos disparos del cargador.", PerkIds.Suppression, AbilityIds.Suppression),
                 Passive("marker", "Marcar", "Lo que alcanza con el arma principal queda marcado: +15 de puntería para todos contra él.", perk: PerkIds.HoloTargeting),
                 Stat("heavyHand", "Mano dura", "+1 de daño con el arma principal.", mods: new UnitMods { Damage = 1 }),
-                Stat("eagleEye", "Ojo de águila", "+8 de puntería y +5 de crítico con armas de fuego.", mods: new UnitMods { GunAim = 8, GunCrit = 5 }),
+                Stat("eagleEye", "Ojo de águila", "+8 de puntería y +5 de crítico al disparar.", mods: new UnitMods { GunAim = 8, GunCrit = 5 }),
             },
             [SkillIds.Melee] = new[]
             {

@@ -740,7 +740,11 @@ namespace Bastion.Engine
                 case PodActivatedEvent ev:
                 {
                     var pod = s.Pods.Find((p) => p.Id == ev.Pod);
-                    if (pod != null) pod.Active = true;
+                    if (pod != null)
+                    {
+                        pod.Active = true;
+                        if (ev.Cause == PodCauses.Attacked && string.IsNullOrEmpty(ev.Unit)) pod.WokenBlind = true;
+                    }
                     break;
                 }
                 case PodSplitEvent ev:
@@ -900,7 +904,8 @@ namespace Bastion.Engine
                     }
                     var by = !string.IsNullOrEmpty(ev.By) ? Grid.GetUnit(s, ev.By!) : null;
                     // Saqueadores (G23.5): the living's shots wind the horde too («el ruido atrae a los zombis de fuera»).
-                    if (by?.Team == Teams.Xcom || (s.Mission.Raiders != null && by != null && !Content.Templates[by.Template].Undead)) s.Mission.Noise = (s.Mission.Noise ?? 0) + Content.HordePoints(ev.Radius);
+                    // N3 (Arturo, 22/11): the living's noise too, in every stage (it was only Saqueadores', G23.5).
+                    if (by?.Team == Teams.Xcom || (by != null && by.Team == Teams.Alien && !Content.Templates[by.Template].Undead)) s.Mission.Noise = (s.Mission.Noise ?? 0) + Content.HordePoints(ev.Radius);
                     break;
                 }
                 case ForgotEvent ev:
@@ -1405,7 +1410,7 @@ namespace Bastion.Engine
         /// <summary>A pod, deep.</summary>
         public static Pod ClonePod(Pod p)
         {
-            return new Pod { Id = p.Id, Active = p.Active, UnitIds = new List<string>(p.UnitIds), Patrol = p.Patrol.Select(CopyPos).ToList(), PatrolIndex = p.PatrolIndex };
+            return new Pod { Id = p.Id, Active = p.Active, UnitIds = new List<string>(p.UnitIds), Patrol = p.Patrol.Select(CopyPos).ToList(), PatrolIndex = p.PatrolIndex, WokenBlind = p.WokenBlind };
         }
 
         private static RtOrder CloneOrder(RtOrder o)
@@ -1490,11 +1495,13 @@ namespace Bastion.Engine
                     Antiviral = m.Antiviral != null ? Gears.CloneGear(m.Antiviral) : null,
                     AntiviralAt = m.AntiviralAt,
                     Locked = CopyInts(m.Locked),
+                    Pits = CopyInts(m.Pits),
                     KeyHolder = m.KeyHolder,
                     Key = m.Key != null ? Gears.CloneGear(m.Key) : null,
                     Reinforcements = m.Reinforcements.Select(CopyReinforcement).ToList(),
                     Difficulty = m.Difficulty,
                     Noise = m.Noise,
+                    HordeScale = m.HordeScale,
                     Horde = CopyStrings(m.Horde),
                     Night = m.Night,
                     Siege = m.Siege != null ? new Siege { Hold = m.Siege.Hold } : null,
@@ -1536,7 +1543,7 @@ namespace Bastion.Engine
                 Fires = CopyList(s.Fires, (f) => new Fire { Id = f.Id, Source = f.Source, Tiles = new List<int>(f.Tiles), Turns = f.Turns }),
                 Dropped = CopyList(s.Dropped, (d) => new DroppedLoot { Id = d.Id, Pos = CopyPos(d.Pos), Loot = CloneLoot(d.Loot), From = d.From }),
                 DroppedCount = s.DroppedCount,
-                Run = s.Run != null ? new RunFight { Node = s.Run.Node, NodeKind = s.Run.NodeKind, Row = s.Run.Row, Modifier = s.Run.Modifier, FirstGear = s.Run.FirstGear, NextGear = s.Run.NextGear, Added = s.Run.Added } : null,
+                Run = s.Run != null ? new RunFight { Node = s.Run.Node, NodeKind = s.Run.NodeKind, Row = s.Run.Row, Modifier = s.Run.Modifier, FirstGear = s.Run.FirstGear, NextGear = s.Run.NextGear, Added = s.Run.Added, Loot = s.Run.Loot } : null,
                 FloorGear = CopyList(s.FloorGear, (d) => new DroppedGear { Gear = Gears.CloneGear(d.Gear), Pos = CopyPos(d.Pos), From = d.From }),
                 Breakables = s.Breakables != null ? new Dictionary<int, int>(s.Breakables) : null,
                 Base = s.Base != null ? new SiegeBase { Pieces = s.Base.Pieces.Select((p) => new BasePiece { Id = p.Id, Piece = p.Piece, X = p.X, Y = p.Y, Rot = p.Rot, Size = p.Size != null ? (int[])p.Size.Clone() : null, Hp = p.Hp, Level = p.Level, Charges = p.Charges }).ToList(), Felled = CopyInts(s.Base.Felled), Level = s.Base.Level } : null,

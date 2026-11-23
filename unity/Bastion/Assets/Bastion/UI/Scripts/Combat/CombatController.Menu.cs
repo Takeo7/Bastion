@@ -9,6 +9,12 @@ namespace Bastion.UI.Combat
 {
     public sealed partial class CombatController
     {
+        /// <summary>
+        /// What abandoning costs, said before (Lore): in an expedition's fight everyone leaves with what they carry and the
+        /// expedition goes on, the stage without its reward (StakesRun); in a loose skirmish, as it was (Stakes).
+        /// </summary>
+        string AbandonStakes => State?.Run != null ? Lore.AbandonText.StakesRun : Lore.AbandonText.Stakes;
+
         /// <summary>Controles (hud.ts CONTROLS): each key and what it does, as the keys are in this version.</summary>
         static readonly (string keys, string what)[] Controls =
         {
@@ -26,7 +32,8 @@ namespace Bastion.UI.Combat
             ("H · clic en su nombre", "Hoja del soldado: tablero, estadísticas y lo que lleva"),
             ("Q / E", "Girar la cámara"),
             ("Rueda", "Acercar o alejar"),
-            ("RePág / AvPág · Mayús + rueda", "Subir o bajar de planta"),
+            // The Mac's keyboard has none of RePág and AvPág: Fn and the arrows there (Lore, 23/11).
+            (HudText.Floors.Keys + " · Mayús + rueda", "Subir o bajar de planta"),
             ("WASD", "Mover la cámara"),
             ("F", "Centrar en el soldado"),
             ("O", "Centrar en el objetivo"),
@@ -104,7 +111,11 @@ namespace Bastion.UI.Combat
                 // The mission waits while it is open (Arturo, 28/10), for both; the battle hidden under it (Ana).
                 PauseNote = over ? null : ActiveSlots().Count > 1 ? HudText.Menu.PausedBoth : HudText.Menu.PausedSolo,
                 Cover = !over,
-                Abandon = !over,
+                // Not in an expedition's fights (cuadro 122, Arturo 22/11: La Lata is the way out, a retreat), but as a safety
+                // net when there is none (Gameplay, 23/11: Rules.AbandonAllowed: no La Lata, a save from before, or a soldier
+                // with no way to it), said why. A loose skirmish keeps it.
+                Abandon = !over && Rules.AbandonAllowed(State),
+                AbandonWhy = !over && State.Run != null && Rules.AbandonAllowed(State) ? Lore.AbandonText.NoWay : null,
                 AbandonLabel = Lore.AbandonText.Button,
                 QuitLabel = Lore.QuitText.Button,
                 // Hosting while the partner isn't in: how they join (Gameplay, 14/11).
@@ -215,7 +226,7 @@ namespace Bastion.UI.Combat
                 var ask = new ConfirmView
                 {
                     Title = $"¿{Lore.AbandonText.Button}?",
-                    Lines = { Lore.AbandonText.Stakes },
+                    Lines = { AbandonStakes },
                     Yes = Lore.AbandonText.Accept,
                     No = Lore.AbandonText.Refuse,
                     Danger = true,

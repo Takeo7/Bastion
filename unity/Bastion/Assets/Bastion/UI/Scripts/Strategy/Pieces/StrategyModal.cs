@@ -44,7 +44,16 @@ namespace Bastion.UI.Strategy
             Ui.Show(host, v != null);
             if (v == null) return;
             if (opening) sound?.Invoke("paper");
-            var card = Ui.El("strat-modal__card panel strat-modal__card--" + v.Kind, host);
+            // The level's (N8), on the start screen's plate rather than the torn panel: the same piece as there.
+            var card = Ui.El((v.Level != null ? "strat-modal__card level-plate" : "strat-modal__card panel") + " strat-modal__card--" + v.Kind, host);
+            // (The plate's style is the picker's sheet's: on the card, not only under the picker.)
+            if (v.Level != null && Resources.Load<StyleSheet>("Hud/LevelPicker") is StyleSheet levelSheet) card.styleSheets.Add(levelSheet);
+            // Opaque over the base's screens behind it (Soldados' slots showed through the cards): set on the card itself.
+            if (v.Level != null)
+            {
+                card.style.backgroundImage = StyleKeyword.None;
+                card.style.backgroundColor = new Color(0.04f, 0.045f, 0.05f, 1f);
+            }
             if (!string.IsNullOrEmpty(v.Kicker))
             {
                 var kicker = Ui.Text(v.Kicker.ToUpperInvariant(), "strat-modal__kicker font-title", card);
@@ -67,6 +76,15 @@ namespace Bastion.UI.Strategy
                     if (tips != null && !string.IsNullOrEmpty(item.Tip)) tips.Attach(row, item.Tip);
                 }
             }
+            // The level's cards (LevelPicker): a click picks one, as an option of the window.
+            if (v.Level != null)
+            {
+                var picker = new LevelPicker(v.Level);
+                picker.Picked += id => handlers.OnOption(System.Linq.Enumerable.ToList(Bastion.Engine.LevelIds.All).IndexOf(id));
+                card.Add(picker.Root);
+            }
+            // In a column of their own.
+            var options = v.Options.Count > 0 ? Ui.El("strat-modal__options", card) : null;
             for (var i = 0; i < v.Options.Count; i++)
             {
                 var o = v.Options[i];
@@ -78,7 +96,7 @@ namespace Bastion.UI.Strategy
                 Ui.Text(o.Label, "strat-option__label font-title", option);
                 Ui.Text(o.Effect, "strat-option__effect", option);
                 if (!string.IsNullOrEmpty(o.Blocked)) Ui.Text(o.Blocked, "strat-option__blocked", option);
-                card.Add(option);
+                options.Add(option);
             }
             if (v.Vote != null)
             {

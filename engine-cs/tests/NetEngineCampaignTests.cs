@@ -651,11 +651,11 @@ namespace Bastion.Engine.Tests
 
         /// <summary>
         /// N9 (Red, 17/11; R4's c2): Pepe's last soldier falls with the whole squad while he is away, and he comes into the room
-        /// after the end, before the base. What he gets is the stage over and the campaign with his recruit, and the report
-        /// says who it is (RunReport.Recruits), the line his screen can't make by comparing (BaseController.FreeRecruit).
+        /// after the end, before the base. What he gets is the stage over and the campaign as it goes on: since N8 (cuadro
+        /// 118) no recruit for nothing (RunReport.Recruits null), and the game isn't lost while Ana has one at the base.
         /// </summary>
         [Fact]
-        public void WhoComesAfterTheSquadFellHearsOfTheirRecruit()
+        public void WhoComesAfterTheSquadFellHearsTheGameGoesOn()
         {
             using var host = new Host();
             var ana = host.Join("Ana");
@@ -689,14 +689,16 @@ namespace Bastion.Engine.Tests
             host.Advance(2000);
             Assert.Equal("mission", host.Room.Summary().phase);
             Assert.Equal((Outcomes.Defeat, EndReasons.Wiped), (store.Load()!.State!.Outcome, store.Load()!.State!.OutcomeReason));
-            // Pepe comes now: the stage over, and his recruit in the report and in the log.
+            // Pepe comes now: the stage over. Since N8 (Gameplay, 22/11, cuadro 118) no recruit for nothing: the game counts,
+            // not the player, and goes on with Ana's soldier at the base.
             pepe = host.Join("Pepe", pepeToken);
             Assert.Equal(Outcomes.Defeat, SnapshotOf(pepe).Outcome);
             var c = CampaignOf(pepe);
             Assert.Null(c.Run);
-            var recruit = c.Soldiers.Single((x) => x.Id == c.LastReport!.Run!.Recruits!.Single());
-            Assert.Equal((1, true), (recruit.Owner, recruit.Alive));
-            Assert.Contains(c.Log, (e) => e.Text == RunTexts.Recruit(recruit.Name));
+            Assert.Null(c.LastReport!.Run!.Recruits);
+            Assert.DoesNotContain(c.Soldiers, (x) => x.Owner == 1 && x.Alive);
+            Assert.Contains(c.Soldiers, (x) => x.Owner == 0 && x.Alive);
+            Assert.Null(c.Outcome);
             Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
         }
 
@@ -946,6 +948,191 @@ namespace Bastion.Engine.Tests
                 if (Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null && Looting.ReachesToSearch(s, p, who.Pos)) return p;
             }
             throw new InvalidOperationException("nowhere beside them");
+        }
+
+        /// <summary>
+        /// N9 (Arturo, 22/11, cuadro 114), through the room: a new game at the level asked for, the same for the partner, in
+        /// red.log and in the save; opened again, still so, and the lobby says it. One the room doesn't know begins nothing.
+        /// </summary>
+        [Fact]
+        public void ANewGameIsAtTheLevelAskedForForBothAndStaysSo()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign", level = "imposible" });
+            Assert.Equal("Ese nivel de dificultad no existe: no se empieza la partida.", (string?)ana.Take("error").Single()["message"]);
+            Assert.Equal("lobby", host.Room.Summary().phase);
+            Assert.Empty(pepe.Take("campaign"));
+            host.Say(ana, new { t = "newCampaign", level = LevelIds.Easy });
+            Assert.Equal("base", host.Room.Summary().phase);
+            Assert.Equal(LevelIds.Easy, CampaignOf(ana).GameLevel);
+            Assert.Equal(LevelIds.Easy, CampaignOf(pepe).GameLevel);
+            Assert.Equal(LevelIds.Easy, host.Saved().GameLevel);
+            Assert.Contains("[campaña] Nueva partida, nivel easy, con 2 jugador(es).", host.Log);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            Assert.Equal(LevelIds.Easy, (string?)pepe.Take("room").Last()["savedCampaign"]!["gameLevel"]);
+            host.Say(ana, new { t = "continueCampaign" });
+            Assert.Equal(LevelIds.Easy, CampaignOf(pepe).GameLevel);
+        }
+
+        /// <summary>
+        /// N9: a new game without a level, and a save from before N9 (no field at all), are Difícil, as every game before: never
+        /// Medio, the level a new one starts marked at (cuadro 125, UI's). Opened again and saved again by the room, still no
+        /// level in the file, and Difícil for the lobby and the start screen (SaveStore.Peek).
+        /// </summary>
+        [Fact]
+        public void AGameWithoutALevelIsHard()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            Assert.Null(CampaignOf(ana).GameLevel);
+            Assert.Contains("[campaña] Nueva partida, nivel hard, con 1 jugador(es).", host.Log);
+            Assert.DoesNotContain("gameLevel", File.ReadAllText(host.SavePath));
+            host.Room = host.Make();
+            ana = host.Join("Ana", anaToken);
+            Assert.Equal(LevelIds.Hard, (string?)ana.Take("room").Last()["savedCampaign"]!["gameLevel"]);
+            host.Say(ana, new { t = "continueCampaign" });
+            Assert.Equal(LevelIds.Hard, Levels.Of(CampaignOf(ana)).Id);
+            Assert.Equal("base", host.Room.Summary().phase);
+            Assert.Null(host.Saved().GameLevel);
+            Assert.DoesNotContain("gameLevel", File.ReadAllText(host.SavePath));
+            Assert.Equal(LevelIds.Hard, new SaveStore(host.SavePath, null, new EngineCampaignRules()).Peek()!.GameLevel);
+        }
+
+        /// <summary>
+        /// Cuadro 122 (Arturo, 22/11: «quitamos el abandonar combate»): a campaign's fight can't be left; asked, it says why
+        /// and goes on as it was. A call left in a save from before only goes away, even said yes to.
+        /// </summary>
+        [Fact]
+        public void ACampaignsFightCantBeLeft()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            GoOut(host, ana, pepe);
+            pepe.Take("events");
+            host.Say(ana, new { t = "abandon" });
+            Assert.Equal("Un combate de expedición no se puede abandonar.", (string?)ana.Take("rejected").Single()["message"]);
+            Assert.Contains("[campaña] Ana: pide abandonar el combate: un combate de expedición no se abandona.", host.Log);
+            Assert.Empty(pepe.Take("events"));
+            Assert.Null(SavedState(host).AbandonCall);
+            // A call from before cuadro 122, in the save: Pepe's yes doesn't take them out.
+            host.Say(ana, new { t = "backToMenu" });
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            save.State!.AbandonCall = new AbandonCall { By = 0 };
+            store.Save(save);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Say(ana, new { t = "continueCampaign" });
+            Assert.Equal("mission", host.Room.Summary().phase);
+            host.Say(pepe, new { t = "abandonAnswer", accept = true });
+            Assert.Equal("mission", host.Room.Summary().phase);
+            Assert.Null(SavedState(host).Outcome);
+            Assert.Null(SavedState(host).AbandonCall);
+        }
+
+        /// <summary>
+        /// Producto's review of the 0.14.0 (23/11): a campaign's fight with no way out may be left (Rules.AbandonAllowed): one
+        /// saved half played before the 0.14.0 with no La Lata (a Limpieza had none). Ana asks, Pepe says yes, and it is over,
+        /// left, nobody fallen for it.
+        /// </summary>
+        [Fact]
+        public void ACampaignsFightWithoutLaLataMayBeLeft()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            GoOut(host, ana, pepe);
+            host.Say(ana, new { t = "backToMenu" });
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            save.State!.Mission.EvacZone.Clear();
+            store.Save(save);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Say(ana, new { t = "continueCampaign" });
+            Assert.True(Rules.AbandonAllowed(SavedState(host)));
+            host.Say(ana, new { t = "abandon" });
+            Assert.Empty(ana.Take("rejected"));
+            host.Say(pepe, new { t = "abandonAnswer", accept = true });
+            var s = SavedState(host);
+            Assert.Equal((Outcomes.Defeat, EndReasons.Abandoned), (s.Outcome, s.OutcomeReason));
+            Assert.All(CampaignOf(ana).Soldiers, (x) => Assert.True(x.Alive));
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("no se abandona"));
+        }
+
+        /// <summary>
+        /// N8 (Gameplay, 22/11, cuadro 118), through the room: the whole squad falls with nobody at the base either, and the
+        /// game is lost for both. red.log says so; every order on the base is refused; the lobby offers nothing to go on with;
+        /// and another begins from the lost one's base, at the level asked for, the lost one kept next to the save.
+        /// </summary>
+        [Fact]
+        public void AGameLostIsOverForBothAndAnotherBeginsFromItsBase()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign", level = LevelIds.Survival });
+            // Nobody at the base: those going out are all there are.
+            Rewrite(host, (c) =>
+            {
+                foreach (var x in c.Soldiers.Where((x) => !c.Squad.Contains(x.Id))) x.Alive = false;
+            });
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Say(ana, new { t = "continueCampaign" });
+            GoOut(host, ana, pepe);
+            // The fight left for the menu, and the whole squad down in its save.
+            host.Say(ana, new { t = "backToMenu" });
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            foreach (var u in save.State!.Units.Where((u) => u.Team == Teams.Xcom))
+            {
+                u.Alive = false;
+                u.Hp = 0;
+            }
+            save.Phase = RoomPhases.Mission;
+            store.Save(save);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Advance(2000);
+            Assert.Equal(Outcomes.Defeat, SnapshotOf(pepe).Outcome);
+            Assert.Equal(Outcomes.Defeat, CampaignOf(ana).Outcome);
+            Assert.Equal(Outcomes.Defeat, CampaignOf(pepe).Outcome);
+            Assert.Contains(host.Log, (l) => l.StartsWith("[campaña] Partida terminada: defeat (nivel survival, capítulo 1, "));
+            // Back on the base: nothing more to order.
+            host.Say(ana, new { t = "returnToBase" });
+            Assert.Equal("base", host.Room.Summary().phase);
+            host.Say(pepe, Ccmd(new { type = "startRun" }));
+            Assert.Equal("La campaña ha terminado.", (string?)pepe.Take("rejected").Single()["message"]);
+            // The lobby: nothing to go on with («Continuar» is for a game under way).
+            host.Say(ana, new { t = "leaveCampaign" });
+            Assert.Equal("lobby", host.Room.Summary().phase);
+            var room = ana.Take("room").Last();
+            Assert.True(room["savedCampaign"] == null || room["savedCampaign"]!.Type == JTokenType.Null);
+            // Back to it to see it again, and another from there: the lost one kept aside.
+            host.Say(ana, new { t = "continueCampaign" });
+            Assert.Equal("base", host.Room.Summary().phase);
+            host.Say(pepe, new { t = "newCampaign", level = LevelIds.Medium });
+            Assert.Equal("base", host.Room.Summary().phase);
+            var fresh = CampaignOf(ana);
+            Assert.Null(fresh.Outcome);
+            Assert.Equal(LevelIds.Medium, fresh.GameLevel);
+            Assert.Contains(fresh.Soldiers, (x) => x.Owner == 0 && x.Alive);
+            Assert.Contains(fresh.Soldiers, (x) => x.Owner == 1 && x.Alive);
+            Assert.Equal(LevelIds.Medium, CampaignOf(pepe).GameLevel);
+            Assert.Contains(host.Log, (l) => l.StartsWith("[save] La campaña anterior queda en "));
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
         }
 
         [Fact]

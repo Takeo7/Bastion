@@ -339,8 +339,8 @@ namespace Bastion.UI.Combat
                     else Toast(Bastion.Client.GameInput.Touch ? Bastion.UI.Hud.HudText.Touch.ThrowWhere : "Señala con el ratón dónde lanzarla.");
                     return;
             }
-            // Nothing armed: the first attack, only with the command (#15).
-            if (!CanAct() || !HasCommand()) return;
+            // Nothing armed: the first attack, only with the command (#15); not before the camera is on the soldier (N5).
+            if (!CanAct() || !HasCommand() || Arriving()) return;
             var views = BarKeys();
             var usable = AbilityTexts.PrimaryAttacks.Select(id => views.FirstOrDefault(v => v.Id == id)).FirstOrDefault(v => v != null && v.Enabled);
             if (usable != null) UseAbility(usable.Id);
@@ -350,8 +350,9 @@ namespace Bastion.UI.Combat
         /// <summary>A number key: a choice of the open menu, a key of the bar, or a menu opened (game.ts onKey).</summary>
         void NumberKey(int n)
         {
-            // Out of one's turn or without the command, nothing (Arturo, 5/11 #15: the 3 armed Vigilar and waited).
-            if (!CanAct() || !HasCommand()) return;
+            // Out of one's turn or without the command, nothing (Arturo, 5/11 #15: the 3 armed Vigilar and waited); nor
+            // while the camera goes to the soldier (N5).
+            if (!CanAct() || !HasCommand() || Arriving()) return;
             if (Hud != null && Hud.AbilityMenuOpen)
             {
                 Hud.PickMenu(n);
@@ -574,18 +575,19 @@ namespace Bastion.UI.Combat
             var centre = AbilityTexts.ThrowTile(u, modeAbility, hover);
             var loud = Abilities.NoiseOf(State, u, modeAbility);
             var walls = Abilities.BreachedWalls(State, modeAbility, centre, u).Count;
-            // A molotov burns on the ground floor only (Arturo, 01/11 #10): up a storey it says so, else how long it burns.
+            // A molotov burns on any floor it lands on since cuadro 120 (Burning.At by node; before, the ground only: 01/11 #10).
             var molotov = modeAbility == AbilityIds.Molotov;
             // Pointed past its reach, it falls short, where the line is: said (Arturo, 15/11, E3: the stone fell nearer than aimed).
             var parts = new[]
             {
                 Same(centre, hover) ? null : Bastion.UI.Hud.HudText.Throw.Short,
-                molotov && centre.Z != 0 ? "Solo a la calle o a una planta baja" : null,
-                molotov && centre.Z == 0 ? $"Arde {Content.MolotovTurns} turnos" : null,
+                molotov ? $"Arde {Content.MolotovTurns} turnos" : null,
                 loud > 0 ? $"Se oye hasta {AbilityTexts.HeardTiles(State, u, loud)}" : null,
                 loud > 0 && AbilityTexts.MeterRise(State, u, loud) is string rise ? $"Ruido {rise}" : null,
                 walls == 0 ? null : walls == 1 ? "Rompe una pared" : $"Rompe {walls} paredes",
                 Abilities.BreaksFloor(State, modeAbility, centre) ? "Hunde el suelo" : null,
+                // The floor it lands on and how to aim at another (cuadro 121), on a map with more than one.
+                MaxLevel > 0 ? Bastion.UI.Hud.HudText.Floors.Throw(centre.Z) : null,
             };
             if (parts.Any(p => p != null)) Note(centre, parts);
         }
@@ -699,12 +701,15 @@ namespace Bastion.UI.Combat
         {
             var u = TurnSoldier(Shown, MySlot) ?? Unit();
             if (u == null || !u.Alive) return;
-            if (u.Id != picked && Commands(u)) Pick(u.Id, false);
+            var changed = u.Id != picked && Commands(u);
+            if (changed) Pick(u.Id, false);
             SetLevel(u.Pos.Z);
             if (Rig != null)
             {
                 Rig.TakeControl();
                 Rig.Focus(FeetOf(u.Id) ?? Board.TileToWorld(Shown, u.Pos));
+                // Another picked: its keys wait for the camera (N5).
+                if (changed) Arrive(u.Id);
             }
         }
 
@@ -954,14 +959,23 @@ namespace Bastion.UI.Combat
             return u != null && u.Alive && Commands(u) && Paths.HasTurnLeft(u) && CanAct() && HasCommand() && !State.Ready[MySlot] ? u : null;
         }
 
-        /// <summary>A card clicked (UI-COMBATE UI-02, UI-08): the soldier picked where the camera is; twice, the camera goes to it.</summary>
+        /// <summary>
+        /// A card clicked (UI-COMBATE UI-02, UI-08): the soldier picked where the camera is; twice, the camera goes to it. One
+        /// not seen (cuadro 117, Arturo, 22/11: off the screen, or under the panels), the camera goes to it at once, and its
+        /// keys wait for it (N5).
+        /// </summary>
         public void OnSelectUnit(string id)
         {
             var u = UnitById(State, id);
             // One inside La Lata too (T24), to get down or ask it to go: the camera to La Lata.
             if (u == null || !(u.Alive || u.Aboard == true) || !Commands(u)) return;
             if (u.Aboard == true) insideChosen = id;
+            // Its body's middle, as the camera has it now (before the pick, which may show another floor).
+            var unseen = u.Aboard != true && !Overhead && Rig != null && Hud != null
+                && !Hud.InView(Rig.Camera, (FeetOf(id) ?? Board.TileToWorld(Shown, u.Pos)) + Vector3.up * 0.9f);
+            if (CameraRig.Logging && u.Aboard != true) Debug.Log($"[cámara] busto de {id}: {(unseen ? "no se ve, va la cámara" : "se ve, la cámara se queda")}");
             Pick(id, u.Aboard == true);
+            if (unseen) OnLookUnit(id);
         }
 
         /// <summary>A card clicked twice (UI-08): the camera to that soldier, on its floor.</summary>
@@ -977,6 +991,8 @@ namespace Bastion.UI.Combat
             {
                 Rig.TakeControl();
                 Rig.Focus(FeetOf(u.Id) ?? Board.TileToWorld(Shown, u.Pos));
+                // Picked by the first click, its keys wait for the camera now (N5).
+                if (u.Id == picked && Commands(u)) Arrive(u.Id);
             }
         }
 

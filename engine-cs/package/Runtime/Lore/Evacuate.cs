@@ -293,6 +293,13 @@ namespace Bastion.Engine
             /// <summary>The button, and what it costs, for whoever asks.</summary>
             public const string Button = "Abandonar la misión";
             public const string Stakes = "Los que sigan en pie vuelven a la base, pero la misión se da por perdida.";
+            /// <summary>
+            /// On an expedition it is only a safety net (cuadro 122 and Producto's review, 23/11: Rules.AbandonAllowed, no La Lata
+            /// or a soldier with no way to it): why it is offered, under the menu's button, and what it costs (nobody falls: the
+            /// standing go on with the expedition and what they carry; the stage without its reward).
+            /// </summary>
+            public static readonly string NoWay = "No hay forma de llegar " + Bus.To + ": podéis abandonar sin perder a nadie.";
+            public const string StakesRun = "Salís todos con lo que lleváis, y la expedición sigue. La etapa queda sin la recompensa.";
             public const string Accept = "Abandonar";
             public const string Refuse = "Seguir";
         }

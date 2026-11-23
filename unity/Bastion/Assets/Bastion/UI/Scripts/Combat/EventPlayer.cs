@@ -980,11 +980,114 @@ namespace Bastion.UI.Combat
         /// </summary>
         void Choreograph()
         {
+            ChoreographDead();
+            LivingTogether();
+        }
+
+        /// <summary>
+        /// N3 (Producto, 22/11): the walks of the living that don't know of the squad and only walk (to look at a noise, back
+        /// to their post: the guards after a fight with the dead, 22 s one after another), all at once too, as the dead's
+        /// (a WalksEvent), where the first of them came: runs of such walks with nothing else between but what only turns
+        /// someone or makes a noise. One that then stops to fire, uses something, or sees the squad (its concealment broken
+        /// by it), or is shot at on the way, leaves the group and is seen whole, in its order. «Don't know of the squad»: it is
+        /// still hidden, or the walker's group hasn't woken (Paths.OnPatrol). Only the order on screen, as Choreograph's.
+        /// </summary>
+        void LivingTogether()
+        {
+            var v = V;
+            var all = queue.ToList();
+            var end = all.FindIndex(q => q.e is TurnBeganEvent || q.e is MissionEndedEvent);
+            if (end < 0) end = all.Count;
+            var hidden = v.Concealed;
+            var awake = new HashSet<string>(v.Pods.Where(p => p.Active).Select(p => p.Id));
+            var groups = new List<(List<string> ids, Dictionary<string, List<int>> chains)>();
+            var apart = new List<string>();
+            Dictionary<string, List<int>> chains = null;
+            List<string> order = null;
+            var left = new HashSet<string>();
+            string last = null;
+            void Close()
+            {
+                if (order != null)
+                {
+                    var ids = order.Where(id => !left.Contains(id)).ToList();
+                    if (ids.Count >= 2) groups.Add((ids, chains));
+                    else apart.AddRange(ids.Select(id => $"{id} solo"));
+                    apart.AddRange(left.Select(id => $"{id} se para"));
+                }
+                chains = null;
+                order = null;
+                last = null;
+                left.Clear();
+            }
+            for (var i = 0; i < end; i++)
+            {
+                var e = all[i].e;
+                if (e is PodActivatedEvent woke) awake.Add(woke.Pod);
+                if (e is MovedEvent m && Unit(m.Unit) is Unit u && u.Team == Teams.Alien && u.Alive && AbilityTexts.ShootsFromRange(u)
+                    && (hidden || string.IsNullOrEmpty(u.PodId) || !awake.Contains(u.PodId)) && !left.Contains(u.Id))
+                {
+                    chains ??= new Dictionary<string, List<int>>();
+                    order ??= new List<string>();
+                    if (!chains.TryGetValue(u.Id, out var chain))
+                    {
+                        chains[u.Id] = chain = new List<int>();
+                        order.Add(u.Id);
+                    }
+                    chain.Add(i);
+                    last = u.Id;
+                    continue;
+                }
+                // What only changes someone's mind or makes a noise goes with the walker before it; before any, it stays put.
+                if (e is TurnedEvent || e is ForgotEvent || e is NoiseEvent || (last != null && !(e is ShotEvent) && OnTheWay(e, last)))
+                {
+                    if (last != null) chains[last].Add(i);
+                    continue;
+                }
+                if (e is ConcealmentBrokenEvent seen)
+                {
+                    hidden = false;
+                    if (seen.By != null && chains != null && chains.ContainsKey(seen.By)) left.Add(seen.By);
+                }
+                // Fired at on its way, or acting itself after its walk: seen whole, in its order.
+                if (e is ShotEvent shot && shot.Reaction && chains != null && chains.ContainsKey(shot.Target)) left.Add(shot.Target);
+                if (Starter(e) is string acts && chains != null && chains.ContainsKey(acts)) left.Add(acts);
+                Close();
+            }
+            Close();
+            if (Rhythm && (groups.Count > 0 || apart.Count > 0))
+                Debug.Log($"[ritmo] vivos que solo andan: {(groups.Count > 0 ? string.Join("; ", groups.Select(g => $"{g.ids.Count} a la vez ({string.Join(" ", g.ids)})")) : "ninguno a la vez")}{(apart.Count > 0 ? $"; en su orden: {string.Join(", ", apart)}" : "")}");
+            if (groups.Count == 0) return;
+            // Each group where its first event was, the rest of its events taken from where they were.
+            var place = new Dictionary<int, WalksEvent>();
+            var taken = new HashSet<int>();
+            foreach (var (ids, gc) in groups)
+            {
+                var items = ids.SelectMany(id => gc[id]).OrderBy(i => i).ToList();
+                place[items[0]] = new WalksEvent
+                {
+                    Chains = ids.Select(id => gc[id].Select(i => all[i]).ToList()).ToList(),
+                    Items = items.Select(i => all[i]).ToList(),
+                };
+                taken.UnionWith(items);
+            }
+            queue.Clear();
+            for (var i = 0; i < all.Count; i++)
+            {
+                if (place.TryGetValue(i, out var walks)) queue.Enqueue((walks, walks.Items[0].by, walks.Items[0].epoch));
+                else if (!taken.Contains(i)) queue.Enqueue(all[i]);
+            }
+        }
+
+        void ChoreographDead()
+        {
             Fail("Choreograph");
             var v = V;
             var all = queue.ToList();
             var end = all.FindIndex(q => q.e is TurnBeganEvent || q.e is MissionEndedEvent);
             if (end < 0) end = all.Count;
+            // (BASTION_RITMO: the turn's events as the engine gave them, for the measure; N3 of 22/11.)
+            if (Rhythm) Debug.Log($"[ritmo] sucesos del turno enemigo: {string.Join(", ", all.Take(end).Select(q => q.e.T + (UnitOf(q.e) is string id && id != "" ? " " + id : "") + (q.e is ShotEvent sh ? ">" + sh.Target + (sh.Reaction ? " (reacción)" : "") : "")))}");
             var kept = new List<string>();
             var front = FrontBites(all, end, kept, out var biters);
             var pre = new HashSet<int>();
@@ -1753,6 +1856,9 @@ namespace Bastion.UI.Combat
 
         bool ShownToSquad(Unit u) => (u.Team == Teams.Xcom && !control.Unfound(u)) || control.Visible(u);
 
+        /// <summary>Whether the squad sees a node (Grid.NodeOf: a storey's place too), as the figures' sight has them.</summary>
+        bool SeenNode(int node) => sight != null && node >= 0 && node < sight.Length && sight[node];
+
         /// <summary>Whether the squad sees tile (x, y) (mapView.isVisible).</summary>
         bool IsVisible(int x, int y) => sight != null && Grid.InBounds(V, x, y) && sight[y * V.Width + x];
 
@@ -2008,7 +2114,8 @@ namespace Bastion.UI.Combat
                 {
                     // Arte's fire, as the bottle has landed (its light is NightLights', from LightOnEvent).
                     Bastion.Client.Map.FireView.Current?.Light(V, lit.Fire);
-                    if (!lit.Fire.Tiles.Any(i => IsVisible(i % V.Width, i / V.Width))) return;
+                    // Fire.Tiles are nodes since N4 (a storey's floor burns too): seen as a node, not as a ground tile.
+                    if (!lit.Fire.Tiles.Any(SeenNode)) return;
                     Log($"Arden {lit.Fire.Tiles.Count} casillas durante {lit.Fire.Turns ?? Content.MolotovTurns} turnos.", "#ff8a3c");
                     await Wait(0.2f);
                     return;
@@ -2017,7 +2124,7 @@ namespace Bastion.UI.Combat
                 {
                     Bastion.Client.Map.FireView.Current?.Out(gone.Id);
                     var fire = V.Fires?.FirstOrDefault(f => f.Id == gone.Id);
-                    if (fire != null && fire.Tiles.Any(i => IsVisible(i % V.Width, i / V.Width))) Log("Se apaga el fuego del cóctel molotov.", "#c9a27a");
+                    if (fire != null && fire.Tiles.Any(SeenNode)) Log("Se apaga el fuego del cóctel molotov.", "#c9a27a");
                     return;
                 }
                 case BurnedEvent b:
@@ -2331,6 +2438,9 @@ namespace Bastion.UI.Combat
                 {
                     var u = Unit(rl.Unit);
                     if (!ShownToSquad(u)) return;
+                    // Drawn while it reloads, as one that attacks (PlayAttack): the engine's sight of a unit (Los.CanSee, the
+                    // squad's «seen») and of its tile (TeamVisibility, the figures') part just behind tall cover (22/11).
+                    Units?.ForceVisible(u.Id);
                     Look(Feet(u.Id));
                     Float(Chest(u.Id), "RECARGANDO", "info");
                     control.Sfx.Reload(Chest(u.Id), rifle: units == null || !units.PistolInHand(u.Id));
@@ -3067,6 +3177,12 @@ namespace Bastion.UI.Combat
             lastAttacker = shooter.Id;
             if (!ShownToSquad(shooter) && !ShownToSquad(target)) return;
             var units = Units;
+            // (Whoever attacks is drawn while it does: one that had run behind cover, out of the squad's sight on its tile,
+            // fired unseen from there, its bolt out of nothing. Arte, 22/11; not inside a building not found, ForceVisible's.
+            // That case is the engine's now (Gameplay, 23/11: TeamVisibility counts the tile of an enemy seen by CanSee). Kept
+            // for one firing out of the fog at a soldier in sight, which Producto wants seen as it fires (22/11): drawn till
+            // the next Sync, which hides it again; its marks go by Drawn, so none are left after.)
+            units?.ForceVisible(shooter.Id);
             var fx = Effects;
             var weapon = Content.AttackWeapon(shooter, e.Ability);
             var chest = Chest(target.Id);
@@ -3082,8 +3198,12 @@ namespace Bastion.UI.Combat
             // another, and the run goes on (Gameplay, 15/11: three shots over the shoulder in a row cut the run).
             var passing = e.Reaction && e.Ability == AbilityIds.Claw;
             var bite = !fells && !passing && weapon.Melee && shooter.Team != Teams.Xcom && target.Team == Teams.Xcom && ShownToSquad(shooter);
+            // The living and the dead between them (N3, 22/11: the Cuervos shoot at the dead, the dead go for the Cuervos):
+            // framed as any, never over the shoulder, which stays for the squad's own fights (a camp at the dead took ~2 s
+            // more a kill).
+            var ours = shooter.Team == Teams.Xcom || target.Team == Teams.Xcom;
             var close = !cam() ? null
-                : fells ? (target.Team == Teams.Xcom ? DeathShot(target, shooter) : ShownToSquad(shooter) ? ShotCam.OverShoulder(v, from, chest, shooter.Id, target.Id) : null)
+                : fells ? (target.Team == Teams.Xcom ? DeathShot(target, shooter) : ours && ShownToSquad(shooter) ? ShotCam.OverShoulder(v, from, chest, shooter.Id, target.Id) : null)
                 : bite ? ShotCam.OverShoulder(v, from, chest, shooter.Id, target.Id) : null;
             if (close != null) StartKillCam(target.Id, close.Value, bite);
             else if (cam())
@@ -3172,21 +3292,26 @@ namespace Bastion.UI.Combat
                 var muzzle = units.Muzzle(shooter.Id);
                 if (i == 0 && CameraRig.Logging) Debug.Log($"[camara] accion close={(control.Rig != null ? control.Rig.Closeness : 0):0.00}");
                 units.Recoil(shooter.Id);
-                fx.MuzzleFlash(muzzle, colour);
+                // (An arrow or a bolt: no flash; Arte's Fx.Arrow below. Arte, 22/11.)
+                if (!weapon.Arrows) fx.MuzzleFlash(muzzle, colour);
                 control.Sfx.Shot(shooter, weapon.Id, muzzle);
                 if (heavy && cam()) control.Rig.Shake(0.08f * Board.Tile, 0.15f);
                 var shots = pellets > 0 ? pellets : 1;
                 for (var p = 0; p < shots; p++)
                 {
                     var dest = hit ? chest + Jitter(pellets > 0 ? 0.6f : 0.25f) : MissPointIn(muzzle, chest, target, i + p, pellets > 0 ? 1.6f : 1);
-                    var bullet = BulletThen(muzzle, dest, colour, heavy ? 45 : 60, heavy, hit ? Fx.Hex(0xff7a5a) : Fx.Hex(0xffd28a), pellets > 0 ? 3 : hit ? 8 : 5);
+                    var bullet = weapon.Arrows ? Effects.Arrow(muzzle, dest, weapon.Id == WeaponIds.Crossbow, Fx.ArrowSpeed, stop)
+                        : BulletThen(muzzle, dest, colour, heavy ? 45 : 60, heavy, hit ? Fx.Hex(0xff7a5a) : Fx.Hex(0xffd28a), pellets > 0 ? 3 : hit ? 8 : 5);
                     // Where the last round lands, heard (its first pellet): flesh, metal or a miss.
                     if (i == rounds - 1 && p == 0) bullet = Then(bullet, () => { if (!stop.IsCancellationRequested) control.Sfx.Impact(hit ? Bastion.Client.Audio.CombatSound.Body(target) : "miss", dest, e.Result == "crit"); });
-                    Loose(bullet);
+                    // (An arrow is seen all its way: the hit and its harm wait for it to land, as a grenade's. Producto, 22/11.)
+                    if (weapon.Arrows) await bullet;
+                    else Loose(bullet);
                 }
-                await Wait(weapon.Burst > 3 ? 0.08f : 0.11f);
+                if (!weapon.Arrows) await Wait(weapon.Burst > 3 ? 0.08f : 0.11f);
             }
-            await Wait(heavy ? 0.25f : 0.15f);
+            // (An arrow has been seen to land: what it did, told at once.)
+            if (!weapon.Arrows) await Wait(heavy ? 0.25f : 0.15f);
             if (!hit)
             {
                 ShowMiss(e, shooter, target);
@@ -3251,6 +3376,9 @@ namespace Bastion.UI.Combat
                 return;
             }
             Log($"{u.Name}: {def.Name.ToLowerInvariant()}");
+            // Whoever throws is drawn while it does, as one that shoots (PlayAttack): from the fog at a tile in sight too, its
+            // throw out of nothing else (22/11). The next Sync hides it again if it stays out of sight.
+            units?.ForceVisible(u.Id);
             if (cam())
             {
                 look(Vector3.Lerp(Feet(u.Id), to, 0.5f));

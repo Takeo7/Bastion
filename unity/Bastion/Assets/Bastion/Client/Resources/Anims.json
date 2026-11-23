@@ -1439,7 +1439,7 @@
    "sight": 0.057,
    "reflex": true
   },
-  "crossbow": {"fbx": "apocalypse:SM_Wep_CrossBow_01", "reach": 0.8, "palm": [0, -0.045, -0.03], "fore": [-0.014, 0.2], "sight": 0.098, "back": [0, -0.22], "cocked": true},
+  "crossbow": {"fbx": "apocalypse:SM_Wep_CrossBow_01", "reach": 0.8, "palm": [0, -0.045, -0.03], "fore": [-0.014, 0.2], "sight": 0.17, "back": [0, -0.22], "cocked": true},
   "bow": {"fbx": "Wep_RecurveBow_01", "bow": true},
   "sniper": {
    "fbx": "SM_Wep_SniperRifle_01",

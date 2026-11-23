@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Bastion.Engine;
@@ -110,23 +111,93 @@ namespace Bastion.Engine.Tests
         // ------------------------------------------------------- nobody left, joins
 
         [Fact]
-        public void NobodyLeftBringsOneWithAKnife()
+        public void NobodyAliveInTheGameItIsLost()
         {
             var c = Two();
-            foreach (var s in c.Soldiers.Where((x) => x.Owner == 1)) s.Alive = false;
+            foreach (var s in c.Soldiers) s.Alive = false;
             // Not while a run is going.
             c.Run = new RunState();
             Assert.False(Runs.NobodyLeft(c, new Rng(3)));
             c.Run = null;
+            // N8 (Arturo, 22/11, cuadro 118): lost, at every level, and nobody comes for nothing.
             Assert.True(Runs.NobodyLeft(c, new Rng(3)));
-            var fresh = c.Soldiers.Where((s) => s.Owner == 1 && s.Alive).ToList();
-            Assert.Single(fresh);
-            Assert.Equal(FoundWeaponIds.Knife, fresh[0].Kit!.Melee!.Type);
-            Assert.Equal(Runs.PackRows(c), fresh[0].Kit!.Pack.H);
-            Assert.Equal(RunTexts.Recruit(fresh[0].Name), c.Log[0].Text);
-            // One, and nothing more.
+            Assert.Equal(Outcomes.Defeat, c.Outcome);
+            Assert.Equal(RunTexts.GameLost, c.Log[0].Text);
+            Assert.DoesNotContain(c.Soldiers, (s) => s.Alive);
             Assert.False(Runs.NobodyLeft(c, new Rng(3)));
-            Assert.Equal(5, c.Soldiers.Count);
+            // Nothing more is done in it.
+            Refused("La campaña ha terminado.", c, new StartRunCommand(), 0, Both);
+        }
+
+        [Fact]
+        public void OneLeftWithNobodyPlaysOnWithThePartners()
+        {
+            var c = Two();
+            var count = c.Soldiers.Count;
+            foreach (var s in c.Soldiers.Where((x) => x.Owner == 1)) s.Alive = false;
+            // The game counts, not the player: not lost, and no recruit.
+            Assert.False(Runs.NobodyLeft(c, new Rng(3)));
+            Assert.Null(c.Outcome);
+            Assert.Equal(count, c.Soldiers.Count);
+            // The partner may take every seat, and the one with nobody commands half the squad that goes out.
+            Assert.Equal(Runs.SeatsOf(c), Runs.SquadLimit(c, Both));
+            var mine = c.Soldiers.Where((s) => s.Owner == 0 && s.Alive).Select((s) => s.Id).Take(Runs.SeatsOf(c)).ToList();
+            Assert.Equal(mine, Runs.DefaultSquad(c, Both));
+            c.Squad = Runs.DefaultSquad(c, Both);
+            var run = Start(c);
+            Assert.Equal(mine, run.Squad);
+            Assert.Equal(Math.Max(1, mine.Count / 2), run.Hands!.Count);
+            Assert.All(run.Hands.Values, (v) => Assert.Equal(1, v));
+            Assert.Equal(run.Hands.Count, Squad(c).Count((s) => Runs.Controls(c, 1, Both, s)));
+        }
+
+        [Fact]
+        public void AloneWithNobodyOfTheirOwnTheyTakeThePartnersOut()
+        {
+            var c = Two();
+            foreach (var s in c.Soldiers.Where((x) => x.Owner == 0)) s.Alive = false;
+            var theirs = c.Soldiers.Where((x) => x.Owner == 1 && x.Alive).ToList();
+            // Player 0 alone: the partner's go out, and 0 commands them while 1 is away.
+            Assert.Equal(theirs.Take(Runs.SeatsOf(c)).Select((s) => s.Id), Runs.DefaultSquad(c, Zero));
+            c.Squad.Clear();
+            Ok(c, new SquadCommand { Soldier = theirs[0].Id, On = true }, 0, Zero);
+            Assert.Contains(theirs[0].Id, c.Squad);
+            Assert.True(Runs.Controls(c, 0, Zero, theirs[0]));
+            // With the partner here, only their own (#43); and with one of their own alive, too.
+            Refused(RunTexts.PickOwn, c, new SquadCommand { Soldier = theirs[1].Id, On = true }, 0, Both);
+            var d = Two();
+            Refused(RunTexts.PickOwn, d, new SquadCommand { Soldier = Soldier(d, 1).Id, On = true }, 0, Zero);
+            Ok(c, new StartRunCommand(), 0, Zero);
+            Assert.NotNull(c.Run);
+        }
+
+        [Fact]
+        public void OnABenchNobodyLeftBringsOneWithAKnife()
+        {
+            // As before N8, on a bench measuring past a squad fallen (Tuning.Wipes.One).
+            Runs.Tuning.Set(new Runs.Tuning.Settings { Wipe = Runs.Tuning.Wipes.One });
+            try
+            {
+                var c = Two();
+                foreach (var s in c.Soldiers.Where((x) => x.Owner == 1)) s.Alive = false;
+                c.Run = new RunState();
+                Assert.False(Runs.NobodyLeft(c, new Rng(3)));
+                c.Run = null;
+                Assert.True(Runs.NobodyLeft(c, new Rng(3)));
+                var fresh = c.Soldiers.Where((s) => s.Owner == 1 && s.Alive).ToList();
+                Assert.Single(fresh);
+                Assert.Equal(FoundWeaponIds.Knife, fresh[0].Kit!.Melee!.Type);
+                Assert.Equal(Runs.PackRows(c), fresh[0].Kit!.Pack.H);
+                Assert.Equal(RunTexts.Recruit(fresh[0].Name), c.Log[0].Text);
+                // One, and nothing more.
+                Assert.False(Runs.NobodyLeft(c, new Rng(3)));
+                Assert.Equal(5, c.Soldiers.Count);
+                Assert.Null(c.Outcome);
+            }
+            finally
+            {
+                Runs.Tuning.Reset();
+            }
         }
 
         [Fact]
@@ -407,7 +478,7 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
-        public void FallenSquadsLeaveARecruitWhenTheRunEnds()
+        public void NobodyLeftWhenTheRunEndsTheGameIsLost()
         {
             var c = Solo();
             Start(c);
@@ -415,8 +486,10 @@ namespace Bastion.Engine.Tests
             // (Home from the map: a run of before G22's.)
             c.Run!.HomeFromRefuge = null;
             Ok(c, new EndRunCommand());
-            Assert.Single(c.Soldiers, (s) => s.Alive);
+            // N8: nobody comes for nothing; the game is lost.
+            Assert.DoesNotContain(c.Soldiers, (s) => s.Alive);
             Assert.Empty(c.Squad);
+            Assert.Equal(Outcomes.Defeat, c.Outcome);
         }
 
         // ------------------------------------------------------------- hands, control

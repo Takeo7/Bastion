@@ -508,7 +508,7 @@ namespace Bastion.Net
             double Away(Pos p) => outside.Min((o) => Grid.Distance(p, o.Pos));
             var reach = Paths.ComputeReach(s, u, Stride(s, u));
             Destination? best = null;
-            foreach (var o in Paths.Destinations(s, u, reach))
+            foreach (var o in Stops(s, u, reach))
                 if (Abilities.InEvacZone(s, o.Pos) && (best == null || Away(o.Pos) > Away(best.Pos) + 1e-9 || (System.Math.Abs(Away(o.Pos) - Away(best.Pos)) < 1e-9 && o.Cost < best.Cost))) best = o;
             if (best == null || Away(best.Pos) < Away(u.Pos) + 1 || Paths.BuildPath(s, u, reach, best.Pos) == null) return null;
             return new MoveCommand { Unit = u.Id, To = best.Pos };
@@ -525,6 +525,57 @@ namespace Bastion.Net
             var left = Paths.MoveBudget(s, u);
             var full = Paths.FullMoves(s, u);
             return left < full ? left : full - Paths.CostOrtho;
+        }
+
+        /// <summary>
+        /// Where a move may end (Paths.Destinations), never one whose way takes all its health (N2, Arturo 22/11, cuadro 119:
+        /// the bot never jumps to die), weighed on the way the order will take (Rules: the reach of all the movement left,
+        /// BuildPath, its way round a fire too: Producto's review of the 0.14.0, point 6, and Gameplay's), not on this reach's.
+        /// The jumps it does take are the ones the way gives (cuadro 122: by the stairs wherever they get it this turn;
+        /// carrying someone, none). Never a stop on fire either: the rules let one end there (whoever does chose it), and it
+        /// burns at once and again at the turn's end (a recruit at 1 hp ended on a burning ladder).
+        /// </summary>
+        private static List<Destination> Stops(GameState s, Unit u, Reach reach)
+        {
+            var all = Paths.Destinations(s, u, reach);
+            if (Burning.Nodes(s) != null) all = all.Where((o) => !Burning.At(s, o.Pos)).ToList();
+            var order = OrderReach(s, u);
+            return all.Where((o) => !Deadly(s, u, order, o.Pos)).ToList();
+        }
+
+        /// <summary>The last OrderReach, per thread (the benches play four fights at once).</summary>
+        [System.ThreadStatic] private static OrderKept? orderKept;
+
+        private sealed class OrderKept
+        {
+            public GameState? State;
+            public int Seq, Node;
+            public string Unit = "";
+            public double Budget;
+            public Reach? Reach;
+        }
+
+        /// <summary>The reach a move order of `u`'s goes by (Rules: all the movement left), kept while nothing has changed.</summary>
+        private static Reach OrderReach(GameState s, Unit u)
+        {
+            var budget = Paths.MoveBudget(s, u);
+            var node = Grid.NodeOf(s, u.Pos);
+            var k = orderKept;
+            if (k != null && ReferenceEquals(k.State, s) && k.Seq == s.Seq && k.Unit == u.Id && k.Node == node && k.Budget == budget && k.Reach != null) return k.Reach;
+            var reach = Paths.ComputeReach(s, u, budget);
+            orderKept = new OrderKept { State = s, Seq = s.Seq, Node = node, Unit = u.Id, Budget = budget, Reach = reach };
+            return reach;
+        }
+
+        /// <summary>
+        /// The way to `to` takes all its health or more: its falls off storeys (N2: Paths.FallAlong, Content.FallDamage each,
+        /// through armour) and the burning tiles it steps on (Rules.MoveAlong: Content.Flames.Damage each).
+        /// </summary>
+        public static bool Deadly(GameState s, Unit u, Reach reach, Pos to)
+        {
+            var path = Paths.BuildPath(s, u, reach, to);
+            if (path == null) return false;
+            return Paths.FallAlong(s, reach.Origin, path) * Content.FallDamage + path.Count((p) => Burning.At(s, p)) * Content.Flames.Damage >= u.Hp;
         }
 
         /// <summary>
@@ -681,7 +732,11 @@ namespace Bastion.Net
                 if (Grid.Dirs8.Any((d) => Grid.InBounds(s, p.X + d.X, p.Y + d.Y) && Walked(new Pos { X = p.X + d.X, Y = p.Y + d.Y, Z = p.Z }))) found.Add(p);
             }
             found.AddRange((s.Dropped ?? new List<DroppedLoot>()).Where((d) => IsGun(d.Loot.Weapon) && Walked(d.Pos)).Select((d) => d.Pos));
-            found.AddRange((s.FloorGear ?? new List<DroppedGear>()).Where((d) => IsGunGear(d.Gear) && Walked(d.Pos)).Select((d) => d.Pos));
+            // A run's gear only with a pack to take it in (PackOrder).
+            if (u.Pack != null) found.AddRange((s.FloorGear ?? new List<DroppedGear>()).Where((d) => IsGunGear(d.Gear) && Walked(d.Pos)).Select((d) => d.Pos));
+            // Never the tile it stands on: what lies there it would have taken by now if it could. A recruit with no pack
+            // stood on a machine gun, crouched, for 40 turns of a Limpieza (Red's R2 by level, 23/11: easy, 2 seats, seed 5).
+            found.RemoveAll((p) => Grid.SamePos(p, u.Pos));
             if (found.Count == 0) return null;
             double Near(Unit x) => found.Min((p) => Grid.Distance(x.Pos, p));
             var going = Squad(s).Where((x) => !x.Evacuated && !Armed(s, x) && PackedGun(x) == null && x.Pack?.Items.Any((p) => IsGunGear(p.Gear)) != true && s.Mission.Item?.Carrier != x.Id)
@@ -706,7 +761,7 @@ namespace Bastion.Net
             var reach = Paths.ComputeReach(s, u, Stride(s, u));
             Destination? best = null;
             (int hp, int crowd, double cost) bestKey = default;
-            foreach (var o in Paths.Destinations(s, u, reach))
+            foreach (var o in Stops(s, u, reach))
             {
                 if (s.Run != null && !leaving && Abilities.InEvacZone(s, o.Pos)) continue;
                 var beside = seen.Where((e) => Aim.InMeleeReach(s, o.Pos, e.Pos)).ToList();
@@ -756,7 +811,7 @@ namespace Bastion.Net
             double Danger(Pos p) => reckless ? 0 : enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0) + (caged.Contains(Grid.NodeOf(s, p)) ? 4 : 0) + (charging && InChargeLine(bull!, p) ? 6 : 0);
             // Not going for La Lata, never a stop on a tile of it in a run: a walk that ends there gets in (T24), and with the
             // street between the start and the police station, two of four got in on their first walk (R9, La llave).
-            var stops = Paths.Destinations(s, u, reach).Where((o) => bus || s.Run == null || !Abilities.InEvacZone(s, o.Pos)).ToList();
+            var stops = Stops(s, u, reach).Where((o) => bus || s.Run == null || !Abilities.InEvacZone(s, o.Pos)).ToList();
             Destination? best = null;
             var end = WayTo(s, walks, goal, bus);
             if (end != null)
@@ -1413,7 +1468,7 @@ namespace Bastion.Net
             double Left(Pos p) => bus && Abilities.InEvacZone(s, p) ? 0 : back.Cost.TryGetValue(Grid.NodeOf(s, p), out var c) ? c : Off;
             var stay = Left(u.Pos) + (Unsafe(Grid.NodeOf(s, u.Pos)) ? 2 * Off : 0);
             var reach = Paths.ComputeReach(s, u, stride);
-            var stops = Paths.Destinations(s, u, reach)
+            var stops = Stops(s, u, reach)
                 .Where((o) => (bus ? Abilities.InEvacZone(s, o.Pos) || !Unsafe(Grid.NodeOf(s, o.Pos)) : !Unsafe(Grid.NodeOf(s, o.Pos)) && !Abilities.InEvacZone(s, o.Pos)) && Left(o.Pos) < stay - Paths.CostOrtho / 2.0)
                 .OrderBy((o) => Left(o.Pos)).ThenBy((o) => o.Cost).ThenBy((o) => Grid.NodeOf(s, o.Pos));
             foreach (var o in stops)
@@ -1684,14 +1739,16 @@ namespace Bastion.Net
         /// </summary>
         /// <remarks>
         /// To one of the dead's own place, the way through a window ended on it: nowhere on it to stop, and the recruit alone
-        /// with the blade stood under the window for ever, in a Limpieza of 40 turns (Gameplay's R2 of 21/11, seed 393).
+        /// with the blade stood under the window for ever, in a Limpieza of 40 turns (Gameplay's R2 of 21/11, seed 393). So
+        /// too to a Rescate's survivor behind a window, the way's end the window itself (Red's R2 by level, 23/11: hard, 2
+        /// seats, seed 39, 41 turns crouched two tiles off): beside the goal, only a place to stop on, whoever stands on it.
         /// </remarks>
         private static Pos? WayTo(GameState s, Reach walks, Pos goal, bool bus)
         {
             var taken = Grid.UnitAt(s, goal) is Unit there && there.Team != Teams.Xcom;
             var ends = bus ? Rules.OpenTiles(s).Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 })
                 : !taken && walks.Cost.TryGetValue(Grid.NodeOf(s, goal), out _) ? new[] { goal }
-                : Grid.Dirs8.Select((d) => new Pos { X = goal.X + d.X, Y = goal.Y + d.Y, Z = goal.Z }).Where((p) => !taken || (Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p)));
+                : Grid.Dirs8.Select((d) => new Pos { X = goal.X + d.X, Y = goal.Y + d.Y, Z = goal.Z }).Where((p) => Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p));
             Pos? best = null;
             var bestWalk = int.MaxValue;
             foreach (var p in ends)

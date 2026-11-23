@@ -302,7 +302,8 @@ namespace Bastion.Engine
                 case NodeKinds.Normal:
                     return $"Registrad lo que queráis y salid {Bus.In}.";
                 case NodeKinds.Elimination:
-                    return $"Abatid a todo lo que haya. Se gana sin volver {Bus.To}.";
+                    // La Lata in it too since the cuadro 122 (Gameplay, MissionOptions.EvacAlways): leaving in it is a retreat, the run goes on.
+                    return $"Abatid a todo lo que haya. Se gana sin volver {Bus.To}. Irse antes en {Bus.Name} es retirarse: la etapa se supera sin la recompensa.";
                 case NodeKinds.Recovery:
                     return $"Recuperad {item_} y volved {Bus.To}.";
                 case NodeKinds.Sabotage:
@@ -337,6 +338,11 @@ namespace Bastion.Engine
                     // blind behind and beside (Los.InNoticeCone), the Golpe silencioso but on the Cabecilla; the camp wakes whole;
                     // their shots too wind the horde (Rules.HordeClock). Also what the card says on arrival, as Separados'.
                     return $"Un campamento de los Cuervos, vivos y armados, guarda su alijo en tres cajas. El alijo es la única recompensa: sin robarlo, la etapa es un Saqueo. Uno hace la ronda y otro vigila el alijo; los de la hoguera miran al fuego y solo ven a {(int)Rules.FireWatch} casillas. Mientras la escuadra esté oculta, no notan a quien les llega por detrás o de lado, y el golpe silencioso los mata sin ruido, salvo al Cabecilla. Si uno ve a un soldado, despierta todo el campamento. Los tiros, también los suyos, atraen a los muertos.";
+                case NodeKinds.Charges:
+                    // G23 Las cargas (Arturo, cuadros 105 and 109; CARGAS.md): the nest only for now (the pass, later); three charges
+                    // in the packs, set from beside the points outside, with a little noise; the third, a count; at 0 the blast,
+                    // the squad too, and La Lata goes; leaving before, «superada, sin la recompensa».
+                    return $"Volad el nido: un edificio lleno de muertos dormidos. La escuadra lleva {Setup.ChargesCount} cargas en las mochilas; si cae quien lleva una, queda en el suelo. Cada una se pone con una acción, al lado de uno de los puntos marcados por fuera del edificio, y hace un poco de ruido. Al poner la tercera quedan {Setup.ChargesTurns} turnos: entonces estallan los tres puntos, con {Setup.ChargesDamage} de daño a {(int)Setup.ChargesRadius} casillas, también a los vuestros, y {Bus.Name} sale. Quien esté fuera se pierde. Si salís antes de ponerlas todas, la etapa se supera sin la recompensa.";
                 case NodeKinds.Refuge:
                     // G22 (cuadro 72): the only way back to the base, but beating the boss.
                     return "Un sitio seguro para descansar: todos se curan del todo. Desde aquí se puede volver a la base.";
@@ -468,6 +474,70 @@ namespace Bastion.Engine
                 default:
                     throw new ArgumentException($"Unknown upgrade: {id}");
             }
+        }
+
+        /// <summary>
+        /// N9 (Arturo, 22/11, cuadros 114 and 118): the game's level, chosen when it is made and never changed (Levels.All). What
+        /// changes: the dead, the horde, the supplies found and paid; in Supervivencia the wounds come home too. «Dificultad» is
+        /// only this; a stage's is «Peligro» (cuadro 115). Without the numbers, which will be tuned by playing.
+        /// </summary>
+        public static class GameLevelText
+        {
+            /// <summary>Over the four to choose from, and under them, what goes for all.</summary>
+            public const string Title = "Dificultad";
+            public const string Fixed = "Se elige al crear la partida y no se puede cambiar.";
+            public const string AllLose = "En todas: si no queda ningún soldado vivo, ni en la base, la partida se pierde.";
+
+            /// <summary>The levels by name (LevelIds).</summary>
+            public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>
+            {
+                [LevelIds.Easy] = "Fácil",
+                [LevelIds.Medium] = "Medio",
+                [LevelIds.Hard] = "Difícil",
+                [LevelIds.Survival] = "Supervivencia",
+            };
+
+            /// <summary>What each one changes, a line each (against Difícil, the one the others are made from).</summary>
+            public static readonly IReadOnlyDictionary<string, string> Lines = new Dictionary<string, string>
+            {
+                [LevelIds.Easy] = "Menos muertos, una horda más lenta y más suministros.",
+                [LevelIds.Medium] = "Algo menos de muertos, una horda algo más lenta y algo más de suministros.",
+                [LevelIds.Hard] = "Los muertos, la horda y los suministros normales. Los otros niveles cambian a partir de este.",
+                [LevelIds.Survival] = "Más muertos, una horda más rápida y menos suministros. Las heridas no se curan al volver a la base: solo en un Refugio, con medicinas o con «Curas en el camino».",
+            };
+
+            /// <summary>A game's level by name (null: Difícil, every game made before).</summary>
+            public static string NameOf(string? level) => level != null && Names.TryGetValue(level, out var name) ? name : Names[LevelIds.Hard];
+        }
+
+        /// <summary>
+        /// N8 (Arturo, 22/11, cuadros 113 and 118): nobody alive in the game, the base too, and it is lost, whole (the stash, the
+        /// upgrades and the chapter go with it); no recruit given. The end's window (StrategyPresenter.End, for a game of runs),
+        /// and the notice for whoever is left with none while the partner has some (no one loses: Runs.HandOver, Runs.Controls).
+        /// </summary>
+        public static class LostText
+        {
+            public const string Kicker = "Fin de la partida";
+            public const string Title = "Partida perdida";
+            public const string Text = "No queda ningún soldado vivo, ni en la expedición ni en la base. Se pierde todo: el almacén, las mejoras y el capítulo. Para volver a jugar, empezad una partida nueva.";
+
+            /// <summary>
+            /// At the base, for a player with no soldiers of their own: with the partner in, half the squad is theirs to lead when
+            /// it sets out; alone, they may take the partner's out and lead them.
+            /// </summary>
+            public static string NoneOfYourOwn(string partner, bool partnerIn) => partnerIn
+                ? $"No te quedan soldados. Al partir, mandas en la mitad de la escuadra de {partner}."
+                : $"No te quedan soldados. Puedes sacar a los de {partner} y mandarlos mientras no esté.";
+        }
+
+        /// <summary>
+        /// Supervivencia (N9): «Volver a la base» without the healing (ExpeditionText.ReturnHelp), and a wounded soldier at the base,
+        /// who sets out with what it came home with (Runs.HpOf, CampaignSoldier.Hurt).
+        /// </summary>
+        public static class WoundsText
+        {
+            public const string ReturnHelp = "Acaba la expedición. Lo que llevan las mochilas se guarda. Los heridos siguen heridos.";
+            public static string Hurt(int hp, int max) => $"Herido: sale con {hp} de {max} de salud. Se cura en un Refugio o con medicinas.";
         }
     }
 }

@@ -75,6 +75,8 @@ namespace Bastion.Engine
         public const string Welcome = "Empieza la campaña. Equipad a la escuadra y salid.";
         public const string EndRunText = "volver a la base";
         public const string RunEnded = "La escuadra vuelve a la base, y todos se curan.";
+        /// <summary>The same in Supervivencia (N9, Levels.Wounds): the wounds come home with them.</summary>
+        public const string RunEndedHurt = "La escuadra vuelve a la base. Los heridos siguen heridos: salen así en la próxima expedición.";
 
         public static string UpgradeText(string id, int price) => $"hacer la mejora «{UpgradeNames[id]}» ({price} §)";
         public static string StartRunText(int chapter) => $"partir de expedición al capítulo {chapter}";
@@ -87,6 +89,8 @@ namespace Bastion.Engine
         public static string SurvivorJoins(string name, bool inSquad = true) => inSquad ? $"{name} se une a la escuadra." : $"{name} se une al Bastión y espera en la base: la escuadra va completa.";
         public static string Recruit(string name) => $"{name} se une al Bastión como recluta: no quedaban soldados vivos.";
         public const string Wiped = "Cae toda la escuadra. Lo que llevaban se pierde.";
+        /// <summary>N8 (cuadro 118): nobody left alive in the game, the base too, and it is lost.</summary>
+        public const string GameLost = "No queda ningún soldado vivo, ni en la base. La partida está perdida.";
         public static string Reward(int supplies, int lost) => lost > 0 ? $"La recompensa: {supplies} §. No caben {lost} §, y se quedan allí." : $"La recompensa: {supplies} §.";
         /// <summary>A fight's name, for the room and the map's card: what the node is, and where.</summary>
         public static string FightName(RunNode n) => n.Site != null && Places.Names.TryGetValue(n.Site, out var site) ? $"{NodeNames[n.Kind]} · {site}" : NodeNames[n.Kind];

@@ -39,6 +39,8 @@ namespace Bastion.UI.Hud
             Ui.Show(host, v != null && v.Button);
             if (v == null) return;
             button.EnableInClassList("sight__button--on", v.On);
+            button.EnableInClassList("sight__button--resting", v.Resting);
+            button.pickingMode = v.Resting ? PickingMode.Ignore : PickingMode.Position;
             // Its colour is the class's: the eye drawn again (its own resolvedStyle).
             button.Q<Eye>()?.MarkDirtyRepaint();
         }

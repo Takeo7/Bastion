@@ -123,6 +123,16 @@ namespace Bastion.UI.Combat
         /// <summary>Whether a move sent (Focus) has got there.</summary>
         public bool Settled => !springing;
 
+        /// <summary>How far the point looked at still is from where a move sent (Focus) takes it, in metres; 0 once there or with none.</summary>
+        public float Left => springing ? Vector3.Distance(target, desiredTarget) : 0;
+
+        /// <summary>
+        /// For the measure (BASTION_CAMARA_LOG, N5 of 22/11): a move sent, how far and when, to say how long it takes to come
+        /// within a tile and to stop («[cámara] viaje …»).
+        /// </summary>
+        float tripLength, tripStart;
+        bool tripNear, tripOn;
+
         /// <summary>Whether a move sent has got there and so has the distance asked for (FrameZoom, CinematicZoom).</summary>
         public bool Arrived => !springing && Mathf.Abs(distance - desiredDistance) < 0.5f;
 
@@ -184,6 +194,14 @@ namespace Bastion.UI.Combat
             if (Overhead || Still) return;
             desiredTarget = Clamp(new Vector3(p.x, Mathf.Max(0, p.y), p.z));
             springing = !instant;
+            if (Logging && !instant)
+            {
+                tripLength = Vector3.Distance(target, desiredTarget);
+                tripStart = Time.unscaledTime;
+                tripNear = false;
+                tripOn = true;
+                Debug.Log($"[cámara] viaje de {tripLength:0.0} m ({tripLength / 1.5f:0.0} casillas)");
+            }
             if (!instant) return;
             target = desiredTarget;
             targetVel = Vector3.zero;
@@ -253,7 +271,8 @@ namespace Bastion.UI.Combat
         public void TakeControl()
         {
             // BASTION_CAMARA_LOG: who took it (the log carries the stack).
-            if (Logging) Debug.Log("[cámara] tomada por el jugador");
+            if (Logging) Debug.Log($"[cámara] tomada por el jugador{(tripOn && springing ? $" a {Time.unscaledTime - tripStart:0.00} s del viaje, a {Left:0.0} m" : "")}");
+            tripOn = false;
             Epoch++;
             TakenAt = Time.unscaledTime;
             savedDistance = null;
@@ -548,11 +567,18 @@ namespace Bastion.UI.Combat
                     targetVel += d * h;
                     target += targetVel * h;
                 }
+                if (Logging && tripOn && !tripNear && (target - desiredTarget).magnitude < 1.5f)
+                {
+                    tripNear = true;
+                    Debug.Log($"[cámara] viaje de {tripLength:0.0} m: a una casilla en {Time.unscaledTime - tripStart:0.00} s");
+                }
                 if ((target - desiredTarget).sqrMagnitude < 2.5e-5f && targetVel.sqrMagnitude < 1e-4f)
                 {
                     target = desiredTarget;
                     targetVel = Vector3.zero;
                     springing = false;
+                    if (Logging && tripOn) Debug.Log($"[cámara] viaje de {tripLength:0.0} m: parada en {Time.unscaledTime - tripStart:0.00} s");
+                    tripOn = false;
                 }
             }
             else target = Vector3.Lerp(target, desiredTarget, k);

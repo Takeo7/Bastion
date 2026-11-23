@@ -183,6 +183,11 @@
     color: #c9d4dc;
 }
 
+/* Resting (over a shoulder, the camera away): there, dimmed, not pressed. */
+.sight__button--resting {
+    opacity: 0.35;
+}
+
 .sight__button--on .sight__eye {
     color: #ffffff;
 }
@@ -203,7 +208,7 @@
 }
 
 /* The finger's buttons (TouchButtons; only with the finger): in the eye's ring and grey, the menu top right by the
-   mission's card, the map and the floors over the eye. */
+   mission's card, the map over the eye (the floors are FloorPicker's, below). */
 .touch-btn {
     position: absolute;
     width: 52px;
@@ -248,16 +253,6 @@
     bottom: 224px;
 }
 
-.touch-btn--down {
-    right: 24px;
-    bottom: 284px;
-}
-
-.touch-btn--up {
-    right: 24px;
-    bottom: 344px;
-}
-
 /* The rucksack's button (U11, Arturo 18/11 cuadro 55): left of the floors', always there; on, lit in the marks' bone. */
 .touch-btn--search {
     right: 84px;
@@ -271,4 +266,60 @@
 
 .touch-btn--on .touch-btn__icon {
     -unity-background-image-tint-color: #f3ecdc;
+}
+
+/* The floors' picker (FloorPicker; cuadro 121, Arturo 22/11): ▲, the floor looked at and ▼, in the eye's ring and grey,
+   over the goal's arrow (its middle over the arrow's), only on a map with more than one floor. With the finger, where
+   the finger's ▲ and ▼ were: over the map's button, right of the rucksack's. */
+.floors {
+    position: absolute;
+    right: 24px;
+    bottom: 92px;
+    width: 52px;
+    flex-direction: column;
+    align-items: center;
+    overflow: visible;
+}
+
+.touch .floors {
+    bottom: 284px;
+}
+
+.floors__key {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.floors__glyph {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    font-size: 18px;
+    color: #8f999f;
+}
+
+.floors__key:hover .floors__glyph {
+    color: #c9d4dc;
+}
+
+.floors__key:disabled {
+    opacity: 0.4;
+}
+
+.floors__name {
+    margin: 2px 0;
+    padding: 1px 6px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    color: #f3ecdc;
+    background-color: rgba(0, 0, 0, 0.8);
 }

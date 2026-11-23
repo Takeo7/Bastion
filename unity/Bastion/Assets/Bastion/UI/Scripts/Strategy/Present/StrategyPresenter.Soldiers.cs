@@ -324,7 +324,7 @@ namespace Bastion.UI.Strategy
             var v = new SoldierSheetView
             {
                 Name = Appearances.DisplayName(s.Name, s.Nickname),
-                NameTip = $"Misiones: {s.Missions} · Bajas: {s.Kills}\nPuntería con armas de fuego {aim + stats.Mods.Aim + stats.Mods.GunAim} · cuerpo a cuerpo {aim + stats.Mods.Aim + stats.Mods.MeleeAim}\nVoluntad {stats.Will} · Esquiva {dodge}",
+                NameTip = $"Misiones: {s.Missions} · Bajas: {s.Kills}\nPuntería al disparar {aim + stats.Mods.Aim + stats.Mods.GunAim} · cuerpo a cuerpo {aim + stats.Mods.Aim + stats.Mods.MeleeAim}\nVoluntad {stats.Will} · Esquiva {dodge}",
                 Hp = stats.MaxHp, HpTip = $"Salud: {stats.MaxHp}",
                 Ap = ap, ApTip = $"{ap} acciones por turno",
                 Moves = moves, MovesTip = $"Movimiento: {moves} casillas por turno",
@@ -516,11 +516,14 @@ namespace Bastion.UI.Strategy
         public SkillBoardView SkillBoard(string soldier)
         {
             var s = State.Soldiers.FirstOrDefault(x => x.Id == soldier);
-            return s == null ? null : BoardOf(s, s.Owner == Slot && s.Alive);
+            return s == null ? null : BoardOf(s, s.Owner == Slot && s.Alive, State);
         }
 
-        /// <summary>A campaign soldier's board as the window shows it; `editable`, its cells can be bought (the battle's sheet: never).</summary>
-        public static SkillBoardView BoardOf(CampaignSoldier s, bool editable)
+        /// <summary>
+        /// A campaign soldier's board as the window shows it; `editable`, its cells can be bought (the battle's sheet: never).
+        /// With its campaign (`c`), its totals and what each cell it can buy now changes of them (N6).
+        /// </summary>
+        public static SkillBoardView BoardOf(CampaignSoldier s, bool editable, CampaignState c = null)
         {
             var spent = s.Board.Count;
             var rank = Bars.VeterancyRank(spent);
@@ -534,7 +537,65 @@ namespace Bastion.UI.Strategy
                 Points = Bars.PointsLeft(s.Skills, s.Board), Editable = editable,
             };
             v.Board.AddRange(s.Board);
+            if (c != null) BoardTotals(c, s, v);
             return v;
+        }
+
+        /// <summary>
+        /// N6 (Arturo, 22/11: «quiero que aparezca cuánto vas a tener en total al cogerlo. No puedo saber por ejemplo cuánta
+        /// esquiva tengo»): the soldier's totals (TotalsOf: the core ones always, the rest when it has any), and for each cell
+        /// open to buy, the totals it would change: the soldier worked out again with it (a copy, Campaign.SquadMember), so
+        /// whatever the rules make of a cell is what shows. What a cell does besides (a grenade's reach, the luck in boxes)
+        /// its card's line says.
+        /// </summary>
+        static void BoardTotals(CampaignState c, CampaignSoldier s, SkillBoardView v)
+        {
+            var now = TotalsOf(c, s);
+            foreach (var (key, value, unit, shown) in now)
+                if (shown) v.Totals.Add(new BoardStatView { Key = key, Label = StrategyText.Board.Stats[key], Value = value, Unit = unit, Signed = StrategyText.Board.Signed.Contains(key) });
+            foreach (var id in Board.BoardCells.Keys)
+            {
+                if (Bars.CellState(s.Board, id) != "open") continue;
+                var copy = Bastion.Net.Json.Read<CampaignSoldier>(Bastion.Net.Json.Write(s));
+                copy.Board.Add(id);
+                var after = TotalsOf(c, copy);
+                for (var i = 0; i < now.Count; i++)
+                    if (after[i].value != now[i].value)
+                        v.Gains.Add(new BoardGainView { Cell = id, Key = now[i].key, Label = StrategyText.Board.Stats[now[i].key], From = now[i].value, To = after[i].value, Unit = now[i].unit, Signed = StrategyText.Board.Signed.Contains(now[i].key) });
+            }
+        }
+
+        /// <summary>
+        /// A soldier's totals as the battle will have them (Campaign.SquadMember; the aims, dodge and actions as its sheet's
+        /// name help): key, value, unit, and whether it shows on its own (health, actions, movement, both aims, dodge and will
+        /// always; armour, crits, defence, sight more and healing more when it has some).
+        /// </summary>
+        static List<(string key, int value, string unit, bool shown)> TotalsOf(CampaignState c, CampaignSoldier s)
+        {
+            var m = Campaign.SquadMember(c, s);
+            var t = Content.Templates[m.Template];
+            var aim = Content.Templates[TemplateIds.Rookie].Aim;
+            var rank = Bars.VeterancyRank(s.Board.Count);
+            var moves = (int)System.Math.Round((t.Mobility + m.Mods.Mobility) * Paths.CostOrtho) / Paths.CostOrtho;
+            var gunCrit = t.Crit + m.Mods.Crit + m.Mods.GunCrit;
+            var meleeCrit = t.Crit + m.Mods.Crit + m.Mods.MeleeCrit;
+            var defense = t.Defense + m.Mods.Defense;
+            return new List<(string, int, string, bool)>
+            {
+                ("hp", m.MaxHp, "", true),
+                ("armor", m.Armor, "", m.Armor != 0),
+                ("ap", rank >= Content.ThirdActionRank ? Content.ApPerTurn + 1 : Content.ApPerTurn, "", true),
+                ("moves", moves, "", true),
+                ("gunAim", aim + m.Mods.Aim + m.Mods.GunAim, "", true),
+                ("meleeAim", aim + m.Mods.Aim + m.Mods.MeleeAim, "", true),
+                ("gunCrit", gunCrit, " %", gunCrit != 0),
+                ("meleeCrit", meleeCrit, " %", meleeCrit != 0),
+                ("dodge", t.Dodge + m.Mods.Dodge, "", true),
+                ("defense", defense, "", defense != 0),
+                ("will", m.Will, "", true),
+                ("sight", t.Sight + m.Mods.Sight, "", m.Mods.Sight != 0),
+                ("heal", m.Mods.Heal, "", m.Mods.Heal != 0),
+            };
         }
 
         // ------------------------------------------------------------ experience

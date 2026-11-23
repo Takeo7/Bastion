@@ -292,6 +292,8 @@ namespace Bastion.UI.Strategy
                     Kind = "endrun", Kicker = StrategyText.Runs.Head(c.Run.Chapter), Title = StrategyText.Runs.EndAsk, Text = StrategyText.Runs.BackTip,
                     Buttons = { StrategyText.Runs.Back, StrategyText.Runs.EndNo },
                 };
+            // A new game from the base of one lost (N8): its level first, the last one marked.
+            if (choosingLevel && c.Outcome != null) return p.LevelChoice(levelPick);
             return p.End() ?? p.Event(view) ?? (alerts.Count > 0 && view != BaseViews.Debrief ? alerts[0] : null);
         }
 
@@ -455,7 +457,19 @@ namespace Bastion.UI.Strategy
                     else leaving = false;
                     break;
                 case "end":
-                    Leave();
+                    // A game of expeditions lost (N8): «Nueva partida» asks the level first (LevelChoice), the last one marked;
+                    // else back to the menu.
+                    if (index == 0 && shown.Buttons.Count > 1)
+                    {
+                        choosingLevel = true;
+                        levelPick = Levels.Of(p.State).Id;
+                    }
+                    else Leave();
+                    break;
+                case "level":
+                    // «Empezar»: another game here at the level picked (the room takes it from the base of a game lost).
+                    if (index == 0) send(new NewCampaignMessage { Level = levelPick });
+                    choosingLevel = false;
                     break;
                 case "endrun":
                     endingRun = false;
@@ -477,7 +491,21 @@ namespace Bastion.UI.Strategy
         public void OnWithdraw() => Order(new WithdrawCommand());
         public void OnWaitingGo() => Go(BaseViews.Squad);
         /// <summary>An event's option; in the runs, a stop's answer (AnswerStopCommand: a vote with two).</summary>
-        public void OnOption(int index) => Order(p.State?.Run?.Stop != null ? (CampaignCommand)new AnswerStopCommand { Option = index } : new AnswerEventCommand { Option = index });
+        public void OnOption(int index)
+        {
+            // The level's cards (N8): one picked, lit; «Empezar» starts with it.
+            if (shown?.Kind == "level")
+            {
+                if (index >= 0 && index < LevelIds.All.Count) levelPick = LevelIds.All[index];
+                Render();
+                return;
+            }
+            Order(p.State?.Run?.Stop != null ? (CampaignCommand)new AnswerStopCommand { Option = index } : new AnswerEventCommand { Option = index });
+        }
+
+        /// <summary>The level's cards open from a game lost (N8), and the one picked there.</summary>
+        bool choosingLevel;
+        string levelPick;
 
         /// <summary>«Ver» (proposalDetail's see): to the screen of what is proposed.</summary>
         public void OnSeeProposal()

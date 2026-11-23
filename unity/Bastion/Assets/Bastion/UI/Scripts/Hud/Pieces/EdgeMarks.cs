@@ -154,6 +154,29 @@ namespace Bastion.UI.Hud
             }
         }
 
+        /// <summary>
+        /// Whether a point of the world is seen (cuadro 117: a card clicked takes the camera only to a soldier not seen): in
+        /// front of the camera, within the room the arrows keep (the turn strip above, the sheet and the bar below), and off
+        /// the panels they keep off. Before the first layout, seen.
+        /// </summary>
+        public bool InView(Camera camera, Vector3 world)
+        {
+            var size = layer.layout.size;
+            if (camera == null || float.IsNaN(size.x) || size.x <= 0) return true;
+            var vp = camera.WorldToViewportPoint(world);
+            if (vp.z <= 0) return false;
+            var x = vp.x * size.x;
+            var y = (1 - vp.y) * size.y;
+            if (x < Left || x > size.x - Right || y < Top || y > size.y - Bottom) return false;
+            foreach (var panel in Avoid)
+            {
+                if (panel == null || panel.resolvedStyle.display == DisplayStyle.None || panel.resolvedStyle.visibility == Visibility.Hidden) continue;
+                var r = layer.WorldToLocal(panel.worldBound);
+                if (!float.IsNaN(r.width) && r.Contains(new Vector2(x, y))) return false;
+            }
+            return true;
+        }
+
         /// <summary>The arrow (styles.css .edge-arrow, its drawing): a shaft and a head, round ends, pointing right, in the text colour.</summary>
         sealed class Arrow : VisualElement
         {

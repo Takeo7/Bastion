@@ -64,7 +64,7 @@ namespace Bastion.Engine
 
         /// <summary>
         /// Bars filled on coming back (docs/FASE10.md §2), one line per line: «Ana
-        /// llena una barra de Disparo: +7 % de puntería con armas de fuego. Tiene un
+        /// llena una barra de Disparo: +7 % de puntería al disparar. Tiene un
         /// punto para el tablero.». `growth`, what each bar added; `from`, the line's
         /// growth before them (Bars.Of(growth, skill)), which Forma física needs: see BarGain.
         /// </summary>
@@ -76,7 +76,7 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// What bars adding `percent` to a line's growth give: «+7 % de puntería con armas de fuego». Forma física's in
+        /// What bars adding `percent` to a line's growth give: «+7 % de puntería al disparar». Forma física's in
         /// points of dodge (Arturo, 6/11: «+3 a +5 por barra»), «+4 de esquiva»: its percent is of Bars.DodgeBase, not of
         /// the soldier's dodge, and the rounding makes the points depend on `from`, the growth before.
         /// </summary>

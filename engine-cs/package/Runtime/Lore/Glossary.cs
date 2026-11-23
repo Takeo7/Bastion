@@ -29,6 +29,13 @@ namespace Bastion.Engine
             // Arco y ballesta (cuadro 102): the kill with arrows nobody else sees (Rules.Attack, SilentKill), and their ammunition.
             ["Tiro callado"] = "Un tiro de arco o de ballesta que mata no rompe la ocultación ni despierta al grupo del muerto, si no os ve ningún otro enemigo. Es como el golpe silencioso, pero de lejos. Si no mata, o alguien os ve, es un tiro como otro.",
             ["Flechas"] = $"La munición del arco y la ballesta, {Content.ArrowsPile} en cada casilla de la mochila. El arco gasta una en cada tiro, y la ballesta, una al recargar. La que acierta se recupera al registrar el cuerpo; la que falla se pierde.",
+            // N2 (Arturo, 22/11, cuadros 119, 122 and 127: through the windows, storeys 1 and 2; the roofs' parapet, by the stairs): Content.FallDamage a storey, through armour (Rules.MoveAlong); a floor a grenade
+            // breaks, the same (Rules.BreakFloor). The dead jump too; the living take the stairs (Paths.Leaps).
+            ["Saltar"] = $"Bajar de una planta por una ventana, sin escalera. Las azoteas tienen parapeto: de ellas se baja por la escalera. Quita {Content.FallDamage} de salud por planta, aunque lleve blindaje, y puede matar. No hace ruido. Si se llega por la escalera, se va por ella; si solo se llega saltando, se avisa antes. Cargando a alguien no se salta. Caer con el suelo que hunde una granada hace el mismo daño. Los muertos también saltan y se hacen daño; los vivos bajan por la escalera.",
+            // N9 (cuadros 114, 115 and 118): the game's level, and a stage's (RunMap.DifficultyOf: more and harder groups, a bigger
+            // horde, a little more found), which is another thing.
+            ["Dificultad"] = "La de la partida: Fácil, Medio, Difícil o Supervivencia. Se elige al crearla y no se cambia. Cambia cuántos muertos hay, lo rápida que es la horda y cuántos suministros se encuentran y se ganan. En Supervivencia, además, las heridas no se curan al volver a la base. En todas, si no queda ningún soldado vivo, ni en la base, la partida se pierde.",
+            ["Peligro"] = "Lo dura que es una etapa: sube con la fila del mapa y con el capítulo. Con más peligro, los enemigos son más y más duros, la horda trae más muertos y se encuentran algo más de suministros. No es la dificultad de la partida.",
             // The expeditions' boss of chapter 1 (H6).
             ["El Toro"] = "El jefe del capítulo 1: un muerto enorme que embiste y tumba. Matarlo supera el capítulo.",
             ["En el suelo"] = "Tras una embestida, el soldado queda en el suelo hasta vuestro turno: −20 de defensa y sin vigilancia. Levantarse le cuesta una acción.",
@@ -51,7 +58,7 @@ namespace Bastion.Engine
             ["Encargo"] = "Cadena de misiones y decisiones con un desenlace que se queda.",
             ["Taller de oficios"] = "Cada misión llena más las barras.",
             ["La Lata"] = "Lleva a la escuadra y la espera en la zona de evacuación. Moto, todoterreno, furgoneta y autobús: cada uno, más plazas.",
-            ["Evacuar"] = "Al llegar a una casilla de " + Bus.Name + ", el soldado sube y está a salvo; en su turno puede bajar. " + Bus.Name + " sale cuando lo pide un jugador y lo acepta el otro, o sola cuando ya están todos dentro. Quien esté fuera se pierde. En una Limpieza, salir es retirarse, y la misión se pierde.",
+            ["Evacuar"] = "Al llegar a una casilla de " + Bus.Name + ", el soldado sube y está a salvo; en su turno puede bajar. " + Bus.Name + " sale cuando lo pide un jugador y lo acepta el otro, o sola cuando ya están todos dentro. Quien esté fuera se pierde. En una Limpieza, salir antes de acabar es retirarse: la etapa se supera sin la recompensa.",
             ["Recluta"] = "Quien acaba de unirse al Bastión, con un cuchillo.",
             ["Barras"] = "Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Registrar y Forma física. Se llenan haciendo eso mismo en los combates. Cada barra llena sube un poco su habilidad y da un punto para el tablero.",
             ["Tablero"] = "Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, al lado de una que ya tenga.",

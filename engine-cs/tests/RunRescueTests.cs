@@ -362,7 +362,17 @@ namespace Bastion.Engine.Tests
                 x.Hp = 0;
             }
             var had = c.Soldiers.Select((x) => x.Id).ToList();
-            var report = EndFight(c, s, Outcomes.Defeat, EndReasons.Wiped);
+            // Since N8 only a bench gives them (Tuning.Wipe): in a game, nobody left, it is lost (RunFightTests).
+            Runs.Tuning.Set(new Runs.Tuning.Settings { Wipe = Runs.Tuning.Wipes.One });
+            MissionReport report;
+            try
+            {
+                report = EndFight(c, s, Outcomes.Defeat, EndReasons.Wiped);
+            }
+            finally
+            {
+                Runs.Tuning.Reset();
+            }
             Assert.Equal(RunEnds.Wiped, report.Run!.Ended);
             Assert.NotEmpty(report.Run.Recruits!);
             Assert.All(report.Run.Recruits!, (id) => Assert.DoesNotContain(id, had));
@@ -412,6 +422,39 @@ namespace Bastion.Engine.Tests
             // the maps move on under it, and a bot that never talks talks to none.
             output.WriteLine($"hablados {talked} de 6, sacados {out_}");
             Assert.True(talked >= 1 && out_ >= 1, $"hablados {talked} de 6, sacados {out_}");
+        }
+
+        [Fact]
+        public void TheSurvivorNeverOnADoorNorInAPassTheDeadOffThemAndTheirWay()
+        {
+            // N7 (Arturo, 22/11: «había aparecido en la misma casilla que una puerta, y al lado tenía una fila de por lo menos 15
+            // zombies»): Setup.SurvivorClear. Outdoors and in one-storey maps, the nearest of the dead on the ground well off them.
+            foreach (var site in new[] { Places.Town, Places.Country, Places.Roadside, Places.Police, Places.Plaza, Places.Camping })
+                for (var seed = 1; seed <= 6; seed++)
+                {
+                    var (_, s) = RunsHelpers.LaunchAt(NodeKinds.Rescue, seed, node: (n) =>
+                    {
+                        n.Site = site;
+                        n.Seed = 100 + seed;
+                        n.Difficulty = 2;
+                        if (site == Places.Town) n.Site = Places.Of(RunMap.MapOf(n)!);
+                    });
+                    var vip = Survivor(s);
+                    Assert.False(Rules.BadSpot(s, vip.Pos), $"{site} {seed}: {Grid.KindAt(s, vip.Pos)} at {vip.Pos.X},{vip.Pos.Y}");
+                    // Still in its circle.
+                    var area = s.Mission.SearchArea!;
+                    Assert.True(Js.Hypot(area.Center.X - vip.Pos.X, area.Center.Y - vip.Pos.Y) <= area.Radius, $"{site} {seed}: out of its circle");
+                    var near = s.Units.Where((u) => u.Alive && u.Team == Teams.Alien && Content.Templates[u.Template].Undead && u.Pos.Z == vip.Pos.Z)
+                        .Select((u) => Js.Hypot(u.Pos.X - vip.Pos.X, u.Pos.Y - vip.Pos.Y)).DefaultIfEmpty(99).Min();
+                    Assert.True(near >= (site == Places.Police ? 3 : 8), $"{site} {seed}: one of the dead {near:0.0} off");
+                }
+            Assert.True(Rules.DoorSpot(StateWithDoor(), new Pos { X = 1, Y = 0, Z = 0 }));
+        }
+
+        private static GameState StateWithDoor()
+        {
+            var s = Step1Helpers.StateFrom(new[] { "#+#", "...", "..." });
+            return s;
         }
     }
 }

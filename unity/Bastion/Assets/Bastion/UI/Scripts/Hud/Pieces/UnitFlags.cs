@@ -366,6 +366,8 @@ namespace Bastion.UI.Hud
                 var head = headOf(pair.Key);
                 if (Place(pair.Value, panel, camera, head, 0, 1f) is float left) KeepLinesIn(pair.Value, left, wide);
             }
+            Unstack();
+            OffPanels();
             var now = Time.time;
             // The marks of those just seen, fading over their last half second and gone after 2 s.
             if (spots.Count > 0)
@@ -464,6 +466,99 @@ namespace Bastion.UI.Hud
                 if (float.IsNaN(from) || float.IsNaN(to) || float.IsNaN(wide)) continue;
                 var shift = from < Edge ? Edge - from : to > wide - Edge ? wide - Edge - to : 0;
                 line.style.translate = new Translate(shift, 0);
+            }
+        }
+
+        readonly List<(VisualElement e, float x, float y, float w, float h)> squadFlags = new List<(VisualElement, float, float, float, float)>();
+
+        /// <summary>
+        /// The panels the flags keep off (the review of 23/11, C26 and C27: an enemy's flag low on the screen went over the bar's
+        /// keys, through them in the enemy's turn): the bar, «Terminar turno», the busts and the sheet. Whichever are shown.
+        /// </summary>
+        public IList<VisualElement> Under = new List<VisualElement>();
+
+        /// <summary>
+        /// A flag over one of those panels: the one aimed at goes up just clear of it (its odds read whole); any other is hidden
+        /// while there (it comes back as the camera moves it off). Each frame, after Place.
+        /// </summary>
+        static readonly bool OffLog = Environment.GetEnvironmentVariable("BASTION_BANDERAS_LOG") == "1";
+        float offLogAt;
+
+        void OffPanels()
+        {
+            if (Under.Count == 0) return;
+            var log = OffLog && Time.unscaledTime - offLogAt > 1;
+            if (log)
+            {
+                offLogAt = Time.unscaledTime;
+                foreach (var panel in Under)
+                    Debug.Log($"[banderas] panel {panel?.name}: {(panel == null ? "null" : $"{layer.WorldToLocal(panel.worldBound)} display {panel.resolvedStyle.display} en el árbol {panel.panel != null}")}");
+            }
+            foreach (var pair in flags)
+            {
+                var e = pair.Value;
+                if (e.style.visibility == Visibility.Hidden) continue;
+                var size = e.layout.size;
+                if (float.IsNaN(size.x) || size.x <= 0) continue;
+                var at = e.style.translate.value;
+                var box = new Rect(at.x.value, at.y.value, size.x, size.y);
+                if (log) Debug.Log($"[banderas] {pair.Key}: {box}");
+                foreach (var panel in Under)
+                {
+                    if (panel == null || panel.resolvedStyle.display == DisplayStyle.None || panel.resolvedStyle.visibility == Visibility.Hidden) continue;
+                    var r = layer.WorldToLocal(panel.worldBound);
+                    if (float.IsNaN(r.width) || r.width <= 0 || !box.Overlaps(r)) continue;
+                    if (e.ClassListContains("uflag--target"))
+                    {
+                        box.y = r.yMin - size.y - 2;
+                        e.style.translate = new Translate(box.x, box.y);
+                    }
+                    else
+                    {
+                        e.style.visibility = Visibility.Hidden;
+                        break;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// The squad's flags kept apart (the review of 23/11, C17: with six or eight soldiers together, «VIGILANCIA» and
+        /// «CUBRIÉNDOSE» went over their neighbours' bars): the one lowest on the screen, nearest the camera, stays; each one
+        /// over it that would overlap goes up just clear of it. Only the squad's (eight at most); the enemies' as they are.
+        /// </summary>
+        void Unstack()
+        {
+            squadFlags.Clear();
+            foreach (var pair in flags)
+            {
+                var e = pair.Value;
+                if (e.ClassListContains("uflag--enemy") || e.style.visibility == Visibility.Hidden) continue;
+                var size = e.layout.size;
+                if (float.IsNaN(size.x) || size.x <= 0) continue;
+                var at = e.style.translate.value;
+                squadFlags.Add((e, at.x.value, at.y.value, size.x, size.y));
+            }
+            if (squadFlags.Count < 2) return;
+            squadFlags.Sort((a, b) => (b.y + b.h).CompareTo(a.y + a.h));
+            for (var i = 1; i < squadFlags.Count; i++)
+            {
+                var (e, x, y, w, h) = squadFlags[i];
+                var moved = y;
+                for (var again = true; again;)
+                {
+                    again = false;
+                    for (var j = 0; j < i; j++)
+                    {
+                        var o = squadFlags[j];
+                        if (x + w <= o.x || o.x + o.w <= x || moved + h <= o.y || o.y + o.h <= moved) continue;
+                        moved = o.y - h - 1;
+                        again = true;
+                    }
+                }
+                if (moved == y) continue;
+                squadFlags[i] = (e, x, moved, w, h);
+                e.style.translate = new Translate(x, moved);
             }
         }
 

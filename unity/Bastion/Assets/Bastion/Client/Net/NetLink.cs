@@ -421,15 +421,16 @@ namespace Bastion.Client.Net
         /// <summary>
         /// «Nueva partida» (0.12.24): hosts a room that starts with nothing (SaveStore.StartAfresh: what was saved stays
         /// next to the save, as with the room's «Nueva campaña»), and once in begins a campaign, this player's alone until
-        /// the partner comes; Opening until the base. The problem, said for the player, or null.
+        /// the partner comes; Opening until the base. `level`: the game's (N9, LevelIds), null for Difícil. The problem, said
+        /// for the player, or null.
         /// </summary>
-        public string? NewGame(string name)
+        public string? NewGame(string name, string? level = null)
         {
             if (name.Trim().Length < 1 || name.Trim().Length > 20) return NameProblem;
             // A room still open from before (leaving the start screen closes it): closed and saved first.
             if (host != null) Leave();
             var problem = Host(name, true);
-            if (problem == null) Carry(new NewCampaignMessage());
+            if (problem == null) Carry(new NewCampaignMessage { Level = level });
             return problem;
         }
 

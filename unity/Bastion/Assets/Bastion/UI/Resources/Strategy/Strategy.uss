@@ -823,3 +823,14 @@
     border-radius: 2px;
     background-color: rgba(255, 255, 255, 0.18);
 }
+
+/* A new game from a game lost (N8): the start screen's plate and cards (LevelPicker, Hud/LevelPicker.uss), its keys on
+   the left as there. */
+.strat-modal__card--level {
+    width: 92%;
+    max-width: 1000px;
+}
+
+.strat-modal__card--level .strat-modal__actions {
+    justify-content: flex-start;
+}

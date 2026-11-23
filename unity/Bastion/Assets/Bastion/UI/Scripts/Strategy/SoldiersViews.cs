@@ -310,6 +310,36 @@ namespace Bastion.UI.Strategy
         /// <summary>One's own living soldier: cells can be bought (held a second).</summary>
         public bool Editable;
         public System.Collections.Generic.List<string> Board = new System.Collections.Generic.List<string>();
+        /// <summary>N6 (Arturo, 22/11: «cuánto vas a tener en total al cogerlo»): the soldier's totals as they are now.</summary>
+        public System.Collections.Generic.List<BoardStatView> Totals = new System.Collections.Generic.List<BoardStatView>();
+        /// <summary>N6: what each cell it can buy now changes of them, from and to («Esquiva 3 → 8»).</summary>
+        public System.Collections.Generic.List<BoardGainView> Gains = new System.Collections.Generic.List<BoardGainView>();
+    }
+
+    /// <summary>One of a soldier's totals on its board (N6): its key, words and value («Esquiva», 8, «%» or none).</summary>
+    [Serializable]
+    public sealed class BoardStatView
+    {
+        public string Key;
+        public string Label;
+        public int Value;
+        public string Unit;
+        /// <summary>Shown with its sign, «+2» (StrategyText.Board.Signed).</summary>
+        public bool Signed;
+    }
+
+    /// <summary>One total a cell would change (N6): the cell, the total's key and words, from and to.</summary>
+    [Serializable]
+    public sealed class BoardGainView
+    {
+        public string Cell;
+        public string Key;
+        public string Label;
+        public int From;
+        public int To;
+        public string Unit;
+        /// <summary>Shown with its sign, «+2» (StrategyText.Board.Signed).</summary>
+        public bool Signed;
     }
 
     /// <summary>«Esperar un día»: a key of both players (advance), what is missing, why not (Soldados' «esperar», the campaign of before the runs).</summary>

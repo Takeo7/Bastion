@@ -42,6 +42,20 @@ namespace Bastion.UI.Strategy
         public static class Board
         {
             public const string PointsTip = "Un punto de habilidad cada vez que se llena una barra";
+            /// <summary>N6 (22/11; till Lore's words): over what a cell changes, and over the soldier's totals.</summary>
+            public const string Gains = "Si la coges";
+            public const string Totals = "Totales";
+            /// <summary>The totals' words, by key (StrategyPresenter.BoardTotals).</summary>
+            public static readonly Dictionary<string, string> Stats = new Dictionary<string, string>
+            {
+                ["hp"] = "Salud", ["armor"] = "Blindaje", ["ap"] = "Acciones", ["moves"] = "Movimiento",
+                ["gunAim"] = "Puntería al disparar", ["meleeAim"] = "Puntería cuerpo a cuerpo", ["gunCrit"] = "Crítico al disparar",
+                ["meleeCrit"] = "Crítico cuerpo a cuerpo", ["dodge"] = "Esquiva", ["defense"] = "Defensa", ["will"] = "Voluntad",
+                ["sight"] = "Vista", ["heal"] = "Cura extra",
+            };
+
+            /// <summary>The totals shown with their sign, «Cura extra +2» (Lore, 22/11: «de más» read as «too much»).</summary>
+            public static readonly HashSet<string> Signed = new HashSet<string> { "heal" };
         }
 
         /// <summary>Escuadra's and the line-up's fixed words.</summary>
@@ -68,6 +82,14 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>«Volver al menú principal» from the base (Lore, 24/10: as in the HUD; «menú principal», not «de inicio»).</summary>
+        /// <summary>A game of expeditions lost (N8): another one from here, as hard as this one (Lore's «empezad una partida nueva»).</summary>
+        public static class Lost
+        {
+            public const string Again = "Nueva partida";
+            public const string Start = "Empezar";
+            public const string Back = "Volver";
+        }
+
         public static class Leave
         {
             public const string Kicker = "Menú principal";
@@ -168,10 +190,32 @@ namespace Bastion.UI.Strategy
             /// <summary>After a modifier an event left on a stage (Lore to confirm).</summary>
             public const string ByEvent = " (por un suceso del camino)";
             public static string Site(string place) => $"Sitio: {place}.";
-            public static string Difficulty(int d) => $"Dificultad {d}.";
+            /// <summary>A stage's danger (cuadro 115: «Peligro»; «Dificultad» is only the game's level).</summary>
+            public static string Difficulty(int d) => $"Peligro {d}.";
 
-            public static string NodeName(string kind, int chapter = 1) => Lore.StageName(kind, chapter);
-            public static string NodeLine(string kind) => Lore.StageLine(kind);
+            /// <summary>
+            /// A stage's name and line (Lore's); a kind Lore has no words for yet, «Etapa» and none, not the whole map gone white
+            /// (the review of 23/11: Las Cargas threw there and the screen was empty). Said in the log, to give it words.
+            /// </summary>
+            public static string NodeName(string kind, int chapter = 1) => Safe(() => Lore.StageName(kind, chapter), kind, Unnamed);
+            public static string NodeLine(string kind) => Safe(() => Lore.StageLine(kind), kind, "");
+            public const string Unnamed = "Etapa";
+
+            /// <summary>The stage's line with what is known of it (Runs.StageLine), or none for a kind without words.</summary>
+            public static string StageLine(RunNode n) => Safe(() => Bastion.Engine.Runs.StageLine(n), n.Kind, "");
+
+            static string Safe(System.Func<string> words, string kind, string none)
+            {
+                try
+                {
+                    return words();
+                }
+                catch (System.Exception e) when (e is System.ArgumentException || e is KeyNotFoundException)
+                {
+                    UnityEngine.Debug.LogWarning($"[runs] el tipo de etapa «{kind}» no tiene textos de Lore: sale «{Unnamed}».");
+                    return none;
+                }
+            }
             /// <summary>The weather isn't known until the stage: «Mal tiempo» (Lore).</summary>
             public static string ModifierName(string id) => Lore.ModifierName(id);
             public static string ModifierLine(string id) => Lore.ModifierLine(id);

@@ -191,6 +191,48 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void ToASurvivorBehindAWindowItGoesRoundToAPlaceBeside()
+        {
+            // Red's R2 by level (23/11, hard, 2 seats, seed 39): in a Rescate, the last soldier two tiles from the captive
+            // survivor, a window between, crouched 41 turns. The way's end beside them was the window, nowhere to stop on;
+            // now a place to stop on, round by the door.
+            var s = Step1Helpers.StateFrom(new[]
+            {
+                "..............",
+                "...#########..",
+                "...+.......#..",
+                "...#.......#..",
+                "...####=####..",
+                "..............",
+                "..............",
+            });
+            s.Mission.Kind = MissionKinds.Rescue;
+            var u = Step1Helpers.AddUnit(s, "s1", TemplateIds.Rookie, 7, 5, extra: (x) => x.Arms = new Arms { Pistol = false });
+            var vip = Step1Helpers.AddUnit(s, "v1", TemplateIds.Vip, 7, 3, extra: (x) => x.Captive = true);
+            s.Mission.ObjectiveUnit = vip.Id;
+            s.Concealed = false;
+            Assert.Equal(TileKinds.Window, Grid.KindAt(s, new Pos { X = 7, Y = 4, Z = 0 }));
+            var connected = new List<int> { 0 };
+            var rng = new Rng(5);
+            for (var turn = 0; turn < 3 && Grid.Distance(u.Pos, vip.Pos) > 1.5; turn++)
+            {
+                for (var k = 0; k < 20; k++)
+                {
+                    var cmd = MissionBot.Next(s, 0, connected);
+                    if (cmd == null || cmd is EndTurnCommand) break;
+                    // Its first order goes for them (it crouched there for ever).
+                    if (turn == 0 && k == 0) Assert.IsType<MoveCommand>(cmd);
+                    Assert.True(Rules.ExecuteCommand(s, cmd, 0, connected, rng).Ok, Json.Write(cmd));
+                    if (Grid.Distance(u.Pos, vip.Pos) <= 1.5) break;
+                }
+                u.Ap = 2;
+                u.Moves = null;
+            }
+            Assert.True(Grid.Distance(u.Pos, vip.Pos) <= 1.5, $"at {u.Pos.X},{u.Pos.Y}");
+            Assert.True(Flights.CanStopAt(s, u.Pos));
+        }
+
+        [Fact]
         public void ABoardedDoorInTheWayIsPriedOrGoneRound()
         {
             // Arturo, 2/11: the crowbar takes the planks off a door. With it, the bot does when the way round is longer;

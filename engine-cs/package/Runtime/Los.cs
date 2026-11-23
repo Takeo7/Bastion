@@ -709,6 +709,22 @@ namespace Bastion.Engine
                     }
                 }
             }
+            // An enemy a viewer sees as CanSee has it, peeking out from beside high cover (its own peeking places, which the
+            // mask doesn't walk to): its place is seen too, so that what can be aimed at is drawn (UI's probe, Producto
+            // 23/11: a Cazador shooting with no figure from beside a rock). Not with `reach` (teamView: a look that far).
+            if (reach == null)
+                foreach (var t in s.Units)
+                {
+                    if (!t.Alive || t.Evacuated || t.Team == team) continue;
+                    var n = Grid.NodeOf(s, t.Pos);
+                    if (n < 0 || n >= mask.Length || mask[n]) continue;
+                    foreach (var look in looks)
+                        if (Grid.Distance(look.U.Pos, t.Pos) <= look.Range && CanSee(s, look.U, t))
+                        {
+                            mask[n] = true;
+                            break;
+                        }
+                }
             // What is inside a building the squad has not found, it does not see (Buildings; Ana, 31/10).
             if (veil && team == Teams.Xcom) Buildings.Veil(s, mask);
             return mask;

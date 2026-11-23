@@ -125,7 +125,8 @@ namespace Bastion.Engine
             var traits = s.Traits.Select((t) => Quests.Traits[t]).ToList();
             var vest = kit.Vest?.Type != null && Content.Vests.TryGetValue(kit.Vest.Type, out var def) ? def : null;
             var max = stats.MaxHp + (vest?.Hp ?? 0);
-            var hp = c.Run != null && c.Run.Hp.TryGetValue(s.Id, out var left) ? Math.Max(1, Math.Min(max, left)) : max;
+            // N9, Supervivencia: the wounds it came home with (CampaignSoldier.Hurt).
+            var hp = c.Run != null && c.Run.Hp.TryGetValue(s.Id, out var left) ? Math.Max(1, Math.Min(max, left)) : Math.Max(1, max - (Levels.Of(c).Wounds ? s.Hurt ?? 0 : 0));
             return new SquadMember
             {
                 CampaignId = s.Id,
@@ -177,6 +178,9 @@ namespace Bastion.Engine
             var guarded = rescue && node.Guarded == true;
             // The boss's group alone (it isn't scaled: there is one Toro).
             var pods = boss ? new List<List<string>> { BossPod(difficulty) } : Setup.PodsFor(map, Setup.MissionPods(difficulty, rescue && !guarded ? MissionKinds.Scavenge : kind, guarded));
+            // N9: the game's level's dead (not the boss's group).
+            var level = Levels.Of(c);
+            if (!boss) pods = Levels.Pods(pods, level.Dead);
             // One Cazador fewer in a guarded Rescate since they carry crossbows (Arturo, cuadro 106; ARCO-Y-BALLESTA.md): the
             // first of its groups', gone with nobody in its place (one swapped for a Saqueador left it harder than before).
             if (guarded) OneCazadorFewer(pods);
@@ -184,58 +188,79 @@ namespace Bastion.Engine
             var seed = Math.Abs(node.Seed ?? 0);
             var alarm = kind == MissionKinds.Sabotage ? AlarmOf(node) : null;
             var name = RunTexts.FightName(node, run.Chapter);
-            var state = Setup.CreateMission(new MissionOptions
+            // Cuadro 122 (Producto's review of 23/11): never a fight with no way out. A map whose La Lata the squad can't walk
+            // to from where it comes in (or with none: the mission would fall back to a Limpieza without it) is made again
+            // from the next seed, MapRetries at most.
+            GameState state = null!;
+            for (var attempt = 0; ; attempt++)
             {
-                Map = map,
-                Slots = c.Players.ToList(),
-                Rng = rng,
-                Kind = kind,
-                Squad = squad,
-                Pods = pods,
-                Difficulty = difficulty,
-                CampaignMission = new CampaignMission { Id = node.Id, Name = name },
-                Living = guarded ? true : (bool?)null,
-                Guarded = guarded ? true : (bool?)null,
-                Survivor = rescue ? SurvivorOf(c, node) : null,
-                // Never fewer than the squad that went out (a run of the 0.13.0's, with 4, under way when its seats went to 2).
-                Seats = Math.Max(SeatsOf(c), squad.Count),
-                Alarm = alarm,
-                ObjectiveName = alarm != null ? Lore.AlarmNames[alarm] : null,
-                // The node's own modifier, and the one an event left for it (H4).
-                Night = node.Modifier == Modifiers.Night || node.Added == Modifiers.Night ? true : (bool?)null,
-                Weather = node.Modifier == Modifiers.Storm || node.Added == Modifiers.Storm ? Weathers.Storm : null,
-                Awake = node.Modifier == Modifiers.Awake || node.Added == Modifiers.Awake ? true : (bool?)null,
-                // Pistols are counted: searches turn them up too.
-                Pistols = true,
-                Vehicle = VehicleOf(c),
-                // The runs' stages (H5, H6).
-                HoldUntil = node.Kind == NodeKinds.Hold ? Setup.HoldTurns : (int?)null,
-                Crossing = node.Kind == NodeKinds.Crossing ? true : (bool?)null,
-                Stealth = node.Kind == NodeKinds.Stealth ? true : (bool?)null,
-                Guard = node.Kind == NodeKinds.Elite ? Setup.GuardOf(seed) : null,
-                Boss = boss ? TemplateIds.Brute : null,
-                // A normal node's La Lata near the squad (Gameplay, 16/11): far was for the Travesía. Separados' too: its two
-                // starts are measured from there (SEPARADOS.md). Saqueadores' too (G23.5): the camp a way off it, not on the way
-                // (R1 of 20/11, rifles, 4 seats: out 0–33 % with La Lata far, 73–87 % near; the Saqueo, 93–100 %).
-                // Evacuación's too (G23.6): the squad goes out for the civilians, and they walk back to it.
-                EvacNear = node.Kind == NodeKinds.Normal || node.Kind == NodeKinds.Split || node.Kind == NodeKinds.Raiders || node.Kind == NodeKinds.Evacuation || node.Kind == NodeKinds.Charges ? true : (bool?)null,
-                // Saqueadores (G23.5): the camp of the living on the map.
-                Raiders = node.Kind == NodeKinds.Raiders ? true : (bool?)null,
-            });
-            // Nothing to search out of everyone's reach (Red, R3 17/11: a police car walled in).
-            Setup.OnlyWithinReach(state);
+                state = Setup.CreateMission(new MissionOptions
+                {
+                    Map = map,
+                    Slots = c.Players.ToList(),
+                    Rng = rng,
+                    Kind = kind,
+                    Squad = squad,
+                    Pods = pods,
+                    Difficulty = difficulty,
+                    CampaignMission = new CampaignMission { Id = node.Id, Name = name },
+                    Living = guarded ? true : (bool?)null,
+                    Guarded = guarded ? true : (bool?)null,
+                    Survivor = rescue ? SurvivorOf(c, node) : null,
+                    // Never fewer than the squad that went out (a run of the 0.13.0's, with 4, under way when its seats went to 2).
+                    Seats = Math.Max(SeatsOf(c), squad.Count),
+                    Alarm = alarm,
+                    ObjectiveName = alarm != null ? Lore.AlarmNames[alarm] : null,
+                    // The node's own modifier, and the one an event left for it (H4).
+                    Night = node.Modifier == Modifiers.Night || node.Added == Modifiers.Night ? true : (bool?)null,
+                    Weather = node.Modifier == Modifiers.Storm || node.Added == Modifiers.Storm ? Weathers.Storm : null,
+                    Awake = node.Modifier == Modifiers.Awake || node.Added == Modifiers.Awake ? true : (bool?)null,
+                    // Pistols are counted: searches turn them up too.
+                    Pistols = true,
+                    Vehicle = VehicleOf(c),
+                    // The runs' stages (H5, H6).
+                    HoldUntil = node.Kind == NodeKinds.Hold ? Setup.HoldTurns : (int?)null,
+                    Crossing = node.Kind == NodeKinds.Crossing ? true : (bool?)null,
+                    Stealth = node.Kind == NodeKinds.Stealth ? true : (bool?)null,
+                    Guard = node.Kind == NodeKinds.Elite ? Setup.GuardOf(seed) : null,
+                    Boss = boss ? TemplateIds.Brute : null,
+                    // A normal node's La Lata near the squad (Gameplay, 16/11): far was for the Travesía. Separados' too: its two
+                    // starts are measured from there (SEPARADOS.md). Saqueadores' too (G23.5): the camp a way off it, not on the way
+                    // (R1 of 20/11, rifles, 4 seats: out 0–33 % with La Lata far, 73–87 % near; the Saqueo, 93–100 %).
+                    // Evacuación's too (G23.6): the squad goes out for the civilians, and they walk back to it.
+                    EvacNear = node.Kind == NodeKinds.Normal || node.Kind == NodeKinds.Split || node.Kind == NodeKinds.Raiders || node.Kind == NodeKinds.Evacuation || node.Kind == NodeKinds.Charges ? true : (bool?)null,
+                    // Saqueadores (G23.5): the camp of the living on the map.
+                    Raiders = node.Kind == NodeKinds.Raiders ? true : (bool?)null,
+                    // N9: the game's level's lone dead.
+                    DeadScale = level.Dead != 1 ? level.Dead : (double?)null,
+                    // Cuadro 122: La Lata in every fight, a Limpieza's too (out on it, a retreat): no abandoning, so a way to end each.
+                    EvacAlways = true,
+                });
+                if ((state.Mission.EvacZone.Count > 0 && Paths.Cut(state).Count == 0) || attempt >= MapRetries) break;
+                map = RunMap.MapOf(new RunNode { Kind = node.Kind, Site = node.Site, Seed = unchecked((node.Seed ?? 0) + (attempt + 1) * 7919) })!;
+            }
             // As many tiles to get out by as La Lata has seats, by its doors (T21, Arturo 18/11).
             SeatZone(state);
+            // No hollow to drop into and never get out of to La Lata (cuadro 122): pits nobody walks into, against La Lata's
+            // zone as it stays (Producto's review of 23/11).
+            Setup.NoPits(state);
+            // Nothing to search out of everyone's reach (Red, R3 17/11: a police car walled in).
+            Setup.OnlyWithinReach(state);
             // Separados (G23.4): the squad in two groups on either side of La Lata, measured from its zone as it is now.
             // Which group takes which side, by the map's seed (one is clearer of the dead: R1, 20/11).
             if (node.Kind == NodeKinds.Split) Setup.Split(state, unchecked((uint)Math.Abs(node.Seed ?? 0) * 2654435761u) >> 31 == 1, node.Seed ?? 0);
+            // N7 (Arturo, 22/11): a Rescate's survivor (Mordido's, El herido's too) never on a door nor in a pass, the dead off them
+            // and off the way to them and back.
+            if (rescue && state.Mission.Survivor != null) Setup.SurvivorClear(state, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x5c1ea))));
             // Evacuación (G23.6): its civilians hidden in buildings, each in its circle.
             if (node.Kind == NodeKinds.Evacuation) Setup.PlaceCivilians(state, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xc1b1))), node.Seed ?? 0);
             // Saqueadores (G23.5): the camp's guards at their posts and its stash, the dead kept off it.
             if (node.Kind == NodeKinds.Raiders) Setup.PlaceCamp(state, difficulty, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xca4e))));
             // One in RunMap.LooseOdds of the other fights, a survivor loose on the map, unmarked (N2, Arturo 17/11).
             if (RunMap.LooseSurvivor(node)) PlaceLoose(state, SurvivorOf(c, node), new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x10057))));
-            state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId };
+            state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId, Loot = level.Loot != 1 ? level.Loot : (double?)null };
+            // N9: the game's level's horde.
+            if (level.Horde != 1) state.Mission.HordeScale = level.Horde;
             // Its day sky (cuadro 83): look only.
             state.Mission.Sky = RunMap.SkyOf(node);
             // La llave (G23.1): its armoury locked and full, its key (a gear of the fight's) on one of the dead in uniform the
@@ -247,8 +272,14 @@ namespace Bastion.Engine
             if (node.Kind == NodeKinds.Wounded) Setup.Wounded(state);
             // Las cargas (cuadro 109): the nest, its three points and its dead; the three charges into the packs.
             if (node.Kind == NodeKinds.Charges) Setup.PlaceCharges(state, difficulty, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xc4a6))));
+            // Nobody left in a pit, wherever they were put (Producto's review of 23/11: one of the dead there could never be
+            // reached with a blade, and a Limpieza never won).
+            Setup.OutOfPits(state);
             return (state, name);
         }
+
+        /// <summary>Maps made again from the next seed when the squad can't walk to La Lata (Launch), at most.</summary>
+        public const int MapRetries = 8;
 
         /// <summary>Cuadro 106: the first Cazador of `pods` out of its group (none in them, as they are).</summary>
         public static void OneCazadorFewer(List<List<string>> pods)
@@ -508,7 +539,7 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// The recruits a run's end gives (Runs.NobodyLeft: a player left with nobody gets one with a knife), by id; null with
+        /// The recruits a run's end gives (Runs.NobodyLeft: since N8 none, but on a bench, Tuning.Wipe), by id; null with
         /// none. RunReport.recruits (Red, N9: the line for whoever comes into the room after it).
         /// </summary>
         private static List<string>? Recruited(CampaignState c, Action end)
@@ -680,6 +711,9 @@ namespace Bastion.Engine
             else if (victory && node.Kind != NodeKinds.Elite && node.Kind != NodeKinds.Key && node.Kind != NodeKinds.Raiders && RunMap.Rewarded(node.Kind))
             {
                 won = rng.Range(RewardMin, RewardMax);
+                // N9: the game's level's share.
+                var loot = Levels.Of(c).Loot;
+                if (loot != 1) won = (int)Js.Round(won.Value * loot);
                 // Evacuación (G23.6, cuadro 100): 20 § more for each civilian aboard past two.
                 if (mission.Mission.Civilians != null) won += Rules.CivilianBonus * Math.Max(0, Rules.CiviliansAboard(mission) - Rules.CiviliansNeeded);
                 if (node.Kind == NodeKinds.Stealth)

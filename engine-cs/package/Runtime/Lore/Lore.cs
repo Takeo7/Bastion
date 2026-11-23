@@ -76,7 +76,7 @@ namespace Bastion.Engine
             public static readonly int ZombieNoticeDark = (int)Js.Round(ZombieNotice * Content.Night.Detection);
         }
 
-        /// <summary>«puntería con armas de fuego»: JavaScript's `s.charAt(0).toLowerCase() + s.slice(1)`.</summary>
+        /// <summary>«puntería al disparar»: JavaScript's `s.charAt(0).toLowerCase() + s.slice(1)`.</summary>
         private static string LowerFirst(string s)
         {
             return s.Length == 0 ? s : s.Substring(0, 1).ToLowerInvariant() + s.Substring(1);

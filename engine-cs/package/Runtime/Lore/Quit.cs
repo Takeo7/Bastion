@@ -25,10 +25,10 @@ namespace Bastion.Engine
             return $"Alojas tú la partida: si sales, {partner} se desconecta hasta que vuelvas a abrirla.";
         }
 
-        /// <summary>For the guest in a mission, with the host connected: the turns go on, and an absent player's soldiers never act.</summary>
+        /// <summary>For the guest in a mission, with the host connected: the turns go on, and the host commands an absent player's soldiers (Content.CommandsFor, since 17/10).</summary>
         public static string QuitGuestWarning(string partner)
         {
-            return $"{partner} sigue la misión sin ti: tus soldados se quedan quietos donde están hasta que vuelvas.";
+            return $"{partner} sigue la misión sin ti, y manda en tus soldados hasta que vuelvas.";
         }
 
         /// <summary>For the guest when the host's game closes (client net.ts): the notice, its second line and, in a browser, the button.</summary>

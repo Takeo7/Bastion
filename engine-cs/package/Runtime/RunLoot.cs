@@ -18,7 +18,8 @@ namespace Bastion.Engine
         /// <remarks>A bench's multiplier too (Runs.Tuning.SuppliesScale), when one is set.</remarks>
         public static double SuppliesScale(RunFight run)
         {
-            var scale = (1 + 0.25 * (run.Row - 1)) * (run.Modifier != null || run.Added != null ? 1.5 : 1);
+            // N9: and the game's level's share (RunFight.Loot).
+            var scale = (1 + 0.25 * (run.Row - 1)) * (run.Modifier != null || run.Added != null ? 1.5 : 1) * (run.Loot ?? 1);
             return Runs.Tuning.IsSet ? scale * Runs.Tuning.Current.SuppliesScale : scale;
         }
 

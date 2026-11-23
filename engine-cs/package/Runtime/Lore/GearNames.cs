@@ -49,7 +49,15 @@ namespace Bastion.Engine
             [GearKinds.Antiviral] = new GearWords("antiviral", "antivirales", "el antiviral"),
             // Arco y ballesta (cuadro 102): one ammunition for both, «flechas» for the crossbow's too (no «virote»).
             [GearKinds.Arrows] = new GearWords("flecha", "flechas", "la flecha"),
+            // Las cargas (cuadro 109: «tres en la mochila»): «explosiva» in the pack, where «carga» alone says little.
+            [GearKinds.Charge] = new GearWords("carga explosiva", "cargas explosivas", "la carga explosiva"),
         };
+
+        /// <summary>Las cargas' charge in the pack (its help, as the antiviral's): what it is for, and that it stays in the stage.</summary>
+        public static class ChargeText
+        {
+            public const string Help = "Para volar el nido: se pone con «Poner la carga», desde una casilla al lado de un punto marcado. No sale de esta etapa.";
+        }
 
         /// <summary>
         /// The weapons' and the vests' many, by their type (U19, 18/11: two of one found together go as one entry, «2 pistolas»):

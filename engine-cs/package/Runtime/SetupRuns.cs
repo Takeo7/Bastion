@@ -607,6 +607,129 @@ namespace Bastion.Engine
             return Los.FacingTo(new Pos { X = camp.X + camp.W / 2, Y = camp.Y + camp.H / 2, Z = 0 }, post);
         }
 
+        // ---------------------------------------------------------------- the survivor (N7)
+
+        /// <summary>N7 (Arturo, 22/11): the dead's groups this far from the survivor at the start, and from the way to them and back.</summary>
+        public const int SurvivorDeadGap = 12, SurvivorWayGap = 10, SurvivorWayClear = 6;
+        /// <summary>How far a survivor on a door or in a pass is moved, at most, to a tile of its own.</summary>
+        public const int SurvivorShift = 8;
+
+        /// <summary>
+        /// N7 (Arturo, 22/11: «había aparecido en la misma casilla que una puerta, y al lado tenía una fila de por lo menos 15
+        /// zombies… según se unía a tu grupo te veían todos»): a Rescate's survivor (also Mordido's and El herido's), after
+        /// SeatZone. Never on a door, a window nor a pass (a tile shut on two sides: Rules.InPass): to the nearest free floor
+        /// tile of its level that is none of them, SurvivorShift at most, its circle moved with it; and the dead's groups off
+        /// them and off the squad, then off the way from the squad to them and from them to La Lata (as Saqueadores'
+        /// camp: DeadOffTheGroups), drawn by their own seed. A Rescate with Cuervos keeps its living where they are.
+        /// </summary>
+        public static void SurvivorClear(GameState s, Rng rng)
+        {
+            var vip = s.Mission.Survivor != null ? Grid.GetUnit(s, s.Mission.Survivor) : null;
+            if (vip == null || !vip.Alive) return;
+            if (Rules.BadSpot(s, vip.Pos))
+            {
+                // Somewhere of its own building (the one it stands in, or by its door the ones beside it), out of the pits, that
+                // the squad walks to (Producto's review of 23/11: not out in the street, nor in a room with no way in).
+                var walker = s.Units.FirstOrDefault((u) => u.Team == Teams.Xcom && u.Alive && !string.IsNullOrEmpty(u.CampaignId));
+                var walk = walker != null ? new HashSet<int>(Paths.ComputeReach(s, walker, 1_000_000, ignore: (_) => true).Cost.Keys) : null;
+                var own = Buildings.Of(s, vip.Pos);
+                var homes = own >= 0 ? new HashSet<int> { own } : new HashSet<int>(Grid.Dirs4.Select((d) => Buildings.Of(s, new Pos { X = vip.Pos.X + d.X, Y = vip.Pos.Y + d.Y, Z = vip.Pos.Z })).Where((b) => b >= 0));
+                bool Fits(Pos p) => (walk == null || walk.Contains(Grid.NodeOf(s, p))) && (homes.Count == 0 ? Buildings.Of(s, p) < 0 : homes.Contains(Buildings.Of(s, p)));
+                var to = Nearest(s, vip.Pos, (p) => !Rules.BadSpot(s, p) && Grid.KindAt(s, p) == TileKinds.Floor && Grid.UnitAt(s, p) == null && Flights.CanStopAt(s, p) && Fits(p))
+                    ?? Nearest(s, vip.Pos, (p) => !Rules.DoorSpot(s, p) && Grid.KindAt(s, p) == TileKinds.Floor && Grid.UnitAt(s, p) == null && Flights.CanStopAt(s, p) && Fits(p));
+                if (to != null)
+                {
+                    var area = s.Mission.SearchArea;
+                    if (area != null) area.Center = new Vec2 { X = Math.Max(0, Math.Min(s.Width - 1, area.Center.X + to.X - vip.Pos.X)), Y = Math.Max(0, Math.Min(s.Height - 1, area.Center.Y + to.Y - vip.Pos.Y)) };
+                    vip.Pos = to;
+                }
+            }
+            var bus = s.Mission.EvacZone.Select((z) => new Pos { X = (int)z.X, Y = (int)z.Y, Z = 0 }).FirstOrDefault((p) => Grid.InBounds(s, p.X, p.Y));
+            var squad = s.Units.Where((u) => u.Team == Teams.Xcom && u.Alive && u.CampaignId != null).ToList();
+            var soldier = squad.FirstOrDefault();
+            if (bus == null || soldier == null) return;
+            var home = soldier.Pos;
+            soldier.Pos = bus;
+            var area_ = s.Width * s.Height;
+            var fromBus = Paths.ComputeReach(s, soldier, 1_000_000, ignore: (_) => true).Cost.Where((kv) => kv.Key < area_).ToDictionary((kv) => kv.Key, (kv) => kv.Value);
+            soldier.Pos = home;
+            var groups = new List<List<Unit>> { new List<Unit> { vip }, squad };
+            DeadOffTheGroups(s, groups, fromBus, rng, SurvivorDeadGap);
+            DeadOffTheGroups(s, groups, fromBus, rng, SurvivorDeadGap, WayThrough(s, soldier, vip.Pos, bus), SurvivorWayGap, SurvivorWayClear);
+        }
+
+        /// <summary>
+        /// The nearest place to `from` on its level, walked to (the steps the rules allow, the four ways, never into a pit),
+        /// SurvivorShift steps at most, that `ok` (Producto's review of 23/11: by the eight ways over the grid it cut wall
+        /// corners and went through doors).
+        /// </summary>
+        private static Pos? Nearest(GameState s, Pos from, Func<Pos, bool> ok)
+        {
+            var pits = s.Mission.Pits != null ? new HashSet<int>(s.Mission.Pits) : null;
+            var seen = new HashSet<int> { Grid.NodeOf(s, from) };
+            var queue = new List<(Pos P, int D)> { (from, 0) };
+            for (var head = 0; head < queue.Count; head++)
+            {
+                var (p, d) = queue[head];
+                if (d > 0 && ok(p)) return p;
+                if (d >= SurvivorShift) continue;
+                foreach (var dir in Grid.Dirs4)
+                    foreach (var step in Paths.StepsFrom(s, p, dir.X, dir.Y))
+                    {
+                        var q = step.To;
+                        var n = Grid.NodeOf(s, q);
+                        if (q.Z != from.Z || (pits != null && pits.Contains(n)) || !seen.Add(n)) continue;
+                        queue.Add((q, d + 1));
+                    }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// A way's distance field, by tile (as CampWay): on foot from the squad's start (`walker`'s place) to `to`, and from there
+        /// to La Lata's nearest; every tile's distance to it by the eight ways. Null when `to` can't be walked to.
+        /// </summary>
+        private static int[]? WayThrough(GameState s, Unit walker, Pos to, Pos bus)
+        {
+            var home = walker.Pos;
+            var there = Paths.ComputeReach(s, walker, 1_000_000, ignore: (_) => true);
+            // Beside them, where they can't be stood on.
+            var into = new[] { to }.Concat(Grid.Dirs8.Select((d) => new Pos { X = to.X + d.X, Y = to.Y + d.Y, Z = to.Z }))
+                .Where((p) => Grid.InBounds(s, p.X, p.Y) && there.Cost.ContainsKey(Grid.NodeOf(s, p))).OrderBy((p) => there.Cost[Grid.NodeOf(s, p)]).FirstOrDefault();
+            if (into == null) return null;
+            var way = Paths.BuildPath(s, walker, there, into) ?? new List<Pos>();
+            walker.Pos = into;
+            var back = Paths.ComputeReach(s, walker, 1_000_000, ignore: (_) => true);
+            walker.Pos = home;
+            var zone = s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).Where((p) => back.Cost.ContainsKey(Grid.NodeOf(s, p))).OrderBy((p) => back.Cost[Grid.NodeOf(s, p)]).FirstOrDefault();
+            if (zone != null) way.AddRange(Paths.BuildPath(s, walker, back, zone) ?? new List<Pos>());
+            way.Add(home);
+            way.Add(to);
+            var far = Enumerable.Repeat(int.MaxValue, s.Width * s.Height).ToArray();
+            var queue = new List<int>();
+            foreach (var p in way.Where((p) => Grid.InBounds(s, p.X, p.Y)))
+            {
+                var i = p.Y * s.Width + p.X;
+                if (far[i] == 0) continue;
+                far[i] = 0;
+                queue.Add(i);
+            }
+            for (var head = 0; head < queue.Count; head++)
+            {
+                var i = queue[head];
+                foreach (var d in Grid.Dirs8)
+                {
+                    int x = i % s.Width + d.X, y = i / s.Width + d.Y;
+                    if (!Grid.InBounds(s, x, y)) continue;
+                    var j = y * s.Width + x;
+                    if (far[j] <= far[i] + 1) continue;
+                    far[j] = far[i] + 1;
+                    queue.Add(j);
+                }
+            }
+            return far;
+        }
+
         // ---------------------------------------------------------------- Evacuación
 
         /// <summary>G23.6 Evacuación's civilians (cuadro 71: four), each in a building of its own of this many ground tiles at least.</summary>
@@ -1080,6 +1203,50 @@ namespace Bastion.Engine
         /// the ground nobody can get to (Mapgen's SealPockets) but not what stands on it, so a lot's cars were left whole in its
         /// wall. Not mended there: the step recordings' maps would change.
         /// </summary>
+        /// <summary>
+        /// Cuadro 122 (no abandoning a fight, and nobody left loses the game): the places a soldier could get to and never
+        /// back to La Lata from (Paths.NoWayOut: a hollow below a hill's edge, walled in by cover), made pits nobody walks
+        /// into (MissionState.Pits). The squad's starts never one (WayOutTests).
+        /// </summary>
+        public static void NoPits(GameState s)
+        {
+            var pits = Paths.NoWayOut(s);
+            foreach (var u in s.Units.Where((o) => o.Team == Teams.Xcom && o.Alive)) pits.Remove(Grid.NodeOf(s, u.Pos));
+            s.Mission.Pits = pits.Count > 0 ? pits.OrderBy((n) => n).ToList() : null;
+        }
+
+        /// <summary>
+        /// Producto's review of 23/11: nobody but the squad in a pit once the fight is set out (one of the dead there could never
+        /// be reached with a blade, and a Limpieza never won): to the nearest free place the squad can walk to, its own level
+        /// first; a survivor's circle goes with them.
+        /// </summary>
+        public static void OutOfPits(GameState s)
+        {
+            if (s.Mission.Pits == null || s.Mission.Pits.Count == 0) return;
+            var pits = new HashSet<int>(s.Mission.Pits);
+            var soldier = s.Units.FirstOrDefault((u) => u.Team == Teams.Xcom && u.Alive && !string.IsNullOrEmpty(u.CampaignId));
+            if (soldier == null) return;
+            var walk = Paths.ComputeReach(s, soldier, 1_000_000, ignore: (_) => true).Cost.Keys.ToList();
+            foreach (var u in s.Units.Where((o) => o.Alive && string.IsNullOrEmpty(o.CampaignId) && pits.Contains(Grid.NodeOf(s, o.Pos))).ToList())
+            {
+                Pos? best = null;
+                var far = double.MaxValue;
+                foreach (var n in walk)
+                {
+                    var p = Grid.PosOf(s, n);
+                    if (!Flights.CanStopAt(s, p) || Grid.UnitAt(s, p) != null) continue;
+                    var d = Grid.Distance(u.Pos, p) + 100 * Math.Abs(p.Z - u.Pos.Z);
+                    if (d >= far) continue;
+                    best = p;
+                    far = d;
+                }
+                if (best == null) continue;
+                var area = s.Mission.SearchArea;
+                if (area != null && u.Id == s.Mission.Survivor) area.Center = new Vec2 { X = Math.Max(0, Math.Min(s.Width - 1, area.Center.X + best.X - u.Pos.X)), Y = Math.Max(0, Math.Min(s.Height - 1, area.Center.Y + best.Y - u.Pos.Y)) };
+                u.Pos = best;
+            }
+        }
+
         public static void OnlyWithinReach(GameState s)
         {
             var soldier = s.Units.FirstOrDefault((u) => u.Team == Teams.Xcom && u.Alive && !u.Evacuated);

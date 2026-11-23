@@ -134,7 +134,7 @@ namespace Bastion.Engine
             // Which way the canvas's x and y run in the final frame (T below): x becomes y when it is transposed.
             c.Backwards[0] = swap ? flipY : flipX;
             c.Backwards[1] = swap ? flipX : flipY;
-            var needsEvac = kind != MissionKinds.Elimination;
+            var needsEvac = kind != MissionKinds.Elimination || opts.Evac == true;
             var ward = opts.Medical == MedicalSiteKinds.Ward;
             var outdoorItem = kind == MissionKinds.Recovery && opts.ItemOutdoors == true && !clinic;
             var role = clinic || hospital || (!outdoorItem && (kind == MissionKinds.Recovery || kind == MissionKinds.Rescue || (kind == MissionKinds.Hack && biome != Biomes.Wilds))) ? Roles.Indoor : Roles.Open;

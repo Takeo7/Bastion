@@ -512,16 +512,19 @@ namespace Bastion.Engine.Tests
             [Fact(DisplayName = "procedural maps › generate quickly")]
             public void GenerateQuickly()
             {
-                // The best of three rounds: one round alone, on a machine busy with something else (Unity compiling), went
-                // over the budget now and then (64,7 ms the 10/11), and that says nothing of the generator.
-                var rounds = new List<double>();
+                // The best of three rounds, in the process's processor time, not the clock's: with the machine busy with
+                // something else (Unity compiling, another session's bench) the clock's went over the budget now and then
+                // (64,7 ms the 10/11; 82–86 ms the 23/11, beside an R2), and that says nothing of the generator. Alone in
+                // its collection, the process's time is the generator's.
+                var rounds = new List<(double Cpu, double Clock)>();
                 for (var round = 0; round < 3; round++)
                 {
+                    var cpu = Process.GetCurrentProcess().TotalProcessorTime;
                     var start = Stopwatch.StartNew();
                     foreach (var biome in BiomeList) for (var seed = 1; seed <= 10; seed++) Layout(biome, MissionKinds.Hack, seed);
-                    rounds.Add(start.Elapsed.TotalMilliseconds / 30);
+                    rounds.Add(((Process.GetCurrentProcess().TotalProcessorTime - cpu).TotalMilliseconds / 30, start.Elapsed.TotalMilliseconds / 30));
                 }
-                Assert.True(rounds.Min() < TimeBudgets.Ms(60), $"{string.Join(", ", rounds.Select((r) => r.ToString("F1")))} ms a map");
+                Assert.True(rounds.Min((r) => r.Cpu) < TimeBudgets.Ms(60), $"{string.Join(", ", rounds.Select((r) => $"{r.Cpu:F1} ({r.Clock:F1} de reloj)"))} ms a map");
             }
         }
 

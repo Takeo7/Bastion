@@ -495,6 +495,9 @@ namespace Bastion.Engine.Tests
         /// </summary>
         private static Chapter PlayChapter(int seed)
         {
+            // A chapter played past a squad fallen with nobody at the base: recruits as before N8 (Tuning.Wipes.One), not the
+            // game lost, so that the chapters measure what they did.
+            Runs.Tuning.Set(new Runs.Tuning.Settings { Wipe = Runs.Tuning.Wipes.One });
             var clock = Stopwatch.StartNew();
             var ch = new Chapter { Seed = seed };
             Expedition? now = null;
@@ -630,6 +633,7 @@ namespace Bastion.Engine.Tests
             ch.Stuck = CampaignAutoRun.Stuck;
             if (CampaignAutoRun.StuckMission != null) File.WriteAllText(Path.Combine(BenchFactAttribute.Folder!, $"atasco-{seed}.json"), CampaignAutoRun.StuckMission);
             ch.Seconds = clock.Elapsed.TotalSeconds;
+            Runs.Tuning.Reset();
             return ch;
         }
 
@@ -674,6 +678,14 @@ namespace Bastion.Engine.Tests
                 lines.Add($"| {(g.Key < 6 ? $"{g.Key}" : "6 o más")} | {g.Count()} | {g.Average((e) => e.After - e.Before):0} | {g.Average((e) => e.Row):0.0} | {g.Count((e) => e.Ended == Home)} | {g.Count((e) => e.Ended == RunEnds.Boss)} | {g.Count((e) => e.Ended == RunEnds.Returned)} | {g.Count((e) => e.Ended == RunEnds.Wiped)} | {g.Average((e) => e.Legs.Count):0.0} | {g.Average((e) => e.Legs.Sum((l) => l.Fallen)):0.0} |");
             lines.Add("");
             var legs = all.SelectMany((e) => e.Legs).ToList();
+            // N9 (Producto, 22/11): by the seats the squad went out with, for the levels' numbers.
+            lines.Add("## Por plazas al salir");
+            lines.Add("");
+            lines.Add("| Escuadra | Expediciones | Vuelven (por su cuenta, Toro o volviendo) | Caen todos | Fila alcanzada (media) | Combates (media) | Caídos (media) | § netos (media) |");
+            lines.Add("|---|---|---|---|---|---|---|---|");
+            foreach (var g in all.GroupBy((e) => e.Squad).OrderBy((g) => g.Key))
+                lines.Add($"| {g.Key} | {g.Count()} | {g.Count((e) => e.Ended != RunEnds.Wiped)} ({100.0 * g.Count((e) => e.Ended != RunEnds.Wiped) / g.Count():0} %) | {g.Count((e) => e.Ended == RunEnds.Wiped)} | {g.Average((e) => e.Row):0.0} | {g.Average((e) => e.Legs.Count):0.0} | {g.Average((e) => e.Legs.Sum((l) => l.Fallen)):0.0} | {g.Average((e) => e.After - e.Before):0} |");
+            lines.Add("");
             lines.Add("## Dónde se pierde");
             lines.Add("");
             lines.Add("| Fila | Combates | Ganados | Caídos | Expediciones que acaban ahí sin nadie |");

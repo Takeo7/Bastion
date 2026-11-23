@@ -70,11 +70,25 @@ namespace Bastion.Engine
             return squad.Count((id) => c.Soldiers.Any((s) => s.Id == id && s.Alive)) < SeatsOf(c);
         }
 
-        /// <summary>Most soldiers each player takes: half the seats with the partner here, all of them alone (as Campaign.SquadLimit).</summary>
+        /// <summary>
+        /// Most soldiers each player takes: half the seats with the partner here, all of them alone (as Campaign.SquadLimit)
+        /// or with a partner left with nobody alive (N8: the game counts, not the player).
+        /// </summary>
         public static int SquadLimit(CampaignState c, IReadOnlyList<int> connected)
         {
             var seats = SeatsOf(c);
-            return c.Players.Count > 1 && connected.Count > 1 ? (seats + 1) / 2 : seats;
+            return c.Players.Count > 1 && Bringers(c, connected).Count > 1 ? (seats + 1) / 2 : seats;
+        }
+
+        /// <summary>
+        /// The players whose soldiers go out: those here with one alive; none of them with any, every player's (N8: one alone
+        /// with nobody of their own takes the partner's out, and commands them while the partner is away: Controls).
+        /// </summary>
+        private static List<int> Bringers(CampaignState c, IReadOnlyList<int> connected)
+        {
+            bool Has(int p) => c.Soldiers.Any((s) => s.Owner == p && s.Alive);
+            var here = c.Players.Where((p) => connected.Contains(p) && Has(p)).ToList();
+            return here.Count > 0 ? here : c.Players.Where(Has).ToList();
         }
 
         public static int PackRows(CampaignState c)
@@ -116,7 +130,8 @@ namespace Bastion.Engine
         /// <summary>The health a soldier has: what is left in the run, or all of it in the base.</summary>
         public static int HpOf(CampaignState c, CampaignSoldier s)
         {
-            return c.Run != null && c.Run.Hp.TryGetValue(s.Id, out var hp) ? hp : MaxHp(s);
+            // N9, Supervivencia: the wounds it came home with (CampaignSoldier.Hurt).
+            return c.Run != null && c.Run.Hp.TryGetValue(s.Id, out var hp) ? hp : Math.Max(1, MaxHp(s) - (Levels.Of(c).Wounds ? s.Hurt ?? 0 : 0));
         }
 
         /// <summary>The squad that goes out by default: each connected player's living soldiers, as many as they may take.</summary>
@@ -124,7 +139,7 @@ namespace Bastion.Engine
         {
             var limit = SquadLimit(c, connected);
             var squad = new List<string>();
-            foreach (var slot in c.Players.Where((p) => connected.Contains(p)))
+            foreach (var slot in Bringers(c, connected))
             {
                 squad.AddRange(c.Soldiers.Where((s) => s.Owner == slot && s.Alive).Take(limit).Select((s) => s.Id));
             }
@@ -158,12 +173,22 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// A player left without a soldier alive, and no run going, gets a recruit for nothing (as Campaign's NobodyLeft
-        /// today): one with a knife. Nothing more. True if anyone came.
+        /// N8 (Arturo, 22/11, cuadro 118): nobody left alive in the game, out or at the base, and no run going, and the game
+        /// is lost (CampaignState.outcome, defeat), at every level: no recruit for nothing. With two, the game counts, not the
+        /// player: one left with nobody plays on with the partner's (SquadLimit, HandOver), and a survivor brought out goes to
+        /// whoever has fewest (Rescued). A bench may give recruits instead, as before (Tuning.Wipe): a player left without a
+        /// soldier alive gets one with a knife. True if anything changed.
         /// </summary>
         public static bool NobodyLeft(CampaignState c, Rng rng)
         {
             if (c.Outcome != null || c.Run != null) return false;
+            if (Tuning.Current.Wipe == Tuning.Wipes.Lose)
+            {
+                if (c.Soldiers.Any((s) => s.Alive)) return false;
+                c.Outcome = Outcomes.Defeat;
+                Campaign.RunsLog(c, RunTexts.GameLost, LogTones.Bad);
+                return true;
+            }
             var came = new List<CampaignSoldier>();
             foreach (var owner in c.Players)
             {
@@ -173,7 +198,7 @@ namespace Bastion.Engine
                 came.Add(s);
             }
             // A bench's (Tuning.Wipe): recruits till the seats are full, in turn to whoever has fewest; with a pistol each.
-            if (came.Count > 0 && Tuning.IsSet && Tuning.Current.Wipe != Tuning.Wipes.One)
+            if (came.Count > 0 && Tuning.Current.Wipe != Tuning.Wipes.One)
             {
                 while (c.Players.Count > 0 && c.Soldiers.Count((s) => s.Alive) < SeatsOf(c))
                 {
@@ -220,12 +245,13 @@ namespace Bastion.Engine
         {
             if (c.Run != null) return RunTexts.RunOn;
             var s = c.Soldiers.FirstOrDefault((x) => x.Id == cmd.Soldier);
-            // Each picks their own, the other here or not (#43), as Campaign's.
-            if (s == null || s.Owner != slot) return RunTexts.PickOwn;
+            // Each picks their own, the other here or not (#43), as Campaign's; one with nobody of their own alive, the
+            // partner's while the partner is away (N8).
+            if (s == null || s.Owner != slot && (connected.Contains(s.Owner) || c.Soldiers.Any((x) => x.Owner == slot && x.Alive))) return RunTexts.PickOwn;
             if (!s.Alive) return RunTexts.NoSoldier;
             if (!cmd.On || c.Squad.Contains(s.Id)) return null;
             var limit = SquadLimit(c, connected);
-            if (c.Squad.Count((id) => c.Soldiers.FirstOrDefault((x) => x.Id == id)?.Owner == slot) >= limit) return RunTexts.PerPlayer(limit);
+            if (c.Squad.Count((id) => c.Soldiers.FirstOrDefault((x) => x.Id == id)?.Owner == s.Owner) >= limit) return RunTexts.PerPlayer(limit);
             return c.Squad.Count >= SeatsOf(c) ? RunTexts.Seats(SeatsOf(c)) : null;
         }
 
@@ -297,7 +323,8 @@ namespace Bastion.Engine
                 Path = new List<string>(),
                 Phase = RunPhases.Choose,
                 Squad = going.Select((s) => s.Id).ToList(),
-                Hp = going.ToDictionary((s) => s.Id, MaxHp),
+                // N9, Supervivencia: out with the wounds they came home with (CampaignSoldier.Hurt).
+                Hp = going.ToDictionary((s) => s.Id, (s) => Math.Max(1, MaxHp(s) - (Levels.Of(c).Wounds ? s.Hurt ?? 0 : 0))),
                 HomeFromRefuge = true,
             };
             Campaign.RunsLog(c, RunTexts.RunStarted(chapter));
@@ -363,13 +390,20 @@ namespace Bastion.Engine
 
         /// <summary>
         /// The run ends: back to the base, everyone healed (health is only counted in a run), each pack with what it holds;
-        /// the soldiers handed over go back to their owner. Whoever has no soldier left gets a recruit.
+        /// the soldiers handed over go back to their owner. Nobody left alive in the game, it is lost (NobodyLeft, N8).
         /// </summary>
         public static void EndRun(CampaignState c, Rng rng, string? line = null)
         {
+            // N9, Supervivencia: the wounds come home with them (healed only at a Refuge, with medicines, with the upgrade).
+            if (c.Run != null && Levels.Of(c).Wounds)
+                foreach (var s in c.Run.Squad.Select((id) => c.Soldiers.FirstOrDefault((x) => x.Id == id)).Where((s) => s != null && s.Alive))
+                {
+                    var hurt = MaxHp(s!) - HpOf(c, s!);
+                    s!.Hurt = hurt > 0 ? hurt : (int?)null;
+                }
             c.Run = null;
             c.Squad = c.Squad.Where((id) => c.Soldiers.Any((s) => s.Id == id && s.Alive)).ToList();
-            Campaign.RunsLog(c, line ?? RunTexts.RunEnded, LogTones.Good);
+            Campaign.RunsLog(c, line ?? (Levels.Of(c).Wounds ? RunTexts.RunEndedHurt : RunTexts.RunEnded), LogTones.Good);
             NobodyLeft(c, rng);
         }
 

@@ -28,6 +28,12 @@ namespace Bastion.Engine
         public JsMap<int, int> Cost { get; set; } = new JsMap<int, int>();
         /// <summary>node -> previous node</summary>
         public JsMap<int, int> Prev { get; set; } = new JsMap<int, int>();
+        /// <summary>
+        /// N2 (cuadro 122): a soldier's places reached only jumping off a storey this turn (the stairs don't get there), whose
+        /// way back is LeapPrev's all along; the rest go by the stairs (Prev). Null for anyone else, or with none.
+        /// </summary>
+        public HashSet<int>? Leapt { get; set; }
+        public JsMap<int, int>? LeapPrev { get; set; }
     }
 
     public static class Paths
@@ -41,8 +47,45 @@ namespace Bastion.Engine
         public const int CostDrop = 2;
         /// <summary>Extra cost to vault through a window.</summary>
         public const int CostVault = 2;
-        /// <summary>Deepest drop a unit will jump down, in storeys.</summary>
+        /// <summary>
+        /// Deepest drop off the ground's own heights (a hill), in levels. Off a storey there is none (N2, Arturo 22/11, cuadro 119:
+        /// «sin tope de pisos»): the fall hurts instead (FallOf).
+        /// </summary>
         private const int MaxDrop = 2;
+
+        /// <summary>
+        /// N2 (Arturo, 22/11, cuadro 119): the storeys fallen stepping from `from` to `to`: off a storey (a window, a roof's or a
+        /// floor's edge) down to a lower floor, not by stairs nor a ladder; 0 otherwise, and off a hill too (the ground's own
+        /// heights don't hurt). A point of damage each, through armour, and it may kill (Rules.MoveAlong).
+        /// </summary>
+        public static int FallOf(GameState s, Pos from, Pos to)
+        {
+            if (from.Z == 0) return 0;
+            var drop = Math.Max(0, Grid.HeightAt(s, from) - Grid.HeightAt(s, to));
+            // Down a flight or a ladder: its storey's step, no more (Producto's review of 23/11: two storeys or more onto
+            // the foot of one, or off one into the air, is a fall).
+            if (drop <= 1 && (Grid.KindAt(s, from) == TileKinds.Ladder || Grid.KindAt(s, to) == TileKinds.Ladder)) return 0;
+            return drop;
+        }
+
+        /// <summary>N2: the storeys fallen along `path` from `from` (the health it will cost, Content.FallDamage each), for UI and the bots.</summary>
+        public static int FallAlong(GameState s, Pos from, IReadOnlyList<Pos> path)
+        {
+            var total = 0;
+            var at = from;
+            foreach (var p in path)
+            {
+                total += FallOf(s, at, p);
+                at = p;
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// N2 (cuadro 119): who jumps down off a storey: the squad and the dead; never the living, who take the stairs, nor a
+        /// civilian; nor a soldier carrying someone (cuadro 122).
+        /// </summary>
+        public static bool Leaps(Unit u) => Content.Templates[u.Template].Undead || (u.Team == Teams.Xcom && u.Automaton == null && u.Carrying == null);
 
         /// <summary>
         /// Cost of a single step between neighbouring tiles on the ground (without unit
@@ -145,7 +188,7 @@ namespace Bastion.Engine
             }
             else if (dz < 0)
             {
-                if (-dz > MaxDrop) return null;
+                if (-dz > MaxDrop && from.Z == 0) return null;
                 for (var k = landing + 1; k <= h; k++) if (Grid.SlabAt(s, to.X, to.Y, k)) return null;
                 var up = toKind == TileKinds.Ladder && dz == -1 ? StairsFacing(s, to) : null;
                 if (up != null && (Grid.Dirs4[up.Value].X != -dx || Grid.Dirs4[up.Value].Y != -dy)) return null;
@@ -213,7 +256,7 @@ namespace Bastion.Engine
             Take(Grid.SurfaceAt(s, nx, ny, h));
             if (dx != 0 && dy != 0) return out_;
             if (Grid.KindAt(s, from) == TileKinds.Ladder) Take(Grid.SurfaceAt(s, nx, ny, h + 1));
-            for (var k = h - 1; k >= Math.Max(0, h - MaxDrop); k--)
+            for (var k = h - 1; k >= (from.Z > 0 ? 0 : Math.Max(0, h - MaxDrop)); k--)
             {
                 var below = Grid.SurfaceAt(s, nx, ny, k);
                 if (below != null)
@@ -463,8 +506,103 @@ namespace Bastion.Engine
         /// `ignore`: units a plan may look past, as if gone (ai.ts breachPlan asks
         /// whether the ground leaves a way, its own crowd about to move); never for a
         /// walk. `avoid`: nodes not to step on at all (BuildPath's way round a fire).
+        /// N2 (Arturo, 22/11, cuadro 122): a soldier goes by the stairs to wherever they get it with the movement given, and
+        /// jumps off a storey only where nothing else gets there (Reach.Leapt); the dead fall the shortest way, without
+        /// thinking; the living never jump (Leaps).
         /// </summary>
         public static Reach ComputeReach(GameState s, Unit u, double maxCost, Pos? from = null, Func<Unit, bool>? ignore = null, HashSet<int>? avoid = null)
+        {
+            if (u.Team != Teams.Xcom || !Leaps(u) || s.Levels == null) return Walk(s, u, maxCost, from, ignore, avoid, Leaps(u));
+            var stairs = Walk(s, u, maxCost, from, ignore, avoid, false);
+            var any = Walk(s, u, maxCost, from, ignore, avoid, true);
+            if (any.Cost.Count == stairs.Cost.Count) return stairs;
+            // In the order the shortest ways found them (as before): by the stairs where they get there, the rest jumping.
+            var reach = new Reach { Origin = stairs.Origin, Leapt = new HashSet<int>(), LeapPrev = any.Prev };
+            foreach (var e in any.Cost)
+            {
+                if (stairs.Cost.TryGetValue(e.Key, out var c))
+                {
+                    reach.Cost.Set(e.Key, c);
+                    if (stairs.Prev.TryGetValue(e.Key, out var back)) reach.Prev.Set(e.Key, back);
+                    continue;
+                }
+                reach.Cost.Set(e.Key, e.Value);
+                if (any.Prev.TryGetValue(e.Key, out var leap)) reach.Prev.Set(e.Key, leap);
+                reach.Leapt.Add(e.Key);
+            }
+            return reach;
+        }
+
+        /// <summary>
+        /// Cuadro 122: the places a soldier gets to from the squad's starts (any movement, everyone standing aside, jumping
+        /// off storeys and hills) with no way from them back to La Lata, pits left out (MissionState.Pits): a walk out
+        /// along every step the rules allow, and one back from La Lata's places along the same steps turned round. Empty
+        /// without La Lata.
+        /// </summary>
+        public static HashSet<int> NoWayOut(GameState s)
+        {
+            var (reached, home) = WaysOut(s);
+            // La Lata out of everyone's reach: not the whole map a pit (Producto's review of 23/11); Cut says so, and a run's
+            // fight is never launched so (RunFights.Launch).
+            if (home.Count == 0) return new HashSet<int>();
+            reached.ExceptWith(home);
+            return reached;
+        }
+
+        /// <summary>
+        /// Cuadro 122: the squad's soldiers with no way from where they stand to La Lata (none: all of them; pits left out), by
+        /// id. A run's fight with one of them may be abandoned (Rules.AbandonAllowed).
+        /// </summary>
+        public static List<string> Cut(GameState s)
+        {
+            var (_, home) = WaysOut(s);
+            return s.Units.Where((u) => u.Team == Teams.Xcom && u.Alive && !u.Evacuated && u.Aboard != true && !string.IsNullOrEmpty(u.CampaignId) && !home.Contains(Grid.NodeOf(s, u.Pos))).Select((u) => u.Id).ToList();
+        }
+
+        /// <summary>NoWayOut's walks: out from the squad, and back from La Lata's places along the same steps turned round.</summary>
+        private static (HashSet<int> Reached, HashSet<int> Home) WaysOut(GameState s)
+        {
+            var pits = new HashSet<int>(s.Mission.Pits ?? new List<int>());
+            var reached = new HashSet<int>();
+            var back = new Dictionary<int, List<int>>();
+            var queue = new Queue<int>();
+            if (s.Mission.EvacZone.Count == 0) return (reached, new HashSet<int>());
+            foreach (var u in s.Units.Where((o) => o.Team == Teams.Xcom && o.Alive && !o.Evacuated))
+            {
+                var n = Grid.NodeOf(s, u.Pos);
+                if (reached.Add(n)) queue.Enqueue(n);
+            }
+            while (queue.Count > 0)
+            {
+                var n = queue.Dequeue();
+                var p = Grid.PosOf(s, n);
+                foreach (var d in Grid.Dirs4)
+                    foreach (var step in StepsFrom(s, p, d.X, d.Y))
+                    {
+                        var m = Grid.NodeOf(s, step.To);
+                        if (pits.Contains(m)) continue;
+                        if (!back.TryGetValue(m, out var from)) back[m] = from = new List<int>();
+                        from.Add(n);
+                        if (reached.Add(m)) queue.Enqueue(m);
+                    }
+            }
+            var home = new HashSet<int>();
+            foreach (var z in s.Mission.EvacZone)
+            {
+                var n = Grid.NodeOf(s, new Pos { X = (int)z.X, Y = (int)z.Y, Z = 0 });
+                if (reached.Contains(n) && home.Add(n)) queue.Enqueue(n);
+            }
+            while (queue.Count > 0)
+            {
+                var n = queue.Dequeue();
+                if (!back.TryGetValue(n, out var from)) continue;
+                foreach (var m in from) if (home.Add(m)) queue.Enqueue(m);
+            }
+            return (reached, home);
+        }
+
+        /// <summary>ComputeReach's Dijkstra; `falls`: whether it may jump down off a storey (N2).</summary>
+        private static Reach Walk(GameState s, Unit u, double maxCost, Pos? from, Func<Unit, bool>? ignore, HashSet<int>? avoid, bool falls)
         {
             var origin = from ?? u.Pos;
             // On patrol, not through windows; going to look where it heard something, yes: something is in there (Arturo's
@@ -475,8 +613,9 @@ namespace Bastion.Engine
             var slow = s.Slow != null && s.Slow.Count > 0 ? new HashSet<int>(s.Slow) : null;
             // Fire (Arturo, 1/11): the enemies go round it if they can, through it if not (Content.Flames.Avoid).
             var fire = u.Team != Teams.Xcom ? Burning.Nodes(s) : null;
-            // A locked door (G23.1): a wall to everyone till the key opens it.
+            // A locked door (G23.1): a wall to everyone till the key opens it. A pit (cuadro 122): nobody goes in.
             var locked = s.Mission.Locked;
+            var pits = s.Mission.Pits != null && s.Mission.Pits.Count > 0 ? new HashSet<int>(s.Mission.Pits) : null;
             var taken = new HashSet<int>();
             foreach (var o in s.Units)
             {
@@ -501,8 +640,10 @@ namespace Bastion.Engine
                     foreach (var step in StepsFrom(s, p, d.X, d.Y))
                     {
                         var to = step.To;
+                        // N2: the living never jump down off a storey; a soldier, only where the stairs don't get it.
+                        if (!falls && FallOf(s, p, to) > 0) continue;
                         var ni = Grid.NodeOf(s, to);
-                        if (taken.Contains(ni) || (avoid != null && avoid.Contains(ni)) || (!windows && Grid.IsWindow(Grid.KindAt(s, to))) || (shut && Grid.KindAt(s, to) == TileKinds.Door) || (locked != null && locked.Contains(ni))) continue;
+                        if (taken.Contains(ni) || (avoid != null && avoid.Contains(ni)) || (!windows && Grid.IsWindow(Grid.KindAt(s, to))) || (shut && Grid.KindAt(s, to) == TileKinds.Door) || (locked != null && locked.Contains(ni)) || (pits != null && pits.Contains(ni))) continue;
                         var nc = c + step.Cost + (slow != null && slow.Contains(ni) ? Content.Traps.Wire : 0) + (fire != null && fire.Contains(ni) ? Content.Flames.Avoid : 0);
                         if (nc > maxCost) continue;
                         if (!cost.TryGetValue(ni, out var old) || nc < old)
@@ -552,15 +693,16 @@ namespace Bastion.Engine
             return (u.Team == Teams.Xcom ? RoundFire(s, u, reach, start, end, path) : null) ?? path;
         }
 
-        /// <summary>The way back from `end` to `start` along a reach's steps, `start` left out.</summary>
+        /// <summary>The way back from `end` to `start` along a reach's steps, `start` left out (a place reached only jumping, the jump's way all along).</summary>
         private static List<Pos> Trace(GameState s, Reach reach, int start, int end)
         {
             var path = new List<Pos>();
+            var prev = reach.Leapt != null && reach.Leapt.Contains(end) ? reach.LeapPrev! : reach.Prev;
             int? i = end;
             while (i != null && i != start)
             {
                 path.Add(Grid.PosOf(s, i.Value));
-                i = reach.Prev.TryGetValue(i.Value, out var back) ? back : (int?)null;
+                i = prev.TryGetValue(i.Value, out var back) ? back : (int?)null;
             }
             path.Reverse();
             return path;
@@ -578,7 +720,11 @@ namespace Bastion.Engine
             fire.Remove(end);
             var budget = MoveBudget(s, u);
             var round = ComputeReach(s, u, budget, reach.Origin, null, fire);
-            return round.Cost.Has(end) ? Trace(s, round, start, end) : null;
+            if (!round.Cost.Has(end)) return null;
+            var way = Trace(s, round, start, end);
+            // Not by a jump the way shown didn't take (Producto's review of 23/11: what is walked is what was shown, and its
+            // warning): through the fire then.
+            return FallAlong(s, reach.Origin, way) > FallAlong(s, reach.Origin, path) ? null : way;
         }
     }
 }

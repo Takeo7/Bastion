@@ -117,6 +117,9 @@ namespace Bastion.Client.Units
             public Transform body;
             public Pos place;
             public bool dead;
+            /// <summary>When it was seen to die (Time.time; −1 alive, −∞ dead before it was looked at).</summary>
+            public float diedAt = -1;
+            public bool sawAlive;
             /// <summary>Thrown by La Lata as it went (RunOver): it lies where it came down, whatever the state says.</summary>
             public bool runOver;
             public bool shaded;
@@ -565,6 +568,14 @@ namespace Bastion.Client.Units
                 v.up = Mathf.MoveTowards(v.up, up ? 1 : 0, dt / AimBlend);
                 v.reachShare = Mathf.MoveTowards(v.reachShare, v.reachFor != null && !v.dead ? 1 : 0, dt / ReachBlend);
                 v.life = Mathf.MoveTowards(v.life, v.dead ? 0 : 1, dt / DeathEase);
+                // (One of the squad as it dies: its tile shown by the fog a while, Fallen. Not one dead as the map came.)
+                if (!v.dead) v.sawAlive = true;
+                if (v.dead && v.diedAt < 0 && v.team == "xcom" && v.sawAlive)
+                {
+                    v.diedAt = Time.time;
+                    Fallings++;
+                }
+                else if (v.dead && v.diedAt < 0) v.diedAt = float.NegativeInfinity;
                 KeepToBody(v, dt);
                 KeepToBars(v, dt);
                 bool seen = eye == null || (v.root.gameObject.activeInHierarchy && !cut && !gone && GeometryUtility.TestPlanesAABB(frustum, new Bounds(v.root.position + Vector3.up * SeenBox.y / 2, SeenBox)));
@@ -695,7 +706,7 @@ namespace Bastion.Client.Units
                     + $" L=({F(left.x)},{F(left.y)},{F(left.z)})";
             }
             var ahead = v.root.position + v.root.forward * 6 + Vector3.up * 1.2f;
-            Debug.Log($"[figura] {Time.time.ToString("0.000", CultureInfo.InvariantCulture)} {v.id} seen={seen} held={v.inHand} aiming={v.aiming} up={F(v.up)} picking={v.picking != null} aims={v.aims} moving={F(v.anim?.Moving ?? 0)}"
+            Debug.Log($"[figura] {Time.time.ToString("0.000", CultureInfo.InvariantCulture)} {v.id} seen={seen} on={v.root.gameObject.activeSelf} cut={v.cut} shaded={v.shaded} held={v.inHand} aiming={v.aiming} up={F(v.up)} picking={v.picking != null} aims={v.aims} moving={F(v.anim?.Moving ?? 0)}"
                 + $" whole={F(v.anim?.WholeShare ?? 0)} free={F(v.anim?.FreeShare ?? 0)} fade={F(v.fade)} gone={v.gone} life={F(v.life)} hands={F(v.twoHands)} yaw={F(v.root.eulerAngles.y)}{pose} {AimReport(v.id, v.aimAt ?? ahead)}");
         }
 
@@ -2046,6 +2057,19 @@ namespace Bastion.Client.Units
         /// found: Unfound) nor faded out. What goes over a figure (a mark, a word) goes by this.
         /// </summary>
         public bool Drawn(string id) => id != null && views.TryGetValue(id, out var v) && v.root != null && v.root.gameObject.activeSelf && !v.cut && !v.gone;
+
+        /// <summary>How many of the squad have been seen to die (the fog looks again as it changes: Fog.Step).</summary>
+        public int Fallings { get; private set; }
+
+        /// <summary>
+        /// Where those of the squad who died in the last `seconds` lie (Producto, 22/11, N2: one who died of a jump lay half
+        /// in what nobody saw, with no one left to see its tile): the fog shows those tiles as in sight meanwhile.
+        /// </summary>
+        public void Fallen(float seconds, List<Pos> into)
+        {
+            foreach (var v in views.Values)
+                if (v.dead && v.team == "xcom" && v.place != null && Time.time - v.diedAt < seconds) into.Add(v.place);
+        }
 
         /// <summary>For a lab: `id` drawn wherever it is put, in sight or not, through every Sync after.</summary>
         public void Reveal(string id)

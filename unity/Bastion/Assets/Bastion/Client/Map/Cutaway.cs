@@ -147,6 +147,13 @@ namespace Bastion.Client.Map
             fresh = true;
         }
 
+        /// <summary>`thing` lies on place p (a molotov's fire on an upper floor or a roof, N4): tracked as what stands on that storey of the building there, if any.</summary>
+        public void TrackAt(GameObject thing, Pos p)
+        {
+            if (plan == null || p == null || p.Z <= 0) return;
+            Track(thing, plan.At(new Vec2 { X = p.X, Y = p.Y }), p.Z);
+        }
+
         /// <summary>
         /// `thing` hangs on a wall of storey `level` of building `building` (medicalWallPatch): it goes with the wall when it
         /// drops, an inner wall's whenever its building's walls drop, an outer one's (`outward` the way that wall looks out

@@ -21,6 +21,8 @@ namespace Bastion.Client.Units
         /// rucksack, behind it, as the slung gun: Stows), leant so (degrees: its mouth up over the right shoulder).
         /// </summary>
         static readonly Vector3 QuiverAt = LabVector("BASTION_CARCAJ_EN") ?? new Vector3(0.09f, -0.12f, 0.02f), QuiverTurn = LabVector("BASTION_CARCAJ_GIRO") ?? new Vector3(0, 0, -22);
+        /// <summary>The arrows in the quiver, in its frame: where (their own origin), and turned how (degrees: their points down into it).</summary>
+        static readonly Vector3 QuiverArrows = LabVector("BASTION_CARCAJ_FLECHAS") ?? new Vector3(0, 0.1f, 0), QuiverArrowsTurn = LabVector("BASTION_CARCAJ_FLECHAS_GIRO") ?? new Vector3(180, 0, 0);
         /// <summary>Seconds after the shot with no arrow on the string (the hand goes to the quiver for the next).</summary>
         const float LooseFor = 0.55f;
 
@@ -72,6 +74,16 @@ namespace Bastion.Client.Units
                 var at = body.InverseTransformPoint(chest.position) + new Vector3(QuiverAt.x, QuiverAt.y, -behind);
                 v.quiver.localScale = Vector3.one * scale;
                 v.quiver.SetPositionAndRotation(body.TransformPoint(at), body.rotation * Quaternion.Euler(QuiverTurn));
+                // Its arrows: three, their feathers out of its mouth.
+                if (catalog.Weapon(ArrowModel) is GameObject shaft)
+                    for (int k = 0; k < 3; k++)
+                    {
+                        var one = Instantiate(shaft, v.quiver, false).transform;
+                        one.name = "flecha del carcaj";
+                        foreach (var r in one.GetComponentsInChildren<Renderer>(true)) r.sharedMaterial = BowMaterial(r.sharedMaterial);
+                        one.localPosition = QuiverArrows + new Vector3((k - 1) * 0.025f, 0, (k % 2) * 0.02f);
+                        one.localRotation = Quaternion.Euler(QuiverArrowsTurn + new Vector3((k - 1) * 4, 0, (k - 1) * 5));
+                    }
                 v.quiver.SetParent(chest, true);
                 if (BowLog)
                 {
@@ -108,7 +120,11 @@ namespace Bastion.Client.Units
         const float CockSeconds = 1.7f;
         static readonly float[] CockBeats = { 0.3f, 0.55f, 1.0f, 1.3f, 1.7f };
         /// <summary>How far its nose goes down (degrees), and along it from its grip: where the string rests, and where it locks (metres of its frame, unscaled).</summary>
-        const float CockDown = 58, CockFrom = 0.42f, CockTo = 0.12f, CockOver = 0.06f;
+        const float CockDown = 80, CockFrom = 0.44f, CockTo = 0.1f, CockOver = 0.06f;
+        /// <summary>How far ahead of the body and up it is held as it is loaded, to be seen (metres).</summary>
+        const float CockAhead = 0.16f, CockUp = 0.14f;
+        /// <summary>How far the body bends over it as its nose goes down (degrees), and how much of that is left once the string is drawn.</summary>
+        const float CockBend = 50, CockPulled = 0.3f;
 
         /// <summary>
         /// The crossbow as it is loaded, over where the right hand holds it (after Hold, the left hand off it): turned nose
@@ -122,7 +138,30 @@ namespace Bastion.Client.Units
             if (hand == null || upper == null || lower == null || left == null) return;
             float t = v.cock;
             float down = t < CockBeats[0] ? Mathf.SmoothStep(0, 1, t / CockBeats[0]) : t < CockBeats[3] ? 1 : Mathf.SmoothStep(1, 0, (t - CockBeats[3]) / (CockBeats[4] - CockBeats[3]));
+            // The body over it, and up with the string as it is drawn (Producto, 22/11: from the game's camera only the
+            // weapon and a hand moved, some forty pixels of figure seen from behind, and nothing of it read): bent at the
+            // spine and the chest before Hold's weapon and the arms are placed again, what it holds turned with it.
+            float bend = CockBend * (t < CockBeats[0] ? Mathf.SmoothStep(0, 1, t / CockBeats[0]) : t < CockBeats[1] ? 1
+                : t < CockBeats[2] ? Mathf.Lerp(1, CockPulled, Mathf.SmoothStep(0, 1, (t - CockBeats[1]) / (CockBeats[2] - CockBeats[1])))
+                : t < CockBeats[3] ? CockPulled : Mathf.Lerp(CockPulled, 0, Mathf.SmoothStep(0, 1, (t - CockBeats[3]) / (CockBeats[4] - CockBeats[3]))));
+            if (a.GetBoneTransform(HumanBodyBones.Spine) is Transform spine)
+            {
+                bool carried = v.weapon.IsChildOf(spine);
+                var turn = Quaternion.AngleAxis(bend / 2, v.root.right);
+                foreach (var bone in new[] { spine, a.GetBoneTransform(HumanBodyBones.Chest) })
+                {
+                    if (bone == null) continue;
+                    var from = bone.position;
+                    bone.rotation = turn * bone.rotation;
+                    if (!carried)
+                    {
+                        v.weapon.position = from + turn * (v.weapon.position - from);
+                        v.weapon.rotation = turn * v.weapon.rotation;
+                    }
+                }
+            }
             v.weapon.RotateAround(hand.position, v.root.right, CockDown * down);
+            v.weapon.position += (v.root.forward * CockAhead + Vector3.up * CockUp) * down;
             float scale = v.weapon.lossyScale.x;
             // Where the left hand is along it: to the string, back with it, over it, and away.
             float along = t < CockBeats[1] ? Mathf.Lerp(CockFrom + 0.1f, CockFrom, Mathf.SmoothStep(0, 1, t / CockBeats[1]))

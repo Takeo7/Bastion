@@ -32,7 +32,8 @@ namespace Bastion.UI.Strategy
                 // by itself; the map's button only on an expedition started before (RunState.HomeFromRefuge missing), and
                 // where it went a line saying where one goes back from (not at the Refugio, whose plate says it).
                 Back = run.HomeFromRefuge == true ? null : StrategyText.Runs.Back,
-                BackTip = StrategyText.Runs.BackTip,
+                // Supervivencia's (N9): the wounded stay wounded (Lore.WoundsText), not «todos se curan».
+                BackTip = Levels.Of(c).Wounds ? Lore.WoundsText.ReturnHelp : StrategyText.Runs.BackTip,
                 BackWhy = Runs.EndRunRefusal(c),
                 HomeNote = run.HomeFromRefuge == true && !Runs.AtRefuge(run) ? Lore.ExpeditionText.ReturnWhere : null,
                 SquadHead = StrategyText.Runs.Squad,
@@ -58,7 +59,7 @@ namespace Bastion.UI.Strategy
                     nv.Icon = NodeIcon(n.Kind);
                     nv.Stop = NodeKinds.IsStop(n.Kind);
                     // Its line with what is known of it (Runs.StageLine: the alarm, the Asedio's turn, the Guarida's guard).
-                    nv.Card.Add(Runs.StageLine(n));
+                    nv.Card.Add(StrategyText.Runs.StageLine(n));
                     // A Rescate with La Lata full (N2, 17/11): whoever doesn't fit is lost when it leaves, said before choosing it.
                     // A Mordido too (Producto, 19/11): winning it takes the bitten aboard, cured, and with no seat free a soldier
                     // stays on the ground (Lore's line says it as it is).
@@ -173,7 +174,7 @@ namespace Bastion.UI.Strategy
             {
                 v.Leave = StrategyText.Runs.EndNo;
                 v.Home = StrategyText.Runs.Back;
-                v.HomeTip = StrategyText.Runs.BackTip;
+                v.HomeTip = Levels.Of(c).Wounds ? Lore.WoundsText.ReturnHelp : StrategyText.Runs.BackTip;
                 v.HomeWhy = Runs.EndRunRefusal(c);
             }
             switch (node.Kind)

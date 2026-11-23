@@ -185,7 +185,7 @@ namespace Bastion.UI.Start
                 var yes = new Button(() =>
                 {
                     Go("main");
-                    Send(new NewCampaignMessage());
+                    Send(new NewCampaignMessage { Level = StartScreen.HostLevel });
                 }) { text = saved != null ? RoomText.StartAgain : RoomText.StartNew };
                 yes.AddToClassList("btn-primary");
                 actions.Add(yes);
@@ -195,7 +195,7 @@ namespace Bastion.UI.Start
             if (saved != null) Choice(menu, RoomText.Continue, RoomText.Saved(saved), true, ok, () => Send(new ContinueCampaignMessage()));
             Choice(menu, RoomText.NewCampaign, RoomText.NewCampaignAbout, saved == null, ok, () =>
             {
-                if (saved == null && !alone) Send(new NewCampaignMessage());
+                if (saved == null && !alone) Send(new NewCampaignMessage { Level = StartScreen.HostLevel });
                 else Go("ask");
             });
             Choice(menu, RoomText.Skirmish, saved?.InMission != null ? RoomText.SkirmishBlocked : RoomText.SkirmishAbout, false, ok && saved?.InMission == null, () => Go("skirmish"));

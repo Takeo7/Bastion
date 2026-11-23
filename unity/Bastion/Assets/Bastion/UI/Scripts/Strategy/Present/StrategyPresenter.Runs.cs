@@ -94,6 +94,8 @@ namespace Bastion.UI.Strategy
             };
             foreach (var s in c.Soldiers.Where(s => s.Owner == Slot && s.Alive)) v.Mine.Add(RunRow(s));
             var theirs = c.Soldiers.Where(s => s.Owner != Slot && s.Alive).ToList();
+            // None of one's own left, the partner's still (N8: nobody loses; Lore's words): whose one leads, under the plate.
+            if (v.Mine.Count == 0 && theirs.Count > 0) v.Warning = Lore.LostText.NoneOfYourOwn(PlayerName(theirs[0].Owner), partner != null && partner.Connected);
             if (theirs.Count > 0)
             {
                 v.PartnerHead = $"De {PlayerName(theirs[0].Owner)} · {squad.Count - myCount}";
@@ -110,7 +112,7 @@ namespace Bastion.UI.Strategy
             foreach (var s in RunPads())
                 v.Cards.Add(s == null
                     ? new LineupCardView { EmptyLabel = "Libre", Tip = "Elige un soldado de la izquierda." }
-                    : new LineupCardView { Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname), Accent = PlayerColor(s.Owner), Lines = { StrategyText.Stash.Health(Runs.MaxHp(s), Runs.MaxHp(s)) }, Removable = s.Owner == Slot });
+                    : new LineupCardView { Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname), Accent = PlayerColor(s.Owner), Lines = { StrategyText.Stash.Health(Runs.HpOf(c, s), Runs.MaxHp(s)) }, Removable = s.Owner == Slot });
             return v;
         }
 

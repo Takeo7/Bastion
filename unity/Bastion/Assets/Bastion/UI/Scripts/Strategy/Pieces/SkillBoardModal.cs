@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Bastion.Engine;
 using Bastion.UI.Hud;
 using UnityEngine;
@@ -111,6 +112,39 @@ namespace Bastion.UI.Strategy
             if (Lore.BoardAbout.TryGetValue(id, out var about)) Ui.Text(about, "board-card__about", card);
             Ui.Text(c.Effect, "board-card__effect", card);
             if (last.Editable && last.Points < 1 && Bars.CellState(last.Board, id) == "open") Ui.Text("Sin puntos por gastar", "board-card__none", card);
+            // N6 (cuadro 116, A): what it changes of the soldier's totals, from and to; at the card's foot, the totals with it marked.
+            var gains = last.Gains.Where(g => g.Cell == id).ToList();
+            if (gains.Count > 0)
+            {
+                Ui.Text(StrategyText.Board.Gains.ToUpperInvariant(), "board-card__title font-title", card);
+                foreach (var g in gains) Stat(card, g.Label, g.From, g.Unit, g.To, g.Signed);
+            }
+            if (last.Totals.Count > 0)
+            {
+                var totals = Ui.El("board-card__totals", card);
+                Ui.Text(StrategyText.Board.Totals.ToUpperInvariant(), "board-card__title font-title", totals);
+                foreach (var t in last.Totals) Stat(totals, t.Label, t.Value, t.Unit, gains.FirstOrDefault(g => g.Key == t.Key)?.To, t.Signed);
+            }
+        }
+
+        /// <summary>
+        /// A total's row: its words, its value, and with `to` the value it would have, after an arrow and in the accent;
+        /// `signed`, «+2» (StrategyText.Board.Signed).
+        /// </summary>
+        static void Stat(VisualElement into, string label, int value, string unit, int? to, bool signed = false)
+        {
+            string N(int n) => signed && n > 0 ? $"+{n}{unit}" : $"{n}{unit}";
+            var row = Ui.El(to != null ? "board-stat board-stat--gain" : "board-stat", into);
+            Ui.Text(label, "board-stat__label", row);
+            Ui.Text(N(value), "board-stat__value", row);
+            if (to != null) Ui.Text($"→ {N(to.Value)}", "board-stat__to", row);
+        }
+
+        /// <summary>For the labs («celda:steadyHand»): that cell picked and its card shown, as the pointer over it.</summary>
+        public void ShowCell(string id)
+        {
+            board.Select(id);
+            Card(id);
         }
     }
 }

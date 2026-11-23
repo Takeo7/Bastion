@@ -1,0 +1,87 @@
+/* The game's level as four cards (LevelPicker; N9, cuadro 125): side by side, as tall as the longest line needs, each its
+   name in capitals and what it changes, the one picked lit; Supervivencia's name in the danger red. The start screen's
+   new game and the base's «Nueva partida» after a game lost: one piece. */
+.level-pick {
+    margin-bottom: 12px;
+}
+
+.level-pick__label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    -unity-font-style: bold;
+    color: var(--t-muted);
+    margin-bottom: 3px;
+}
+
+.level-pick__list {
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.level-pick__card {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-height: 168px;
+    margin: 0 8px 0 0;
+    padding: 14px 12px 12px;
+    align-items: stretch;
+    justify-content: flex-start;
+    background-image: none;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+}
+
+.level-pick__card:last-child {
+    margin-right: 0;
+}
+
+.level-pick__card:hover {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+.level-pick__name {
+    font-size: 22px;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    -unity-text-align: upper-center;
+    color: var(--t-text);
+}
+
+.level-pick__line {
+    font-size: 13px;
+    white-space: normal;
+    -unity-text-align: upper-center;
+    color: var(--t-muted);
+}
+
+.level-pick__card--hard .level-pick__name {
+    color: #e0634f;
+}
+
+.level-pick__card--on {
+    background-color: rgba(236, 235, 230, 0.16);
+    border-color: rgba(236, 235, 230, 0.85);
+}
+
+.level-pick__card--on .level-pick__line {
+    color: var(--t-text);
+}
+
+.level-pick__note {
+    margin-top: 6px;
+    font-size: 12px;
+    white-space: normal;
+    color: var(--t-muted);
+}
+
+/* The plate it goes on, as the start screen's form: dark, translucent, a thin edge; its keys on the left, «Empezar» lit. */
+.level-plate {
+    padding: 16px 18px 10px;
+    background-image: none;
+    background-color: rgba(10, 11, 12, 0.96);
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0);
+    border-width: 1px;
+    border-color: rgba(196, 198, 194, 0.3);
+}

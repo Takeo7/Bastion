@@ -224,6 +224,10 @@ namespace Bastion.UI.Hud
             Ui.Show(cd, a.Cooldown > 0);
             cd.text = a.Cooldown > 0 ? a.Cooldown.ToString() : "";
             Ui.Show(btn.Q("stamp"), a.Depleted);
+            // Its key in a corner, always in sight (cuadro 124, Arturo 23/11): the number, «1» of «1 · Espacio»; the name stays
+            // on hover. None with the finger (no Hotkey then).
+            var number = string.IsNullOrEmpty(a.Hotkey) ? null : a.Hotkey.Split('·')[0].Trim();
+            if (!string.IsNullOrEmpty(number) && number.Length <= 3) Ui.Text(number, "ability__hotkey font-title", btn).pickingMode = PickingMode.Ignore;
             tips.Attach(btn, () => Card(a));
             // The button out of its template container: the bar lays out buttons, not containers.
             btn.RemoveFromHierarchy();

@@ -229,6 +229,8 @@ namespace Bastion.Engine
     public sealed class CampaignSoldier
     {
         public string Id { get; set; } = "";
+        /// <summary>N9, Supervivencia: the health a soldier came home short of (its wounds don't heal by themselves). Missing: none.</summary>
+        public int? Hurt { get; set; }
         public string Name { get; set; } = "";
         public int Owner { get; set; } // Slot
         public int Kills { get; set; }
@@ -696,6 +698,11 @@ namespace Bastion.Engine
         public List<LogEntry> Log { get; set; } = new List<LogEntry>();
         public MissionReport? LastReport { get; set; }
         public string? Outcome { get; set; } // Outcomes
+        /// <summary>
+        /// N9 (Arturo, 22/11, cuadro 114): the game's level («Dificultad»; not the Bastion's Level of before), chosen when it is made and never changed (Levels: easy, medium, hard,
+        /// survival). Missing: hard, today's (every game made before). Not a stage's difficulty (RunMap.DifficultyOf).
+        /// </summary>
+        public string? GameLevel { get; set; } // LevelIds
         /// <summary>How the final mission was resolved, with both keys.</summary>
         public string? Ending { get; set; } // Endings
         public StoryState Story { get; set; } = new StoryState();

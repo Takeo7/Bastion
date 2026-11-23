@@ -156,6 +156,8 @@ namespace Bastion.UI.Strategy
         public ProposalView Vote;
         /// <summary>The buttons, the first the main one (Entendido, Volver al menú…).</summary>
         public List<string> Buttons = new List<string>();
+        /// <summary>The level's cards (LevelPicker, as the start screen's) with this one picked; null, none (N8: a new game after one lost).</summary>
+        public string Level;
     }
 
     [Serializable]

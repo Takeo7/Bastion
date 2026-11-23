@@ -261,3 +261,24 @@
     font-size: 10px;
     color: var(--t-muted);
 }
+
+/* Under «Continuar partida», the saved game's chapter and level (cuadro 125). */
+.start__saved {
+    margin: -6px 0 10px 6px;
+    font-size: 15px;
+    color: #c4c9c0;
+}
+
+/* The game's level, asked with the name for a new game and to host one (N9; cuadro 125, Arturo 23/11): in the middle,
+   the four side by side as cards, each its name and what it changes, the one picked lit as the go key; Supervivencia's name
+   in the danger red. Their line whole: cards as tall as the longest needs. */
+.start__form--levels {
+    width: 92%;
+    max-width: 1000px;
+    padding: 16px 18px 6px;
+}
+
+.start__form--levels .start__field {
+    width: 300px;
+}
+

@@ -510,13 +510,20 @@ namespace Bastion.EditorTools
             try
             {
                 var tira = state.Units[0];
-                var target = MapSpace.TileToWorld(state, new Pos { X = tira.Pos.X + 6, Y = tira.Pos.Y }) + Vector3.up * 1.2f;
+                var target = MapSpace.TileToWorld(state, new Pos { X = tira.Pos.X + 4, Y = tira.Pos.Y }) + Vector3.up * 1.2f;
                 await Awaitable.WaitForSecondsAsync(1.2f);
                 Debug.Log($"[armas] {Time.time:0.00} aim");
                 units.AimAt("tira", target);
                 await Awaitable.WaitForSecondsAsync(1.4f);
+                Debug.Log($"[armas] aimed {arm}: {units.AimReport("tira", target)} | {units.ShoulderReport("tira")} | {units.GripReport("tira")}");
                 Debug.Log($"[armas] {Time.time:0.00} shot");
                 units.Recoil("tira");
+                // (The arrow or the bolt as the game throws it: Fx.Arrow, slowed with BASTION_FLECHA_LENTA to be caught in a strip.)
+                if (arm == "bow" || arm == "crossbow")
+                {
+                    var fx = new GameObject("Efectos").AddComponent<Bastion.Client.Effects.Fx>();
+                    _ = fx.Arrow(units.Muzzle("tira"), target, arm == "crossbow", float.TryParse(Environment.GetEnvironmentVariable("BASTION_FLECHA_LENTA"), out float slow) ? slow : 34);
+                }
                 await Awaitable.WaitForSecondsAsync(1.3f);
                 units.AimAt("tira", null);
                 await Awaitable.WaitForSecondsAsync(0.5f);

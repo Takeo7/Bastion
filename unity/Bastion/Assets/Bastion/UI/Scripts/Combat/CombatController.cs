@@ -346,6 +346,7 @@ namespace Bastion.UI.Combat
         {
             if (Rig != null) Rig.TakeControl();
             if (id != insideChosen) insideChosen = null;
+            var changed = picked != id;
             if (picked != id)
             {
                 picked = id;
@@ -353,7 +354,11 @@ namespace Bastion.UI.Combat
             }
             var u = Unit();
             looking = u != null && !Paths.HasTurnLeft(u) && CanAct() ? u.Id : null;
-            if (u != null && look && Rig != null) Rig.Focus(Board.TileToWorld(State, u.Pos));
+            if (u != null && look && Rig != null)
+            {
+                Rig.Focus(Board.TileToWorld(State, u.Pos));
+                if (changed && Commands(u)) Arrive(u.Id);
+            }
             // One inside La Lata (T24): the camera to La Lata, where it would get down.
             else if (u == null && look && Rig != null && Inside() != null && State.Mission.EvacZone.Count > 0)
             {
@@ -512,6 +517,48 @@ namespace Bastion.UI.Combat
             if (u == null || !u.Alive || Hud == null || !Hud.FollowsTurn || Rig == null || Time.unscaledTime - Rig.TakenAt < TurnCameraQuiet) return;
             SetLevel(u.Pos.Z);
             Rig.Focus(FeetOf(u.Id) ?? Board.TileToWorld(State, u.Pos));
+            if (u.Id == picked && Commands(u)) Arrive(u.Id);
+        }
+
+        /// <summary>
+        /// N5 (Arturo, 22/11, cuadro 113: «hasta que la cámara no está donde el soldado que le toca no se activa ni su
+        /// movimiento ni sus botones de acciones»): the camera sent to the soldier just picked (its turn come, Tab, its card
+        /// clicked twice, its body clicked), its walking range and its keys wait till the camera is within a tile of it
+        /// (ArriveNear). The player taking the camera meanwhile lets them go at once (the camera never fights the player), and
+        /// so does ArriveLongest. Measured on 22/11 (the rig's spring): 0.3 s for a soldier 2 tiles off, 1.1 s for one 50 off.
+        /// </summary>
+        string arriving;
+        int arrivingEpoch;
+        float arrivingFrom;
+        /// <summary>Whether the range and the keys were held back at the last Refresh: Update refreshes again when that changes.</summary>
+        bool held;
+        const float ArriveNear = 1.5f;
+        const float ArriveLongest = 1.5f;
+
+        /// <summary>The camera has just been sent to `id`, picked: its range and its keys wait for it (Arriving).</summary>
+        void Arrive(string id)
+        {
+            if (Rig == null || Rig.Left < ArriveNear) return;
+            arriving = id;
+            arrivingEpoch = Rig.Epoch;
+            arrivingFrom = Time.unscaledTime;
+            if (CameraRig.Logging) Debug.Log($"[cámara] {id} espera a la cámara ({Rig.Left / 1.5f:0.0} casillas)");
+        }
+
+        /// <summary>
+        /// Whether the picked soldier's range and keys wait for the camera (N5): it is on its way to it, or about to go once
+        /// what plays now has been seen (TurnCameraSoon).
+        /// </summary>
+        bool Arriving()
+        {
+            if (turnAfter != null && turnAfter == picked) return true;
+            if (arriving == null) return false;
+            var taken = Rig == null || Rig.Epoch != arrivingEpoch;
+            var late = Time.unscaledTime - arrivingFrom >= ArriveLongest;
+            if (arriving == picked && !taken && !late && Rig.Left >= ArriveNear) return true;
+            if (CameraRig.Logging) Debug.Log($"[cámara] {arriving} activo a los {Time.unscaledTime - arrivingFrom:0.00} s ({(arriving != picked ? "otro elegido" : taken ? "el jugador tomó la cámara" : late ? "tope" : "la cámara a una casilla")})");
+            arriving = null;
+            return false;
         }
 
         /// <summary>The camera to `slot`'s soldier whose turn it is in `v` (the event player: a turn opens, the command passes).</summary>
@@ -570,6 +617,9 @@ namespace Bastion.UI.Combat
             Refresh();
         }
 
+        /// <summary>The floor the picker last showed (-1 none) and the map's top floor then (cuadro 121).</summary>
+        int floorsShown = -2, floorsMax = -1;
+
         /// <summary>The floor follows the picked soldier: when it is picked, and when it climbs or comes down.</summary>
         void FollowLevel()
         {
@@ -607,9 +657,11 @@ namespace Bastion.UI.Combat
             // The action sent has its events now: they keep its marks away while they play.
             if (sent != null && Busy(sent)) sent = null;
             var u = Unit();
+            // (Not while the camera is on its way to it: N5.)
+            held = Arriving();
             // The movement it has left, apart from its actions (Arturo, 5/11 #14): one reach, in sky blue (#13).
             // (Less than a step is none: Paths.HasTurnLeft, 0.12.16.)
-            var moving = mode == Mode.Move && u != null && CanAct() && Commands(u) && Paths.MoveBudget(State, u) >= Paths.CostOrtho && WaitingFor(u.Id) == null && !Busy(u.Id) && u.Id != sent;
+            var moving = mode == Mode.Move && u != null && CanAct() && Commands(u) && Paths.MoveBudget(State, u) >= Paths.CostOrtho && WaitingFor(u.Id) == null && !Busy(u.Id) && u.Id != sent && !held;
             using (MRefreshReach.Auto())
             {
                 reach = moving ? Paths.ComputeReach(State, u, Paths.MoveBudget(State, u)) : null;
@@ -857,6 +909,8 @@ namespace Bastion.UI.Combat
                 turnAfter = null;
                 if (after == picked) TurnCamera(UnitById(State, after));
             }
+            // The camera sent to the picked one, or there (N5): its range and keys held back, or now shown.
+            if (held != Arriving()) Refresh();
             if (Time.unscaledTime >= graceEnds) GraceOver();
             // An action sent whose events never came (a lost answer): its marks back after 2 s.
             if (sent != null && Time.realtimeSinceStartup - sentAt > 2f) TurnedDown();
@@ -894,9 +948,18 @@ namespace Bastion.UI.Combat
             Overlay?.Cinematic(away || elsewhere);
             AimMarks?.Cinematic(away);
             Hud?.SetSight(SightNow());
-            // With the finger: the floors where there are any, the faster key while the enemy plays (TouchButtons).
+            // The floor looked at, at the desktop and with the finger (FloorPicker, cuadro 121): only on a map with more than
+            // one, and not from above; told again only when it changes.
+            var floorsNow = MaxLevel > 0 && !Overhead ? Level : -1;
+            if (Hud != null && (floorsNow != floorsShown || MaxLevel != floorsMax))
+            {
+                floorsShown = floorsNow;
+                floorsMax = MaxLevel;
+                Hud.SetFloors(floorsNow < 0 ? null : new FloorView { Level = Level, CanUp = Level < MaxLevel, CanDown = Level > 0 });
+            }
+            // With the finger: the faster key while the enemy plays, the rucksack's (TouchButtons).
             if (Hud != null && Bastion.Client.GameInput.Touch)
-                Hud.SetTouch(new TouchView { Floors = MaxLevel > 0 && !Overhead, CanUp = Level < MaxLevel, CanDown = Level > 0, Hurry = EnemyTurnPlaying(), Search = searchTouch });
+                Hud.SetTouch(new TouchView { Hurry = EnemyTurnPlaying(), Search = searchTouch });
             Marks?.Cinematic(Film || Rig != null && Rig.Away);
             // From above, marks and lines no smaller than one reads (cuadro 55); in the view, as the world has them.
             Hud?.SetTagFloor(Overhead ? MapMarkPixels : 0);
@@ -1222,6 +1285,22 @@ namespace Bastion.UI.Combat
         /// <summary>The detected tile clicked once (breaking concealment can't be undone: the first click only warns).</summary>
         string concealWarn;
 
+        /// <summary>The jump last warned of (its soldier and tile), whose second click goes ahead (N2, cuadros 119 and 122).</summary>
+        string jumpWarn, jumpToast;
+
+        /// <summary>
+        /// A way's jump (N2, Arturo 22/11, cuadros 119 and 122): the storeys it drops off where nothing else gets there this turn
+        /// (Paths.FallAlong; Reach.Leapt), 1 of health a storey through armour, and whether that kills (it can). None, 0.
+        /// </summary>
+        (int storeys, bool dies) JumpOf(Unit u, List<Pos> path)
+        {
+            var storeys = u != null && path != null && path.Count > 0 ? Paths.FallAlong(State, u.Pos, path) : 0;
+            return (storeys, storeys > 0 && storeys * Content.FallDamage >= u.Hp);
+        }
+
+        /// <summary>The jump's line (Lore.JumpText): in the danger red when it kills (Arturo: «muy claro antes»).</summary>
+        static string JumpLine(string line, bool dies) => dies ? $"<color=#ff6b5a>{line}</color>" : line;
+
         const string ConcealWarning = "Desde ahí os ven: se rompe la ocultación. Haz clic otra vez para mover.";
         /// <summary>The same, seen on the way there and not there (U28: Producto, 21/11; till Lore's words).</summary>
         const string ConcealWayWarning = "Por el camino os ven: se rompe la ocultación. Haz clic otra vez para mover.";
@@ -1264,7 +1343,7 @@ namespace Bastion.UI.Combat
                 else Toast($"{body.Name} es de la escuadra de {(body.Owner != null ? PlayerName(body.Owner) : "el otro jugador")}.");
                 return;
             }
-            if (!CanAct() || u == null || tile == null) return;
+            if (!CanAct() || u == null || tile == null || Arriving()) return;
             var waiting = WaitingFor(u.Id);
             if (waiting != null)
             {
@@ -1336,6 +1415,18 @@ namespace Bastion.UI.Combat
                 return;
             }
             var key = $"{u.Id}|{tile.X},{tile.Y}";
+            // A jump on the way (N2): asked first, always, the finger's second tap too (it says so on the first).
+            var jump = JumpOf(u, Paths.BuildPath(State, u, reach, tile));
+            if (jump.storeys > 0 && jumpWarn != key && !GameInput.Touch)
+            {
+                jumpWarn = key;
+                jumpToast = JumpLine(Lore.JumpText.Ask(jump.storeys, jump.dies, false), jump.dies);
+                Toast(jumpToast);
+                return;
+            }
+            if (jumpToast != null) Hud?.ClearToast(jumpToast);
+            jumpToast = null;
+            jumpWarn = null;
             // Seen there, or on the way (U28): asked once.
             var onWay = !dest.Detected ? NoticedOnWay(u, Paths.BuildPath(State, u, reach, tile)) : null;
             if ((dest.Detected || onWay != null) && concealWarn != key && !GameInput.Touch)
@@ -1557,18 +1648,22 @@ namespace Bastion.UI.Combat
                 Overlay.ShowReactions(State, marks);
             }
             Overlay?.ShowCover(State, CoverMatters() ? hover : null);
-            Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected || onWay != null ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
+            // A jump that kills, in the noticed ring's red too (N2).
+            var jump = Planning ? (storeys: 0, dies: false) : JumpOf(u, path);
+            Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected || onWay != null || jump.dies ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
             // Into El Toro's line, his charge drawn to it before one stands there (Gameplay, 16/11).
             var charged = ChargeLineTo(u, hover);
             // Running, a door or a window is heard (docs/FASE2.md): an icon under the destination, no words (Ana, 7/11 #3); the
             // fire it goes through; and at night, whether it ends in the light.
             // With the finger, the second tap: what it does (Lore, 7/11).
-            var again = !GameInput.Touch ? null : Planning ? HudText.Touch.AgainPlan : dest.Detected ? HudText.Touch.Concealed : onWay != null ? HudText.Touch.ConcealedWay : HudText.Touch.AgainMove;
+            var again = !GameInput.Touch ? null : Planning ? HudText.Touch.AgainPlan : jump.storeys > 0 ? null : dest.Detected ? HudText.Touch.Concealed : onWay != null ? HudText.Touch.ConcealedWay : HudText.Touch.AgainMove;
+            // The jump (N2): its cost, and with the finger what the second tap does (Lore.JumpText).
+            var jumpLine = jump.storeys == 0 ? null : JumpLine(GameInput.Touch ? Lore.JumpText.Ask(jump.storeys, jump.dies, true) : Lore.JumpText.Note(jump.storeys, jump.dies), jump.dies);
             var heard = path != null && AbilityTexts.MoveNoise(State, u, path, dest.Run) != null;
             // Into the hidden squad's extra: that it is lost if they are seen (Gameplay, 16/11).
             // Who would see it on the way (U28; Lore's words): «Por el camino os ve un Saqueador», «… os ve El Toro».
             var seenOnWay = onWay.HasValue ? $"Por el camino os ve {OneOf(onWay.Value.by)}" : null;
-            NoteWith(hover, heard ? "noise" : null, BoardNote(u, hover), seenOnWay, charged ? HudText.Boss.InLine : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
+            NoteWith(hover, heard ? "noise" : null, jumpLine, BoardNote(u, hover), seenOnWay, charged ? HudText.Boss.InLine : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
         }
 
         /// <summary>

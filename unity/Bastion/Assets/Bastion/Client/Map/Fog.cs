@@ -61,6 +61,13 @@ namespace Bastion.Client.Map
         /// </summary>
         bool[] closedNodes;
         bool all;
+        /// <summary>Seconds the tile of one of the squad who has just died is shown (UnitViews.Fallen), those tiles, and what Step looks at to work it out again.</summary>
+        const float FallenSeconds = 6;
+        /// <summary>BASTION_NIEBLA_CAIDO=1: each fallen one's tile as the fog shows it, in the log.</summary>
+        static readonly bool FallenLog = System.Environment.GetEnvironmentVariable("BASTION_NIEBLA_CAIDO") == "1";
+        readonly List<Pos> fallen = new List<Pos>();
+        int fallings;
+        float fallenTill;
         /// <summary>
         /// Where an enemy in sight stands (its node): on a closed tile, its tile alone shown, so that it stands on its floor
         /// (who stands in the doorway of a building not found shows: the engine's Buildings.Hidden).
@@ -486,6 +493,28 @@ namespace Bastion.Client.Map
                     else if (tent.Any(i => knownTo[i] > 0)) foreach (int i in tent) knownTo[i] = 1;
                 }
             Rooms(s, levels);
+            // What burns of a molotov's fire shows as in sight, its tiles alone, whoever sees that floor (Producto, 22/11,
+            // N4: on a floor the squad doesn't see, the haze lay over its flames and they came out white, as candles; a
+            // fire is seen from afar). After the rooms: it shows no room it burns in.
+            if (s.Fires != null)
+                foreach (var fire in s.Fires)
+                {
+                    if (fire.Turns == null || fire.Tiles == null) continue;
+                    foreach (int node in fire.Tiles)
+                    {
+                        int i = node % n;
+                        if (node >= 0 && levels[i] == node / n) sightTo[i] = knownTo[i] = 1;
+                    }
+                }
+            // Where one of the squad has just died, as it falls and a while after (UnitViews.Fallen; Step looks again).
+            fallen.Clear();
+            Units.UnitViews.Current?.Fallen(FallenSeconds, fallen);
+            foreach (var p in fallen)
+            {
+                int i = p.Y * width + p.X;
+                if (FallenLog) Debug.Log($"[niebla] caído en {p.X}/{p.Y}/{p.Z}, planta a la vista {levels[System.Math.Clamp(i, 0, n - 1)]}, cerrado {shut[System.Math.Clamp(i, 0, n - 1)]}");
+                if (i >= 0 && i < n && levels[i] == p.Z) sightTo[i] = knownTo[i] = 1;
+            }
             // A building's roof: in sight when any of the street along it is, seen when any of it was.
             foreach (var shell in shells)
             {
@@ -587,6 +616,14 @@ namespace Bastion.Client.Map
         {
             time += dt;
             Shader.SetGlobalFloat(FogTime, time);
+            // (One of the squad seen to die since, or its while over: worked out again.)
+            var figures = Units.UnitViews.Current;
+            if (figures != null && last != null && (figures.Fallings != fallings || (fallenTill > 0 && Time.time > fallenTill)))
+            {
+                fallenTill = figures.Fallings != fallings ? Time.time + FallenSeconds + 0.1f : 0;
+                fallings = figures.Fallings;
+                Refog();
+            }
             if (map == null) return;
             float step = dt / SightFade;
             for (int i = 0; i < sight.Length; i++)

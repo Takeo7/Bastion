@@ -930,9 +930,17 @@ namespace Bastion.Net
                     break;
 
                 // ---- campaign
-                case NewCampaignMessage _:
+                case NewCampaignMessage m:
                 {
-                    if (phase != RoomPhases.Lobby || campaignRules == null) return;
+                    // From the lobby; or from the base of a game lost (N8, Gameplay 22/11: «empezar otra»), all its orders refused.
+                    if (!(phase == RoomPhases.Lobby || (phase == RoomPhases.Base && campaign?.Outcome != null)) || campaignRules == null) return;
+                    // N9 (cuadro 114): a level the room doesn't know starts nothing (none: Difícil, as before).
+                    if (m.Level != null && !LevelIds.All.Contains(m.Level))
+                    {
+                        store.Log($"[campaña] {seat.Name}: nueva partida con un nivel que no existe («{m.Level}»): no se empieza.");
+                        Send(seat.Socket!, new ErrorMessage { Message = "Ese nivel de dificultad no existe: no se empieza la partida." });
+                        return;
+                    }
                     // The campaign it replaces is kept as it was, next to the save: the client asks first, but a click is easy.
                     if (campaign != null)
                     {
@@ -951,9 +959,12 @@ namespace Bastion.Net
                     // A mission of the old one left half played goes with it (in the copy).
                     if (PausedMission() != null) state = null;
                     campaign = campaignRules.CreateCampaign(ConnectedSlots(), rng);
+                    // Its level, before anything is played (the dead and the horde of its fights, its loot: Levels).
+                    campaign.GameLevel = m.Level;
                     // It opens with the first operation chosen and its squad in the hangar (playtest 2026-10-13).
                     campaignRules.OpeningMission(campaign);
                     say($"[room] Nueva campaña con {campaign.Players.Count} jugador(es).");
+                    store.Log($"[campaña] Nueva partida, nivel {Levels.Of(campaign).Id}, con {campaign.Players.Count} jugador(es).");
                     EnterBase();
                     break;
                 }
@@ -1028,6 +1039,15 @@ namespace Bastion.Net
                 {
                     // Asked of the partner first, if here (playtest 16/10); alone, it ends now.
                     if (phase != RoomPhases.Mission || state == null) return;
+                    // A campaign's fight can't be left (Arturo, 22/11, cuadro 122: «quitamos el abandonar combate»): every
+                    // stage has its way out, La Lata. But one with none (Rules.AbandonAllowed, Producto's review of 23/11): a
+                    // fight saved half played before the 0.14.0 without La Lata, or a soldier cut off from it. A skirmish can.
+                    if (mode == "campaign" && !Rules.AbandonAllowed(state))
+                    {
+                        store.Log($"[campaña] {seat.Name}: pide abandonar el combate: un combate de expedición no se abandona.");
+                        Send(seat.Socket!, new RejectedMessage { Message = "Un combate de expedición no se puede abandonar." });
+                        return;
+                    }
                     var events = rules.CallAbandon(state, seat.Slot, ActiveSlots());
                     if (events.Count == 0) return;
                     say($"[room] {seat.Name} {(state.Outcome != null ? "abandona la misión" : "pide abandonar la misión")}.");
@@ -1039,9 +1059,11 @@ namespace Bastion.Net
                 case AbandonAnswerMessage m:
                 {
                     if (phase != RoomPhases.Mission || state == null) return;
-                    var events = rules.AnswerAbandon(state, seat.Slot, m.Accept);
+                    // In a campaign, where it may not be left (a call saved from before cuadro 122), only goes away.
+                    var accept = m.Accept && (mode != "campaign" || Rules.AbandonAllowed(state));
+                    var events = rules.AnswerAbandon(state, seat.Slot, accept);
                     if (events.Count == 0) return;
-                    say($"[room] {seat.Name} {(m.Accept ? "acepta abandonar la misión" : "no quiere abandonar la misión")}.");
+                    say($"[room] {seat.Name} {(accept ? "acepta abandonar la misión" : "no quiere abandonar la misión")}.");
                     Broadcast(new EventsMessage { Events = events, Seq = state.Seq, By = seat.Slot });
                     AfterTactical();
                     CheckWaits();
@@ -1213,8 +1235,16 @@ namespace Bastion.Net
         {
             if (mode == "campaign" && campaign != null && campaignRules != null && state?.Outcome != null && !resultApplied)
             {
+                var going = campaign.Outcome == null;
                 campaignRules.ApplyMissionResult(campaign, state, rng);
                 resultApplied = true;
+                // N8 (cuadro 118): nobody alive in the game, the squad nor the base: lost, for both; every order refused from
+                // now on, and from the base only «newCampaign» (the lobby has no «Continuar» for it: SavedCampaign.Of).
+                if (going && campaign.Outcome != null)
+                {
+                    say($"[room] Partida terminada: {campaign.Outcome}.");
+                    store.Log($"[campaña] Partida terminada: {campaign.Outcome} (nivel {Levels.Of(campaign).Id}, capítulo {campaign.Chapter ?? 1}, {campaign.NodesPlayed ?? 0} etapas).");
+                }
                 Broadcast(new CampaignMessage { State = campaign });
             }
             Persist();
@@ -1422,8 +1452,10 @@ namespace Bastion.Net
             if (kind == DeadlineKinds.Abandon && state?.AbandonCall != null && phase == RoomPhases.Mission)
             {
                 var partner = state.AbandonCall.By == 0 ? 1 : 0;
-                var events = rules.AnswerAbandon(state, partner, true);
-                say("[room] Abandono sin respuesta: se abandona la misión.");
+                // In a campaign (cuadro 122), where it may not be left, a call left from before only goes away.
+                var leave = mode != "campaign" || Rules.AbandonAllowed(state);
+                var events = rules.AnswerAbandon(state, partner, leave);
+                say(leave ? "[room] Abandono sin respuesta: se abandona la misión." : "[room] Abandono sin respuesta: en campaña no se abandona.");
                 if (events.Count > 0)
                 {
                     Broadcast(new EventsMessage { Events = events, Seq = state.Seq, By = null });

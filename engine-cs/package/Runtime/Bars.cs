@@ -141,7 +141,7 @@ namespace Bastion.Engine
 
         public static readonly IReadOnlyDictionary<string, SkillDef> SkillDefs = new Dictionary<string, SkillDef>
         {
-            [SkillIds.Shooting] = new SkillDef { Id = SkillIds.Shooting, Name = "Disparo", Short = "DIS", Line = "Se llena disparando, más si se acierta y más si se abate.", Stat = "Puntería con armas de fuego" },
+            [SkillIds.Shooting] = new SkillDef { Id = SkillIds.Shooting, Name = "Disparo", Short = "DIS", Line = "Se llena disparando, más si se acierta y más si se abate.", Stat = "Puntería al disparar" },
             [SkillIds.Melee] = new SkillDef { Id = SkillIds.Melee, Name = "Cuerpo a cuerpo", Short = "CaC", Line = "Se llena golpeando con la hoja, más si se acierta y más si se abate.", Stat = "Puntería cuerpo a cuerpo" },
             [SkillIds.Throwing] = new SkillDef { Id = SkillIds.Throwing, Name = "Lanzar", Short = "LAN", Line = "Se llena lanzando piedras y granadas, más si alcanzan a alguien.", Stat = "Alcance al lanzar" },
             [SkillIds.Medicine] = new SkillDef { Id = SkillIds.Medicine, Name = "Curar", Short = "CUR", Line = "Se llena curando con el botiquín o con medicinas; más si es a otro.", Stat = "Curación" },

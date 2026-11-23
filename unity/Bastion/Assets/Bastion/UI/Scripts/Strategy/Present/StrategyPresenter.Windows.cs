@@ -194,12 +194,35 @@ namespace Bastion.UI.Strategy
             var c = State;
             if (c.Outcome == null) return null;
             var won = c.Outcome == "victory";
+            // A game of expeditions lost (N8, cuadro 118): nobody alive, the base too; all of it goes, and another starts from
+            // here (Red's NewCampaignMessage from the base of a game lost), as hard as this one. Its words Lore's, not the
+            // squad lost of a stage («Escuadra perdida»: the expedition ends, the game goes on).
+            if (Campaign.IsRuns(c) && !won)
+                return new StrategyModalView
+                {
+                    Kind = "end", Kicker = Lore.LostText.Kicker, Tone = "bad", Title = Lore.LostText.Title, Text = Lore.LostText.Text,
+                    Buttons = { StrategyText.Lost.Again, StrategyText.Leave.Yes },
+                };
             return new StrategyModalView
             {
                 Kind = "end", Kicker = "Fin de la campaña", Tone = won ? "good" : "bad",
                 Title = won ? (c.Ending != null && Lore.EndingTitles.TryGetValue(c.Ending, out var t) ? t : "Campaña ganada") : "Campaña perdida",
                 Text = Lore.Epilogue(c.Outcome, c.Ending, c.Doom >= Campaign.DoomMax),
                 Buttons = { StrategyText.Leave.Yes },
+            };
+        }
+
+        /// <summary>
+        /// A new game from the base of one lost (N8; Producto, 23/11: through the four levels, the last one marked, whoever
+        /// has just lost being who may want it lower): the cards as the start screen has them (cuadro 125), Empezar and Volver.
+        /// </summary>
+        public StrategyModalView LevelChoice(string pick)
+        {
+            // The start screen's own cards (LevelPicker; Producto, 23/11: one piece), «Empezar» and «Volver» under them.
+            return new StrategyModalView
+            {
+                Kind = "level", Kicker = StrategyText.Lost.Again, Level = pick ?? LevelIds.Medium,
+                Buttons = { StrategyText.Lost.Start, StrategyText.Lost.Back },
             };
         }
 

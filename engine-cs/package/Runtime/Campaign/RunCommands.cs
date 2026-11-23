@@ -109,6 +109,8 @@ namespace Bastion.Engine
                     break;
                 case StartRunAction _:
                     StartRun(c, ctx.Rng);
+                    // One here with none of theirs in the squad (N8: left with nobody alive) commands half of it, as on joining.
+                    foreach (var p in ctx.Connected) HandOver(c, p, ctx.Connected);
                     break;
                 case ChooseNodeAction a:
                     return CampaignResult.Success(ChooseNode(c, a.Node, ctx.Rng));

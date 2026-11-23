@@ -197,6 +197,9 @@ namespace Bastion.UI.Strategy
 
         Sprite Icon(string id) => IconOf?.Invoke(id) ?? (icons != null ? icons.Get(id) : null);
 
+        /// <summary>An icon by id, as the screens draw theirs (the labs' proposals: MapProposals).</summary>
+        public Sprite IconFor(string id) => Icon(id);
+
         /// <summary>Who answers the buttons: the campaign's controller (or the lab); null, nobody.</summary>
         public void Bind(IStrategyHandlers handlers)
         {
@@ -408,11 +411,16 @@ namespace Bastion.UI.Strategy
         /// <summary>Esc on the board while a cell is held: the purchase let go, the board stays; whether one was held.</summary>
         public bool CancelBoardHold() => skillBoard != null && skillBoard.CancelHold();
 
+        /// <summary>For the labs (BaseRun's «celda:»): a cell of the open board shown as under the pointer.</summary>
+        public void LabBoardCell(string id) => skillBoard?.ShowCell(id);
+
         /// <summary>The choice open on Soldados' sheet; null, none (tests). Opening one, as its head's click.</summary>
         public string SoldierChoice => soldiers?.OpenChoice;
         public void OpenSoldierChoice(string id) => soldiers?.Open(id);
         /// <summary>An element's help shown now and kept (the lab's captures, TooltipLayer.Pin).</summary>
         public void PinTip(VisualElement target) => tips?.Pin(target);
+        /// <summary>The pinned help let go (the lab's series, between samples).</summary>
+        public void UnpinTip() => tips?.Hide();
         /// <summary>A soldier's sheet in short by Escuadra's list, as the pointer on their row shows it (the lab's captures).</summary>
         public void PeekSquad(string id) => squad?.LabPeek(id);
 

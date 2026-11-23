@@ -16,9 +16,9 @@ namespace Bastion.Client.Net
     /// base each answers what waits and gives its key (HeardGame.BaseOrder), BASTION_LANZAR seconds in (8 unless said;
     /// 14 after a mission, for the debrief); in the mission each plays its soldiers (MissionBot) on what it has heard, an
     /// order once the screen has played the last one's events (its `idle`) or a few seconds have gone; once over, the host
-    /// takes both back to the base. BASTION_ABANDONAR=&lt;seconds&gt;: the host leaves the mission then instead, and the
-    /// partner says yes. BASTION_MISIONES missions (2 unless said). BASTION_SEMILLA (NetLink): the room's Rng, so the
-    /// campaign is CampaignAutoRun's with that seed.
+    /// takes both back to the base (a campaign's fight can't be left since cuadro 122). BASTION_MISIONES missions (2 unless
+    /// said). BASTION_NIVEL: the game's level (N9, LevelIds; Difícil unless said). A game lost (N8) ends the run there.
+    /// BASTION_SEMILLA (NetLink): the room's Rng, so the campaign is CampaignAutoRun's with that seed.
     ///
     /// BASTION_FOTOS=&lt;folder&gt;: the screen a few seconds into each step: 1-base, 1-mision, 1-final, 1-parte, 2-base…;
     /// once seen, what a player would close is closed (UiPress): the premise, the arrival card, the debrief.
@@ -38,7 +38,7 @@ namespace Bastion.Client.Net
         }
 
         private readonly float launchAfter;
-        private readonly float? leaveAfter;
+        private readonly string? level;
         private readonly int missions;
         private readonly float limit;
         private readonly string? shots;
@@ -66,10 +66,10 @@ namespace Bastion.Client.Net
         private bool refusedOnBase;
         private float quitAt = -1;
 
-        private CampaignRun(float launchAfter, float? leaveAfter, int missions, float limit, string? shots, Action<string> log)
+        private CampaignRun(float launchAfter, string? level, int missions, float limit, string? shots, Action<string> log)
         {
             this.launchAfter = launchAfter;
-            this.leaveAfter = leaveAfter;
+            this.level = level;
             this.missions = missions;
             this.limit = limit;
             this.shots = shots;
@@ -82,7 +82,8 @@ namespace Bastion.Client.Net
             if (Environment.GetEnvironmentVariable("BASTION_CAMPANA") != "1") return null;
             var shots = Environment.GetEnvironmentVariable("BASTION_FOTOS");
             if (!string.IsNullOrEmpty(shots)) Directory.CreateDirectory(shots!);
-            return new CampaignRun(Number("BASTION_LANZAR") ?? 8, Number("BASTION_ABANDONAR"), (int)(Number("BASTION_MISIONES") ?? 2), Number("BASTION_LIMITE") ?? 900, string.IsNullOrEmpty(shots) ? null : shots, log);
+            var level = Environment.GetEnvironmentVariable("BASTION_NIVEL");
+            return new CampaignRun(Number("BASTION_LANZAR") ?? 8, string.IsNullOrEmpty(level) ? null : level, (int)(Number("BASTION_MISIONES") ?? 2), Number("BASTION_LIMITE") ?? 900, string.IsNullOrEmpty(shots) ? null : shots, log);
         }
 
         /// <summary>BASTION_SEMILLA, with BASTION_CAMPANA or BASTION_MEDIR (never in a game of the players): the host room's Rng (NetLink), or null.</summary>
@@ -151,7 +152,15 @@ namespace Bastion.Client.Net
                         Enter(Step.Base, now, "en la base");
                         break;
                     }
-                    if (link.Hosting && phase == RoomPhases.Lobby && room.Players.Count((p) => p.Connected) == 2 && Due(now, 3)) link.Send(new NewCampaignMessage());
+                    // A fight saved half played, opened by the host (a save of a version before: R19, the 0.13.8's): played on
+                    // from where it is, to its end.
+                    if (phase == RoomPhases.Mission)
+                    {
+                        round = 1;
+                        Enter(Step.Mission, now, "en un combate a medias");
+                        break;
+                    }
+                    if (link.Hosting && phase == RoomPhases.Lobby && room.Players.Count((p) => p.Connected) == 2 && Due(now, 3)) link.Send(new NewCampaignMessage { Level = level });
                     break;
                 case Step.Base:
                     // What a player reads first, then closes: the premise, the debrief («Continuar»).
@@ -165,6 +174,13 @@ namespace Bastion.Client.Net
                         Shoot($"{round - 1}-parte", now, 3);
                         if (now - since > 5) Press(now, "Continuar");
                         Shoot($"{round}-base", now, 10);
+                    }
+                    // N8: lost, nothing more to do in it (every order would be refused).
+                    if (heard.Campaign?.Outcome != null && now - since > 11)
+                    {
+                        log($"[prueba] campaña: partida terminada ({heard.Campaign.Outcome}) tras la misión {round - 1}");
+                        step = Step.Done;
+                        break;
                     }
                     if (round > missions)
                     {
@@ -206,8 +222,7 @@ namespace Bastion.Client.Net
                         orders = late = stamps = idles = 0;
                         break;
                     }
-                    if (leaveAfter != null) Leave(link, now, leaveAfter.Value);
-                    else Play(link, room, now);
+                    Play(link, room, now);
                     break;
                 case Step.Over:
                     // The end as the screen shows it: once it says it has played everything since (or 180 s on). The
@@ -245,14 +260,6 @@ namespace Bastion.Client.Net
             link.Send(cmd);
             sentAt = s.Seq;
             sentWhen = now;
-        }
-
-        /// <summary>BASTION_ABANDONAR: the host asks to leave, the partner says yes.</summary>
-        private void Leave(NetLink link, float now, float after)
-        {
-            if (now - since < after || !Due(now, 2)) return;
-            if (link.Hosting) link.Send(new AbandonMessage());
-            else link.Send(new AbandonAnswerMessage { Accept = true });
         }
 
         private void Enter(Step next, float now, string what)

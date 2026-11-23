@@ -139,6 +139,21 @@
     white-space: nowrap;
 }
 
+/* The key's number in its top left corner, always in sight (cuadro 124): small, on a dark tab, never over the icon's middle. */
+.ability__hotkey {
+    position: absolute;
+    left: 2px;
+    top: 1px;
+    padding: 0 3px;
+    font-size: 11px;
+    color: #d7dbd2;
+    background-color: rgba(0, 0, 0, 0.55);
+}
+
+.ability:disabled .ability__hotkey {
+    color: rgba(150, 155, 148, 0.6);
+}
+
 .ability__count {
     position: absolute;
     right: 3px;

@@ -565,8 +565,8 @@ namespace Bastion.UI.Combat
         /// <summary>The enemies' sight's button as things stand (each frame: SightButton draws only what changed).</summary>
         SightView SightNow()
         {
-            var battle = State != null && Shown.Outcome == null && !Film && Rig != null && !Rig.Overhead && !Rig.CloseUp && !Rig.Away;
-            return new SightView { Button = battle, On = sightAll };
+            var battle = State != null && Shown.Outcome == null && !Film && Rig != null && !Rig.Overhead;
+            return new SightView { Button = battle, Resting = battle && (Rig.CloseUp || Rig.Away), On = sightAll };
         }
 
         /// <summary>
@@ -959,7 +959,7 @@ namespace Bastion.UI.Combat
             }
             // The pistol carried beside a main gun counts its own rounds; the spares serve both.
             if (sidearm) view.Stats.Add(new StatView { Kind = "sidearm", Tip = $"{pistol}: {u.PistolAmmo ?? 0}/{Content.PistolClip}", Filled = u.PistolAmmo ?? 0, Total = Content.PistolClip });
-            if (gun) view.Stats.Add(new StatView { Kind = "aim", Tip = $"Puntería con armas de fuego {aim + u.Mods.GunAim}", Value = (aim + u.Mods.GunAim).ToString() });
+            if (gun) view.Stats.Add(new StatView { Kind = "aim", Tip = $"Puntería al disparar {aim + u.Mods.GunAim}", Value = (aim + u.Mods.GunAim).ToString() });
             if (soldier) view.Stats.Add(new StatView { Kind = "melee", Tip = $"Puntería cuerpo a cuerpo {aim + u.Mods.MeleeAim}", Value = (aim + u.Mods.MeleeAim).ToString() });
             if (u.Charges.TryGetValue(ChargeIds.Grenade, out var grenades)) view.Stats.Add(new StatView { Kind = "grenade", Tip = $"Granadas: {grenades}", Value = $"×{grenades}" });
             if (u.Charges.TryGetValue(ChargeIds.Molotov, out var molotovs)) view.Stats.Add(new StatView { Kind = "molotov", Tip = $"Cócteles molotov: {molotovs}", Value = $"×{molotovs}" });
@@ -1777,7 +1777,7 @@ namespace Bastion.UI.Combat
                     Kind = "abandon",
                     Kicker = "",
                     Title = Lore.AbandonAsk(PlayerName(abandon.By)),
-                    Text = Lore.AbandonText.Stakes,
+                    Text = AbandonStakes,
                     ClockNote = "Sin respuesta, se acepta sola",
                     Accept = Lore.AbandonText.Accept,
                     Refuse = Lore.AbandonText.Refuse,

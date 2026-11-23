@@ -106,6 +106,21 @@ namespace Bastion.Engine.Tests
         }
 
         /// <summary>
+        /// One with no pack (a recruit made in a fight) on a gun of the run it can't take: it doesn't stand on it for ever, it
+        /// goes on (Red's R2 by level, 23/11: easy, 2 seats, seed 5, crouched 40 turns of a Limpieza on a machine gun).
+        /// </summary>
+        [Fact]
+        public void WithNoPackAGunAtItsFeetDoesntHoldItThere()
+        {
+            var (_, s) = Saqueo(4, false);
+            var u = Alone(s);
+            u.Pack = null;
+            s.FloorGear = new List<DroppedGear> { new DroppedGear { Gear = new Gear { Id = "g901", Kind = GearKinds.Weapon, Type = FoundWeaponIds.AssaultRifle }, Pos = u.Pos } };
+            var cmd = MissionBot.Next(s, 0, Zero);
+            Assert.IsType<MoveCommand>(cmd);
+        }
+
+        /// <summary>
         /// The four stages of H5 and H6 with both players and rifles, as the squad is by the chapter's end, on six seeds: the
         /// Asedio held till La Lata comes and the Travesía crossed, won; a Guarida's box opened and El Toro killed, what the
         /// bot does for them (16/11: 2 Guaridas of 6 won, the box opened in 5, the rest lost on the long way back from it to

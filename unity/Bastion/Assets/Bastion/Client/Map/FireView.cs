@@ -35,10 +35,15 @@ namespace Bastion.Client.Map
         const float LickRate = 0.4f;
         /// <summary>How high the big flames stand over what burns (m): a car's body, bins and drums, a heap on the ground.</summary>
         const float OverCar = 0.55f, OverBins = 0.45f, OverHeap = 0.1f;
+        /// <summary>How far over an upper floor's slab a pool's soot and burning ground lie (m).</summary>
+        const float OverSlab = 0.1f;
+        /// <summary>How much stronger a pool's burning ground is on an upper floor, and the pools it is so for.</summary>
+        const float OnSlab = 1.7f;
+        readonly HashSet<string> strong = new HashSet<string>();
         /// <summary>The soot under the fire: its colour and how dark.</summary>
         static readonly Color Soot = new Color(0.04f, 0.035f, 0.03f, 0.6f);
 
-        static Material soot;
+        static Material soot, sootDark;
         static Mesh quad;
         static Texture2D embers;
         /// <summary>
@@ -68,7 +73,7 @@ namespace Bastion.Client.Map
                 // (Lit up over Grows, as its flames grow: grown with them from a tenth, its blots came together in the middle,
                 // their light summed, as white discs spreading out: L-05.)
                 left *= Mathf.Clamp01((Time.time - born) / Grows);
-                material.SetColor("_BaseColor", new Color(Ablaze.r, Ablaze.g, Ablaze.b, Ablaze.a * (1 - Flicker + Flicker * 2 * n) * left));
+                material.SetColor("_BaseColor", new Color(Ablaze.r, Ablaze.g, Ablaze.b, Mathf.Min(1, Ablaze.a * (strong.Contains(id) ? OnSlab : 1) * (1 - Flicker + Flicker * 2 * n) * left)));
             }
         }
 
@@ -127,33 +132,44 @@ namespace Bastion.Client.Map
         /// </summary>
         void Pool(GameState s, Fire fire, FxArt art, bool grow)
         {
-            int w = s.Width;
-            int sx = fire.Source % w, sy = fire.Source / w;
-            var at = MapSpace.World(sx, sy);
+            // (Its tiles are nodes, Grid.NodeOf: on an upper floor or a roof (N4, Gameplay 22/11) the storey is in them, and
+            // read as a ground tile's index they fell off the map. Each on its own floor; hidden with its storey, Cutaway.)
+            var source = Bastion.Engine.Grid.PosOf(s, fire.Source);
+            int sx = source.X, sy = source.Y;
+            var at = MapSpace.TileToWorld(s, source);
             var holder = new GameObject(fire.Id).transform;
             holder.SetParent(transform, false);
             holder.position = at;
+            Cutaway.Current?.TrackAt(holder.gameObject, source);
             // What grows (Grow): the flames and embers alone, not the ground under them (L-05).
             var flames = new GameObject("llamas").transform;
             flames.SetParent(holder, false);
             Effect(art.embers, flames, at + Vector3.up * 0.1f, 0, 0.7f);
-            Scorch(holder, at, 3.4f, MapArt.Hash(sx, sy, 440) * 360);
+            // (On a storey's slab or a roof's deck, a little over it: at its height they lay in the deck's own top, unseen.)
+            var lift = Vector3.up * (source.Z > 0 ? OverSlab : 0);
+            // (On those pale floors the soot wider than the burning ground and darker, a dark rim round it: under it alone
+            // it showed only once the fire was out, and the flames stood yellow on cream. Producto, 23/11.)
+            Scorch(holder, at + lift, source.Z > 0 ? 4.8f : 3.4f, MapArt.Hash(sx, sy, 440) * 360, source.Z > 0);
+            // (Stronger on a storey or a roof: their floors are pale, and the burning ground on them was a faint yellow.)
+            if (source.Z > 0) strong.Add(fire.Id);
             var glow = Glow(holder, fire.Id, grow);
             var licks = art.fireLick != null ? art.fireLick : art.fire;
             float lick = art.fireLick != null ? LickScale : 1;
             foreach (int i in fire.Tiles)
             {
-                int x = i % w, y = i / w;
+                var p = Bastion.Engine.Grid.PosOf(s, i);
+                int x = p.X, y = p.Y;
+                var floor = MapSpace.TileToWorld(s, p);
                 float r(int salt) => MapArt.Hash(x, y, 450 + salt);
                 // The ground of the tile aglow, a soft blot over it and into its neighbours', so the pool reads whole.
-                if (glow != null) Patch(holder, glow, MapSpace.World(x, y), 1.6f, r(9) * 360);
+                if (glow != null) Patch(holder, glow, floor + lift, 1.6f, r(9) * 360);
                 // (Four flames a tile, low, one in each quarter, so they cover it: a pool's, not a car's; the middle's a
                 // little bigger. The middling fire made small: the small one's flames are a few centimetres, nothing from the
                 // game's camera.)
                 for (int k = 0; k < 4; k++)
                 {
                     var quarter = new Vector3((k % 2) - 0.5f, 0, (k / 2) - 0.5f) * 0.5f + new Vector3(r(k * 3) - 0.5f, 0, r(k * 3 + 1) - 0.5f) * 0.25f;
-                    var spot = MapSpace.World(x, y) + quarter * MapSpace.Tile;
+                    var spot = floor + quarter * MapSpace.Tile;
                     Effect(licks, flames, spot, r(k * 3 + 2) * 360, ((i == fire.Source && k == 0 ? 0.62f : 0.42f) + 0.16f * r(13 + k)) * lick, art.fireLick != null ? LickRate : 1);
                 }
             }
@@ -271,7 +287,7 @@ namespace Bastion.Client.Map
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 
-        static void Scorch(Transform parent, Vector3 at, float size, float yaw)
+        static void Scorch(Transform parent, Vector3 at, float size, float yaw, bool dark = false)
         {
             if (soot == null)
             {
@@ -281,6 +297,11 @@ namespace Bastion.Client.Map
                 soot.mainTexture = Blot();
                 soot.renderQueue = 2990;
             }
+            if (dark && sootDark == null)
+            {
+                sootDark = new Material(soot) { name = "Hollín oscuro" };
+                sootDark.SetColor("_BaseColor", new Color(Soot.r, Soot.g, Soot.b, 0.92f));
+            }
             quad ??= Quad();
             var blot = new GameObject("hollín");
             blot.transform.SetParent(parent, false);
@@ -288,7 +309,7 @@ namespace Bastion.Client.Map
             blot.transform.localScale = Vector3.one * size * MapSpace.Tile;
             blot.AddComponent<MeshFilter>().sharedMesh = quad;
             var r = blot.AddComponent<MeshRenderer>();
-            r.sharedMaterial = soot;
+            r.sharedMaterial = dark ? sootDark : soot;
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 

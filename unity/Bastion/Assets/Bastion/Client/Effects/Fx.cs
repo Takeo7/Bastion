@@ -784,7 +784,8 @@ namespace Bastion.Client.Effects
             // (A faint glow round it so that it shows from the game's camera.)
             var halo = Make("brillo", quad, added, false, false, out var hr);
             halo.SetParent(shell, false);
-            halo.localScale = Vector3.one * 0.35f / Mathf.Max(shell.lossyScale.x, 1e-4f);
+            // (0.35 till 22/11: with the molotov's, wider, to be followed up to another floor.)
+            halo.localScale = Vector3.one * 0.55f / Mathf.Max(shell.lossyScale.x, 1e-4f);
             Paint(hr, glow, WithAlpha(Hex(0xfff2d8), 0.45f));
             float d = Vector3.Distance(from, to) / T;
             float height = (1.5f + d * 0.3f) * T;
@@ -879,6 +880,8 @@ namespace Bastion.Client.Effects
 
         /// <summary>The rag's flame against the middling fire's own size, and its life (L-06).</summary>
         const float RagScale = 0.12f, RagLife = 0.5f;
+        /// <summary>The glow round a molotov in flight (tiles across), and how much of its way lies between two of its trail's lights.</summary>
+        const float BottleGlow = 0.7f, BottleTrail = 0.07f;
 
         /// <summary>
         /// A molotov thrown (as a grenade's arc, GrenadeArc): the bottle tumbling end over end from the hand to `to`, its rag
@@ -895,10 +898,21 @@ namespace Bastion.Client.Effects
             }
             float d = Vector3.Distance(from, to) / T;
             float height = (1.5f + d * 0.3f) * T;
+            // (Followed all its way from the game's camera, as an arrow is: an orange glow round it and a trail of its rag's
+            // light left behind, fading. Producto, 22/11: the bottle alone showed in two or three frames of ten a second.)
+            var halo = Make("brillo", quad, added, false, false, out var hr);
+            halo.localScale = Vector3.one * BottleGlow * T;
+            Paint(hr, glow, WithAlpha(Hex(0xff9a3c), 0.8f));
+            float trailed = -1;
             void Fly(float t)
             {
                 bottle.position = Vector3.Lerp(from, to, t) + Vector3.up * Mathf.Sin(t * Mathf.PI) * height;
                 bottle.rotation = Quaternion.LookRotation(new Vector3(to.x - from.x, 0, to.z - from.z).normalized + Vector3.up * 1e-3f) * Quaternion.Euler(t * 540, 0, 0);
+                halo.position = bottle.position;
+                if (Camera.main != null) halo.rotation = Camera.main.transform.rotation;
+                if (t - trailed < BottleTrail) return;
+                trailed = t;
+                Spawn(Sprite(bottle.position, glow, Hex(0xff8a2c), BottleGlow * 0.6f, 0.7f, true), 0.35f, -0.5f);
             }
             // (Where it starts before its first frame.)
             Fly(0);
@@ -909,7 +923,74 @@ namespace Bastion.Client.Effects
             finally
             {
                 DestroyNow(bottle.gameObject);
+                DestroyNow(halo.gameObject);
             }
+        }
+
+        /// <summary>How fast an arrow flies (tiles a second): ten tiles in half a second, to be seen all its way.</summary>
+        public const float ArrowSpeed = 19;
+
+        /// <summary>How much over its colour by day an arrow's shaft and feathers are painted by night.</summary>
+        const float NightArrow = 5;
+
+        /// <summary>
+        /// An arrow or a crossbow's bolt (`bolt`, shorter) from `from` to `to` (Arturo's cuadros 101–106: the quiet ones): a
+        /// dark shaft with pale fletching, flying nearly flat at `speed` tiles a second, no flash; gone as it lands.
+        /// </summary>
+        public async Awaitable Arrow(Vector3 from, Vector3 to, bool bolt = false, float speed = ArrowSpeed, CancellationToken ct = default)
+        {
+            Load();
+            var arrow = new GameObject(bolt ? "virote" : "flecha").transform;
+            arrow.SetParent(transform, false);
+            float length = (bolt ? 0.38f : 0.62f) * T;
+            var shaft = Make("astil", cylinder, solid, false, false, out var r);
+            shaft.SetParent(arrow, false);
+            // (Unity's cylinder: 1 across, 2 long along its y; the arrow along its own +z.)
+            shaft.localRotation = Quaternion.Euler(90, 0, 0);
+            // (By night the shaft a little thicker and its colour over white, so the little light there is gives as much
+            // back as by day: it was a faint thread, lost on the way. Producto, 22/11.)
+            float night = Mood.IsNight ? NightArrow : 1, thick = Mood.IsNight ? 0.04f : 0.025f;
+            shaft.localScale = new Vector3(thick * T, length / 2, thick * T);
+            Paint(r, null, Hex(0xc9b48a) * night);
+            // (A dark edge either side of the pale shaft from any camera, two thin blades crossed along it: pale on pale
+            // ground, a zebra crossing or snow, it was lost.)
+            for (int i = 0; i < 2; i++)
+            {
+                var edge = Make("borde", cylinder, solid, false, false, out var e);
+                edge.SetParent(arrow, false);
+                edge.localRotation = Quaternion.Euler(90, 0, 0);
+                edge.localScale = new Vector3((i == 0 ? 0.06f : 0.008f) * T, length / 2, (i == 0 ? 0.008f : 0.06f) * T);
+                Paint(e, null, Hex(0x1f1b17));
+            }
+            var fletch = Make("plumas", cylinder, solid, false, false, out var f);
+            fletch.SetParent(arrow, false);
+            fletch.localRotation = Quaternion.Euler(90, 0, 0);
+            fletch.localPosition = Vector3.back * (length * 0.42f);
+            fletch.localScale = new Vector3(0.052f * T, length * 0.08f, 0.052f * T);
+            Paint(f, null, Hex(0xf2efe6) * night);
+            var dir = to - from;
+            float d = dir.magnitude / T;
+            // (A little drop over its way: it falls into its mark.)
+            float rise = Mathf.Min(0.7f, 0.08f + d * 0.035f) * T;
+            try
+            {
+                var last = from;
+                await Run(Mathf.Max(0.22f, d / speed), t =>
+                {
+                    var at = Vector3.Lerp(from, to, t) + Vector3.up * Mathf.Sin(t * Mathf.PI) * rise;
+                    if ((at - last).sqrMagnitude > 1e-8f) arrow.rotation = Quaternion.LookRotation(at - last);
+                    arrow.position = at;
+                    last = at;
+                }, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                DestroyNow(arrow.gameObject);
+                throw;
+            }
+            // Where it lands: a puff, and it stays stuck there a moment (what it hit is told after).
+            Puffs(to, Hex(0xcdbf9a), 2, size: 0.12f, spread: 0.04f, rise: 0.25f, away: 0.12f, life: 0.45f, grow: 1.2f, opacity: 0.5f);
+            After(0.7f, () => { if (arrow != null) DestroyNow(arrow.gameObject); });
         }
 
         /// <summary>

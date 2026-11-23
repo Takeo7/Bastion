@@ -146,6 +146,14 @@ namespace Bastion.UI.Hud
             studio.style.unityBackgroundImageTintColor = new Color(owner.r, owner.g, owner.b, 0.85f);
             // The bust's edges lit from behind in the same colour (Arte's Portraits.Light, 0.12.24).
             Bastion.Client.Portraits.Light(c.Id, owner);
+            // The partner's, lit and ringed in their colour (cuadro 124, Arturo 23/11): dimmed is for the fallen alone, now
+            // with its word over the bust.
+            if (!c.Mine && !c.Dead)
+            {
+                card.style.borderTopColor = card.style.borderBottomColor = card.style.borderLeftColor = card.style.borderRightColor = owner;
+                card.style.borderTopWidth = card.style.borderBottomWidth = card.style.borderLeftWidth = card.style.borderRightWidth = 2;
+            }
+            if (c.Dead) Ui.Text(HudText.Squad.Fallen, "squad-card__fallen font-title", tree.Q("bust")).pickingMode = PickingMode.Ignore;
             var face = tree.Q("face");
             var portrait = c.Bust ? PortraitOf?.Invoke(c.Id) : null;
             if (portrait is RenderTexture rt) face.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));

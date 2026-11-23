@@ -171,6 +171,8 @@ namespace Bastion.UI.Combat
                 int? charge = def.Charge != null ? AbilityTexts.Charge(u, def.Charge) : Content.RunsChainsaw(u, id) ? AbilityTexts.Charge(u, ChargeIds.Fuel) : (int?)null;
                 string reason;
                 using (MBlocker.Auto()) reason = !CanAct() ? "No es vuestro turno." : WaitingFor(u.Id) ?? Abilities.AbilityBlocker(State, u, id);
+                // The camera on its way to it (N5): all off for that moment, nothing said (Refresh again as it gets there).
+                var arriving = reason == null && u.Id == picked && Arriving();
                 bool none;
                 using (MTargets.Auto()) none = reason == null && (def.Target == AbilityTargets.Enemy || def.Target == AbilityTargets.Melee || def.Target == AbilityTargets.Ally) && !HasTargets(id);
                 if (none) reason = def.Target == AbilityTargets.Ally ? "No hay aliados válidos." : def.Target == AbilityTargets.Melee ? "Ningún enemigo a su alcance." : "Sin enemigos a la vista.";
@@ -183,7 +185,7 @@ namespace Bastion.UI.Combat
                     // Disparar by the gun in hand (Arturo, 23/10 #7): its picture on the key, not always the rifle's; the Tajo by a
                     // found blunt weapon or the chainsaw (Ana's notes, Arturo 29/10).
                     Weapon = id == AbilityIds.Shoot ? ShotPicture(u) : id == AbilityIds.Slash && Found(Content.AttackWeapon(u, id).Id) ? Content.AttackWeapon(u, id).Id : null,
-                    Enabled = reason == null,
+                    Enabled = reason == null && !arriving,
                     Reason = reason,
                     // Out of rounds in the magazine (Ana, 20/10 #24): said on the key.
                     Note = reason != null && reason.EndsWith(": recarga.", StringComparison.Ordinal) ? AbilityTexts.ReloadFirst : null,
@@ -394,7 +396,7 @@ namespace Bastion.UI.Combat
                 var limits = left != null ? Lore.ProposalClock(left, false) : null;
                 return new List<AbilityView>
                 {
-                    CallKey("abandonAccept", Lore.AbandonText.Accept, $"{ask}. {Lore.AbandonText.Stakes}", limits),
+                    CallKey("abandonAccept", Lore.AbandonText.Accept, $"{ask}. {AbandonStakes}", limits),
                     CallKey("abandonRefuse", Lore.AbandonText.Refuse, $"{ask}. Seguís en la misión.", limits),
                 };
             }

@@ -24,6 +24,7 @@ namespace Bastion.UI.Hud
 
         readonly HandlerRelay relay = new HandlerRelay();
         TouchButtons touchButtons;
+        FloorPicker floors;
         VisualElement root;
         TooltipLayer tips;
         TurnStrip strip;
@@ -98,6 +99,7 @@ namespace Bastion.UI.Hud
             turnActions = new TurnActions(root.Q("end-slot"), root.Q("clocks"), relay, tips, Icon);
             // With the finger, what only a key did has its button (docs/IOS.md, phase 2); the desktop has none.
             if (Bastion.Client.GameInput.Touch) touchButtons = new TouchButtons(root, root.Q("end-slot"), relay, tips, Icon);
+            floors = new FloorPicker(root, relay, tips);
             // The keys' row in the screen's middle, but clear of the squad's plate when it grows (eight cards).
             actions = root.Q("actions");
             squadPlate.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
@@ -109,10 +111,12 @@ namespace Bastion.UI.Hud
             if (Bastion.Client.GameInput.Touch) goal.TurnsCamera(relay.OnTurnCamera);
             log = new Log(root.Q("log"), Icon);
             flags = new UnitFlags(root.Q("flags"), Icon);
+            // Off the bar and the panels at the foot (the review of 23/11, C26–C27).
+            foreach (var name in new[] { "abilities", "end-slot", "squad-plate", "unit-panel", "shot-panel" }) flags.Under.Add(root.Q(name));
             flags.TargetPicked += id => TargetPicked?.Invoke(id);
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at), Icon);
             // The arrows off the panels (U27): the objective's card and what goes under it, the squad's plate and sheet, the bar.
-            foreach (var name in new[] { "goal", "compass", "log", "unit-panel", "squad-plate", "abilities", "end-slot" }) edges.Avoid.Add(root.Q(name));
+            foreach (var name in new[] { "goal", "compass", "log", "unit-panel", "squad-plate", "abilities", "end-slot", "floors" }) edges.Avoid.Add(root.Q(name));
             goalArrow = new GoalArrow(root.Q("goal-arrow"), tips);
             sight = new SightButton(root.Q("sight"), tips);
             sight.Toggled += () => SightToggled?.Invoke();
@@ -258,6 +262,9 @@ namespace Bastion.UI.Hud
         public void SetTagFloor(float pixels) => flags.TagFloor = pixels;
         public void SetEdgeMarks(EdgeMarksView v) => edges.Set(v);
 
+        /// <summary>Whether a point of the world is seen: on screen, clear of the edges and of the panels (EdgeMarks.InView).</summary>
+        public bool InView(Camera camera, Vector3 world) => edges == null || edges.InView(camera, world);
+
         /// <summary>Where the mission's goal lies, for the ring's arrow (UI-06); null, none.</summary>
         public void SetGoal(Vector3? world) => goalArrow.Set(world);
 
@@ -266,6 +273,8 @@ namespace Bastion.UI.Hud
 
         /// <summary>With the finger, which of its buttons show (TouchButtons); nothing at the desktop.</summary>
         public void SetTouch(TouchView v) => touchButtons?.Set(v);
+        /// <summary>The floor looked at (cuadro 121); null with a single floor or from above.</summary>
+        public void SetFloors(FloorView v) => floors?.Set(v);
 
         /// <summary>The enemies' sight's button pressed.</summary>
         public event Action SightToggled;

@@ -17,6 +17,7 @@ namespace Bastion.UI.App
     {
         const string LevelKey = "bastion.graphics";
         const string CapKey = "bastion.fpsCap";
+        const string VSyncKey = "bastion.vsync";
         const string CounterKey = "bastion.showFps";
         const string TintKey = "bastion.squadTint";
         const string CinemaKey = "bastion.cinematic";
@@ -137,6 +138,25 @@ namespace Bastion.UI.App
             set
             {
                 PlayerPrefs.SetInt(CapKey, Array.IndexOf(Caps, value) >= 0 ? value : 0);
+                Apply();
+            }
+        }
+
+        /// <summary>
+        /// N1 (Arturo, 22/11: «he visto la imagen cortada horizontalmente»): the screen's sync, on by default and kept. Off
+        /// for a test (BASTION_SIN_VSYNC=1) and for publicar.sh's measures (BASTION_MEDIR: with the sync the Mac's gpu in ms
+        /// is its clock, not the cost, and the frames stop at the screen's), so they stay comparable; never on iOS, where
+        /// it doesn't count and the frames go by the cap. On the Mac only while the screen is surely awake (ScreenWatch).
+        /// </summary>
+        public static bool VSync
+        {
+            // (BASTION_MEDIR_SINCRONIA=1: a measure with it, to see the sync and ScreenWatch at work.)
+            get => Environment.GetEnvironmentVariable("BASTION_SIN_VSYNC") != "1"
+                && (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("BASTION_MEDIR")) || Environment.GetEnvironmentVariable("BASTION_MEDIR_SINCRONIA") == "1")
+                && Application.platform != RuntimePlatform.IPhonePlayer && PlayerPrefs.GetInt(VSyncKey, 1) == 1;
+            set
+            {
+                PlayerPrefs.SetInt(VSyncKey, value ? 1 : 0);
                 Apply();
             }
         }
@@ -313,26 +333,39 @@ namespace Bastion.UI.App
             var quality = Array.FindIndex(names, n => string.Equals(n, QualityNames[level], StringComparison.OrdinalIgnoreCase));
             if (quality < 0 && names.Length > 0) quality = level == 0 ? 0 : level == 2 ? names.Length - 1 : (names.Length - 1) / 2;
             if (quality >= 0 && quality != QualitySettings.GetQualityLevel()) QualitySettings.SetQualityLevel(quality, true);
-            var (sync, rate) = Pacing(FpsCap, inMenu, Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.IPhonePlayer, ScreenHz());
-            QualitySettings.vSyncCount = sync;
-            Application.targetFrameRate = rate;
-            ScreenCap = sync == 0 && FpsCap == 0 && !inMenu;
+            Pace();
             Changed?.Invoke();
         }
 
         /// <summary>
-        /// The frames' sync and cap for Unity (vSyncCount, targetFrameRate) by the cap chosen in Ajustes (0: none), out of
-        /// the battle or in it, on the Mac or not, with the screen's refresh in Hz: none, the screen's sync; a cap, that many
-        /// frames and no sync; out of the battle, `MenuFps` at most. On the Mac no sync even with none, the screen's refresh
-        /// (60 if it doesn't say) as the cap instead: with the screen asleep its presentation never came and the battle
-        /// waited for it for ever, also once the screen woke (1/11, 0.11.3). And on iOS, where the sync doesn't count and -1
-        /// is 30 fps (Arturo, 7/11: «no la capes de base a 30»): the screen's refresh there too (120 on the Duo, Arte).
+        /// The frames' sync and cap as things stand (Pacing): Ajustes' cap, in the menus or the battle, the screen's refresh,
+        /// and the sync if it is on and the screen surely awake (ScreenWatch.Dozing, the Mac's). In the app only; again from
+        /// ScreenWatch as the screen goes to sleep or wakes. SetQualityLevel puts its level's own back (0), so after it.
         /// </summary>
-        public static (int sync, int rate) Pacing(int cap, bool menu, bool mac, int hz)
+        public static void Pace()
+        {
+            if (Application.isEditor) return;
+            var (sync, rate) = Pacing(FpsCap, inMenu, ScreenHz(), VSync && !ScreenWatch.Dozing);
+            QualitySettings.vSyncCount = sync;
+            Application.targetFrameRate = rate;
+            ScreenCap = sync == 0 && FpsCap == 0 && !inMenu;
+        }
+
+        /// <summary>
+        /// The frames' sync and cap for Unity (vSyncCount, targetFrameRate) by the cap chosen in Ajustes (0: none), out of
+        /// the battle (`MenuFps` at most) or in it, with the screen's refresh in Hz, and whether the screen's sync goes:
+        /// - with it (N1, 22/11: the picture cut across without it), a frame every so many refreshes as the cap asks, never
+        ///   fewer frames than it (144 Hz and 60: every second, 72; none, every refresh); Unity leaves targetFrameRate be;
+        /// - without it, or the screen not saying its refresh, a cap: Ajustes', else the screen's refresh (60 if it doesn't
+        ///   say). Never none: the Mac's battle went so with the screen asleep, its presentation never coming (1/11,
+        ///   0.11.3); iOS, where -1 is 30 fps (Arturo, 7/11: «no la capes de base a 30»), the screen's too (120 on the Duo).
+        /// </summary>
+        public static (int sync, int rate) Pacing(int cap, bool menu, int hz, bool vsync)
         {
             if (menu && (cap == 0 || cap > MenuFps)) cap = MenuFps;
-            if (cap == 0 && mac) cap = hz >= 30 ? hz : 60;
-            return cap == 0 ? (1, -1) : (0, cap);
+            if (vsync && hz >= 30) return (cap > 0 ? Math.Max(1, hz / cap) : 1, -1);
+            if (cap == 0) cap = hz >= 30 ? hz : 60;
+            return (0, cap);
         }
 
         /// <summary>
@@ -425,6 +458,7 @@ namespace Bastion.UI.App
         public const string ResolutionId = "resolution";
         public const string GraphicsId = "graphics";
         public const string CapId = "fpsCap";
+        public const string VSyncId = "vsync";
         public const string CounterId = "showFps";
         public const string TintId = "squadTint";
         public const string CinemaId = "cinematic";
@@ -443,7 +477,8 @@ namespace Bastion.UI.App
         public static System.Collections.Generic.List<Hud.SettingView> Views(System.Collections.Generic.IEnumerable<Hud.SettingView> battle = null)
         {
             var rows = Sound();
-            rows.AddRange(Graphics());
+            // (A row not for this machine is null: the sync's on iOS.)
+            rows.AddRange(Graphics().FindAll(r => r != null));
             if (battle != null) rows.AddRange(battle);
             rows.AddRange(Looks());
             rows.Add(Auto());
@@ -569,6 +604,15 @@ namespace Bastion.UI.App
                 Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(Caps, c => c == 0 ? "Sin límite" : c.ToString())),
                 On = Math.Max(0, Array.IndexOf(Caps, FpsCap)),
             },
+            // N1 (22/11): the screen's sync, «Sí» first as «Mostrar FPS»; not on iOS, where it doesn't count.
+            Application.platform == RuntimePlatform.IPhonePlayer ? null : new Hud.SettingView
+            {
+                Id = VSyncId,
+                Label = "Sincronía vertical",
+                About = "Que la imagen no se vea partida en horizontal al mover la cámara. No da más imágenes por segundo que la pantalla, y con un límite de FPS puede pasarlo un poco.",
+                Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
+                On = VSync ? 0 : 1,
+            },
             new Hud.SettingView
             {
                 Id = CounterId,
@@ -633,6 +677,7 @@ namespace Bastion.UI.App
             }
             else if (id == GraphicsId) Level = 2 - (int)value;
             else if (id == CapId) FpsCap = Caps[Mathf.Clamp((int)value, 0, Caps.Length - 1)];
+            else if (id == VSyncId) VSync = value == 0;
             else if (id == CounterId) ShowFps = value == 0;
             else if (id == TintId) SquadTint = value == 1;
             else if (id == CinemaId) Cinematic = value == 0;

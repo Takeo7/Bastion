@@ -98,9 +98,15 @@ namespace Bastion.Engine
     public sealed class Fire
     {
         public string Id { get; set; } = "";
-        /// <summary>The tile of what burns (a car's nose, a bin, drums, or the pile itself), by tile index.</summary>
+        /// <summary>
+        /// The tile of what burns (a car's nose, a bin, drums, or the pile itself), by node (Grid.NodeOf: on the ground, the
+        /// tile index; a molotov's on a storey, N4), as Tiles.
+        /// </summary>
         public int Source { get; set; }
-        /// <summary>The ground on fire, tiles one can step on, by tile index (on the ground).</summary>
+        /// <summary>
+        /// The ground on fire, places one can step on, by node (Grid.NodeOf): on the ground a tile's index; a molotov's on a
+        /// storey's floor too (N4, cuadro 120), that storey's nodes.
+        /// </summary>
         public List<int> Tiles { get; set; } = new List<int>();
         /// <summary>The squad's turns it still burns, a molotov's (Arturo, 1/11); absent, the map's own, for ever.</summary>
         public int? Turns { get; set; }
@@ -177,6 +183,12 @@ namespace Bastion.Engine
         /// <summary>Waypoints an inactive pod walks between during the alien turn (empty = it stays put).</summary>
         public List<Pos> Patrol { get; set; } = new List<Pos>();
         public int PatrolIndex { get; set; }
+        /// <summary>
+        /// Woken by something not of the squad, with the squad hidden (a bite or a blast of the dead, N3: PodActivatedEvent
+        /// attacked with no unit): its living don't know where the squad is, and go only for the soldiers they see (Ai).
+        /// Producto's review of 23/11: a group awake from the start (Despiertos) goes for the squad as before. Missing: no.
+        /// </summary>
+        public bool? WokenBlind { get; set; }
     }
 
     /// <summary>
@@ -319,6 +331,12 @@ namespace Bastion.Engine
         /// in its pack opens it (OpenDoor; UnlockedEvent). Missing: none.
         /// </summary>
         public List<int>? Locked { get; set; }
+        /// <summary>
+        /// Cuadro 122 (no abandoning, a game lost with nobody left): the places with no way back to La Lata (a hollow below a
+        /// hill's edge, walled in by cover: nobody climbs a hill without a ladder), by node; nobody walks into them (Paths).
+        /// A run's fight (Setup.NoPits). Missing: none.
+        /// </summary>
+        public List<int>? Pits { get; set; }
         /// <summary>G23.1: the unit the key is on (one of the dead in uniform), its body's to search for it.</summary>
         public string? KeyHolder { get; set; }
         /// <summary>
@@ -331,6 +349,8 @@ namespace Bastion.Engine
         public int? Difficulty { get; set; }
         /// <summary>Noise the squad has made, in horde points (content.ts hordePoints): it brings the Saqueo's horde sooner.</summary>
         public int? Noise { get; set; }
+        /// <summary>N9: the game's level's horde (Levels.Def.Horde): the trickle that many times, a wave that much sooner. Missing, 1.</summary>
+        public double? HordeScale { get; set; }
         /// <summary>Saqueo: who comes in each wave of the horde; absent on missions without one.</summary>
         public List<string>? Horde { get; set; } // TemplateIds
         /// <summary>A night mission (docs/ALTURA-Y-NOCHE.md): the living see less, light matters. Missing in older saves: day.</summary>

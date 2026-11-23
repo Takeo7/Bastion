@@ -419,6 +419,22 @@ namespace Bastion.UI.Hud
             public const string Short = "No llega más lejos";
         }
 
+        /// <summary>
+        /// The floors (FloorPicker; cuadro 121, Arturo 22/11): Lore's FloorText, «Planta baja», «Planta 1»; the keys, the Mac's
+        /// Fn with the arrows (its keyboard has no RePág nor AvPág: Lore, 23/11).
+        /// </summary>
+        public static class Floors
+        {
+            public static bool Mac => UnityEngine.Application.platform == UnityEngine.RuntimePlatform.OSXPlayer || UnityEngine.Application.platform == UnityEngine.RuntimePlatform.OSXEditor;
+            public static string Name(int level) => Bastion.Engine.Lore.FloorText.Name(level);
+            /// <summary>Both keys, «Fn + ↑ / Fn + ↓» or «RePág / AvPág» (the controls' list).</summary>
+            public static string Keys => Bastion.Engine.Lore.FloorText.Keys(Mac);
+            public static string UpTip => Keyed(TouchButtons.FloorUp, Mac ? "Fn + ↑" : "RePág");
+            public static string DownTip => Keyed(TouchButtons.FloorDown, Mac ? "Fn + ↓" : "AvPág");
+            /// <summary>In a throw's line (cuadro 121): the floor it lands on and how to aim at another.</summary>
+            public static string Throw(int level) => Bastion.Engine.Lore.FloorText.Aim(level, Bastion.Client.GameInput.Touch, Mac);
+        }
+
         public static class Moves
         {
             /// <summary>«5», «6,5» (half a point: a trap's wire costs a tile and a half, Content.Traps.Wire).</summary>
@@ -459,6 +475,8 @@ namespace Bastion.UI.Hud
             public const string Automaton = "Va sola: nadie le da órdenes.";
             public static string SheetTip => " · " + Keyed("La hoja del soldado: tablero, estadísticas y lo que lleva", "H");
             public const string InPlay = "EN JUEGO";
+            /// <summary>Over a fallen one's bust (cuadro 124): dimmed for that alone, and said.</summary>
+            public const string Fallen = "CAÍDO";
             public const string InPlayTip = "En juego: termina sus acciones antes que otro";
 
             /// <summary>«DE ANA»; a partner not in the room, «DEL OTRO JUGADOR».</summary>

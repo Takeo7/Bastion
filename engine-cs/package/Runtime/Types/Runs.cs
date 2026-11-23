@@ -280,6 +280,8 @@ namespace Bastion.Engine
         public int NextGear { get; set; }
         /// <summary>A modifier an event left for this fight (RunNode.added, H4), besides the node's own.</summary>
         public string? Added { get; set; } // Modifiers
+        /// <summary>N9: the game's level's share of what is found and paid (Levels.Def.Loot); missing, 1.</summary>
+        public double? Loot { get; set; }
     }
 
     /// <summary>RunReport.ended: how the run ended, when the fight ended it.</summary>
@@ -314,8 +316,8 @@ namespace Bastion.Engine
         /// <summary>A survivor brought out on La Lata (H4, N2: a Rescate's or one loose): the soldier they are now (CampaignSoldier.id).</summary>
         public string? Joined { get; set; }
         /// <summary>
-        /// The run ended with the fight and gave recruits for nothing (Runs.NobodyLeft, a player left with nobody): their
-        /// ids. For the line of whoever comes into the room after it (Red, N9). Null: none.
+        /// The run ended with the fight and gave recruits for nothing (Runs.NobodyLeft, a player left with nobody; since N8,
+        /// only on a bench): their ids. For the line of whoever comes into the room after it (Red, N9). Null: none.
         /// </summary>
         public List<string>? Recruits { get; set; }
         /// <summary>Whether they came into the squad; false, waiting at the base (no seat).</summary>

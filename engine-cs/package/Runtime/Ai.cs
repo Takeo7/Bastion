@@ -307,7 +307,7 @@ namespace Bastion.Engine
         /// <summary>`reach` cut to what costs `budget` at most.</summary>
         private static Reach Within(Reach reach, double budget)
         {
-            return new Reach { Origin = reach.Origin, Cost = new JsMap<int, int>(reach.Cost.Where((e) => e.Value <= budget)), Prev = reach.Prev };
+            return new Reach { Origin = reach.Origin, Cost = new JsMap<int, int>(reach.Cost.Where((e) => e.Value <= budget)), Prev = reach.Prev, Leapt = reach.Leapt, LeapPrev = reach.LeapPrev };
         }
 
         /// <summary>planWalk's path.</summary>
@@ -479,7 +479,38 @@ namespace Bastion.Engine
         }
 
         /// <summary>How near one of the dead must be for the living to turn on it.</summary>
-        private const int ZombieThreat = 8;
+        public const int ZombieThreat = 8;
+
+        /// <summary>
+        /// N3 (Arturo, 22/11: «Los zombies atacan a los saqueadores y el resto de humanos y el resto de humanos les atacan a
+        /// ellos»): one of the living still unaware of the squad (its group asleep, a camp's guard at its post) and one of the
+        /// dead it sees ZombieThreat or nearer: it reloads if it must, and shoots the nearest it has a shot at, once, from
+        /// where it stands. Its group stays asleep: it fights the dead, it doesn't go looking for the squad (Rules.Attack wakes
+        /// the one shot at, never the squad's concealment: the attacker isn't of the squad).
+        /// </summary>
+        public static void FendOff(Sim sim, Unit u)
+        {
+            var s = sim.S;
+            if (!u.Alive || u.Ap <= 0 || sim.Over || Content.Templates[u.Template].Undead) return;
+            var abilities = Abilities.AbilitiesOf(u);
+            bool Usable(string a) => abilities.Contains(a) && Abilities.AbilityBlocker(s, u, a) == null;
+            var dead = Foes(s, u).Where((e) => e.Team != Teams.Xcom && Content.Templates[e.Template].Undead && Farness(s, u.Pos, e.Pos) <= ZombieThreat && Los.CanSee(s, u, e)).ToList();
+            if (dead.Count == 0) return;
+            if (Aim.WeaponOf(u).Clip > 0 && u.Ammo <= 0)
+            {
+                if (Usable(AbilityIds.Reload)) sim.Perform(u, AbilityIds.Reload);
+                return;
+            }
+            if (!Usable(AbilityIds.Shoot)) return;
+            Js.Sort(dead, ByDistance(s, u.Pos));
+            var target = dead.FirstOrDefault((e) => Aim.PreviewShot(s, u, e, new ShotOptions { Ability = AbilityIds.Shoot }) != null);
+            if (target == null) return;
+            // Back to where it looked once it has shot (Red's R18, 22/11: a fire guard turned to a zombie saw the hidden squad on
+            // its turn, which the player couldn't foresee): still on watch as before, the one sitting by the fire at it.
+            var facing = u.Facing;
+            sim.Perform(u, AbilityIds.Shoot, target: target);
+            if (u.Alive && !sim.Over && facing != null && u.Facing != facing) sim.Emit(new TurnedEvent { Unit = u.Id, Facing = facing.Value });
+        }
 
         /// <summary>
         /// One enemy's full turn (also drives mind-controlled soldiers). The living
@@ -502,8 +533,11 @@ namespace Bastion.Engine
             int Acts() => u.Ap - (moved ? 1 : 0);
             for (var guard = 0; guard < 6 && u.Alive && u.Ap > 0 && !sim.Over; guard++)
             {
-                // The squad, and the dead it sees close by (18/10 #47): a zombie at hand is a threat too.
-                var enemies = Grid.Combatants(s, Teams.Xcom).Concat(Foes(s, u).Where((e) => e.Team != Teams.Xcom && Farness(s, u.Pos, e.Pos) <= ZombieThreat && Los.CanSee(s, u, e))).ToList();
+                // The squad, and the dead it sees close by (18/10 #47): a zombie at hand is a threat too. Woken by the dead with
+                // the squad still hidden (N3, Pod.WokenBlind), only the soldiers it sees: it doesn't know where the rest are.
+                var blind = s.Concealed && s.Pods.Any((p) => p.WokenBlind == true && p.UnitIds.Contains(u.Id));
+                var squad = Grid.Combatants(s, Teams.Xcom).Where((e) => !blind || Los.CanSee(s, u, e));
+                var enemies = squad.Concat(Foes(s, u).Where((e) => e.Team != Teams.Xcom && Farness(s, u.Pos, e.Pos) <= ZombieThreat && Los.CanSee(s, u, e))).ToList();
                 if (enemies.Count == 0) return;
 
                 if (Aim.WeaponOf(u).Clip > 0 && u.Ammo <= 0 && Usable(AbilityIds.Reload))

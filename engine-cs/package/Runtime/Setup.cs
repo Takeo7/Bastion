@@ -148,6 +148,11 @@ namespace Bastion.Engine
         public SiegePlan? SiegePlan { get; set; }
         /// <summary>La Lata's vehicle in a campaign (campaign.ts VEHICLE_SEATS: 0 todoterreno … 3 autobús); the bus without it.</summary>
         public int? Vehicle { get; set; }
+        /// <summary>
+        /// A run's fight (cuadro 122, Arturo 22/11: no abandoning, and a game lost with nobody left): La Lata always, a Limpieza's
+        /// too, where leaving on it is a retreat (CheckOutcome), with no clock. Without it, a Limpieza has none, as before.
+        /// </summary>
+        public bool? EvacAlways { get; set; }
         /// <summary>Where defenders stand when a siege begins (campaign.ts siegePosts, by campaignId): the rest, at the spawns.</summary>
         public Dictionary<string, Vec2>? Posts { get; set; }
         /// <summary>The runs' «horda despierta» (H3): every group alert, and a wave by an edge in the first enemy turn (MissionState.Awake).</summary>
@@ -164,6 +169,8 @@ namespace Bastion.Engine
         public string? Boss { get; set; } // TemplateIds
         /// <summary>A run's normal node (Gameplay, 16/11): La Lata near the squad (GenOptions.EvacNear).</summary>
         public bool? EvacNear { get; set; }
+        /// <summary>N9: the game's level's share of the lone dead (Levels.Def.Dead); missing, 1.</summary>
+        public double? DeadScale { get; set; }
         /// <summary>A run's Saqueadores (G23.5): a camp of the living with its stash (GenOptions.Camp, MissionState.Raiders).</summary>
         public bool? Raiders { get; set; }
         /// <summary>
@@ -353,6 +360,9 @@ namespace Bastion.Engine
         public static void UpToDate(GameState s)
         {
             if (s.Mission != null && s.Mission.TurnsLeft != null && !MissionTurnsByKind.ContainsKey(s.Mission.Kind)) s.Mission.TurnsLeft = null;
+            // A run's fight saved half played before the 0.14.0 (Producto's review of 23/11): its pits, as one set out now
+            // (NoPits). Without La Lata (a Limpieza had none) it may be abandoned (Rules.AbandonAllowed).
+            if (s.Run != null && s.Mission != null && s.Mission.Pits == null && s.Mission.EvacZone.Count > 0 && s.Outcome == null) NoPits(s);
         }
 
         /// <summary>
@@ -773,7 +783,7 @@ namespace Bastion.Engine
         /// </summary>
         private static readonly IReadOnlyDictionary<string, string> LayoutKind = new Dictionary<string, string> { [MissionKinds.Scavenge] = MissionKinds.Recovery };
 
-        public static MissionLayout MissionLayout(MapSource map, string kind, List<int> podSizes, bool itemOutdoors = false, bool clinic = false, bool hospital = false, string? alarm = null, bool evacNear = false, bool camp = false)
+        public static MissionLayout MissionLayout(MapSource map, string kind, List<int> podSizes, bool itemOutdoors = false, bool clinic = false, bool hospital = false, string? alarm = null, bool evacNear = false, bool camp = false, bool evac = false)
         {
             if (map.Kind == MapSourceKinds.Base) return Base.BaseLayout(map.Base!);
             if (map.Kind == MapSourceKinds.Handmade)
@@ -795,6 +805,7 @@ namespace Bastion.Engine
                 Alarm = !string.IsNullOrEmpty(alarm) ? alarm : null,
                 EvacNear = evacNear ? true : (bool?)null,
                 Camp = camp ? true : (bool?)null,
+                Evac = evac ? true : (bool?)null,
             });
         }
 
@@ -899,7 +910,7 @@ namespace Bastion.Engine
             var plan = new List<List<string>>(basePlan);
             if (extra != null) plan.Add(extra);
             if (opts.Night == true && opts.Map.Kind != MapSourceKinds.Base) plan.Add(NightPod(difficulty));
-            var layout = MissionLayout(opts.Map, kind, plan.Select((p) => p.Count).ToList(), opts.ItemOutdoors == true, opts.CampaignMission?.Story == 1, opts.CampaignMission?.Story == 2, opts.Alarm, opts.EvacNear == true, opts.Raiders == true);
+            var layout = MissionLayout(opts.Map, kind, plan.Select((p) => p.Count).ToList(), opts.ItemOutdoors == true, opts.CampaignMission?.Story == 1, opts.CampaignMission?.Story == 2, opts.Alarm, opts.EvacNear == true, opts.Raiders == true, opts.EvacAlways == true);
             if (opts.Vehicle != null) FitVehicle(layout, opts.Vehicle.Value);
             // A run's Travesía (H5): the squad at the far end from La Lata.
             if (opts.Crossing == true) FarSpawns(layout);
@@ -1039,6 +1050,7 @@ namespace Bastion.Engine
                 var lone = Lurkers[Math.Min(difficulty, Lurkers.Count - 1)];
                 var place = Places.Of(opts.Map, opts.CampaignMission?.Story);
                 if (place != null && Places.WalkShare.TryGetValue(place, out var walk)) lone = Math.Max(1, (int)Js.Round(lone * walk));
+                if (opts.DeadScale != null) lone = Math.Max(0, (int)Js.Round(lone * opts.DeadScale.Value));
                 var spots = LurkerSpots(layout, units, lone, new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0x2f6b))), Sites.IndoorsOnly(opts.Map.Site));
                 for (var k = 0; k < spots.Count; k++)
                 {
@@ -1103,8 +1115,8 @@ namespace Bastion.Engine
                 Kind = kind,
                 TurnsLeft = kind == MissionKinds.Elimination ? null : opts.Turns ?? (layout.Route != null && layout.Route != 0 ? RouteTurns(kind, layout.Route.Value) : MissionTurns(kind, Math.Max(layout.Width, layout.Height))),
                 Item = kind == MissionKinds.Recovery && layout.Item != null ? new MissionItem { Pos = Grid.Ground(layout.Item), Carrier = null, Evacuated = false } : null,
-                EvacZone = kind == MissionKinds.Elimination ? new List<Vec2>() : layout.EvacZone,
-                EvacBus = kind != MissionKinds.Elimination && layout.EvacBus != null ? layout.EvacBus : null,
+                EvacZone = kind == MissionKinds.Elimination && opts.EvacAlways != true ? new List<Vec2>() : layout.EvacZone,
+                EvacBus = (kind != MissionKinds.Elimination || opts.EvacAlways == true) && layout.EvacBus != null ? layout.EvacBus : null,
                 Terminal = kind == MissionKinds.Hack && layout.Terminal != null ? Grid.Ground(layout.Terminal) : null,
                 ObjectiveUnit = objectiveUnit,
                 ObjectiveDone = false,

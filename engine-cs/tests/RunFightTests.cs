@@ -794,9 +794,25 @@ namespace Bastion.Engine.Tests
             Assert.Equal(RunEnds.Wiped, report.Run!.Ended);
             Assert.Null(c.Run);
             Assert.Equal(RunTexts.Wiped, c.Log.Skip(1).First().Text);
-            // Somebody comes for nothing, with a knife.
-            Assert.Single(c.Soldiers, (x) => x.Alive);
-            Assert.Equal(FoundWeaponIds.Knife, c.Soldiers.Single((x) => x.Alive).Kit!.Melee!.Type);
+            // N8 (cuadro 118): nobody left alive in the game, at the base either, and it is lost; nobody comes for nothing.
+            Assert.DoesNotContain(c.Soldiers, (x) => x.Alive);
+            Assert.Null(report.Run.Recruits);
+            Assert.Equal(Outcomes.Defeat, c.Outcome);
+            Assert.Equal(RunTexts.GameLost, c.Log[0].Text);
+        }
+
+        [Fact]
+        public void TheSquadWipedWithSomeoneAtTheBaseTheGameGoesOn()
+        {
+            var (c, s) = Fight(before: (d) => Runs.NewSoldier(d, 0, new Rng(5)));
+            var home = c.Soldiers.Last();
+            Assert.DoesNotContain(home.Id, c.Run!.Squad);
+            foreach (var u in s.Units.Where((x) => x.CampaignId != null).ToList()) Events.ApplyEvent(s, new DiedEvent { Unit = u.Id });
+            var report = End(c, s, Outcomes.Defeat, EndReasons.Wiped);
+            Assert.Equal(RunEnds.Wiped, report.Run!.Ended);
+            Assert.Null(c.Outcome);
+            Assert.Equal(new[] { home.Id }, c.Soldiers.Where((x) => x.Alive).Select((x) => x.Id));
+            Assert.Null(report.Run.Recruits);
         }
 
         [Fact]

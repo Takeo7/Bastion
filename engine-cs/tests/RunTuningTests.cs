@@ -30,7 +30,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(Content.UpgradePrices[UpgradeIds.Squad][0], Runs.NextPrice(c, UpgradeIds.Squad));
             var run = new RunFight { Row = 1 };
             Assert.Equal(1, RunLoot.SuppliesScale(run));
-            Assert.Equal(Runs.Tuning.Wipes.One, Runs.Tuning.Current.Wipe);
+            Assert.Equal(Runs.Tuning.Wipes.Lose, Runs.Tuning.Current.Wipe);
         }
 
         [Fact]
@@ -76,8 +76,9 @@ namespace Bastion.Engine.Tests
         public void AWipeAsToday()
         {
             var c = Wiped(40);
-            // One recruit with a knife, nothing back.
-            Assert.Single(c.Soldiers.Where((x) => x.Alive));
+            // Nobody at the base: the game lost (N8), nothing back.
+            Assert.Empty(c.Soldiers.Where((x) => x.Alive));
+            Assert.Equal(Outcomes.Defeat, c.Outcome);
             Assert.Equal(0, Runs.StashSupplies(c));
             Assert.DoesNotContain(c.Stash!.Items, (p) => p.Gear.Type == FoundWeaponIds.AssaultRifle);
         }

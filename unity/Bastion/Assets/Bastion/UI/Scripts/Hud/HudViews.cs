@@ -68,12 +68,18 @@ namespace Bastion.UI.Hud
     [Serializable]
     public sealed class TouchView
     {
-        public bool Floors;
-        public bool CanUp;
-        public bool CanDown;
         public bool Hurry;
         /// <summary>The rucksack's button on (U11): everything to search shown, as Mayús held.</summary>
         public bool Search;
+    }
+
+    /// <summary>The floor looked at (FloorPicker, cuadro 121) and whether it can go up or down; null with a single floor.</summary>
+    [Serializable]
+    public sealed class FloorView
+    {
+        public int Level;
+        public bool CanUp;
+        public bool CanDown;
     }
 
     /// <summary>One player's turn clock (the server's turnClock): how much is left, 0–1, and whether it runs now.</summary>
@@ -609,8 +615,13 @@ namespace Bastion.UI.Hud
     [Serializable]
     public sealed class SightView
     {
-        /// <summary>The button there (in a battle, not over a shoulder nor from above).</summary>
+        /// <summary>The button there (in a battle, not from above).</summary>
         public bool Button;
+        /// <summary>
+        /// There but resting, dimmed and not pressed (over a shoulder, the camera away: the review of 23/11, C08: it went
+        /// while a blow was armed, as if gone for good).
+        /// </summary>
+        public bool Resting;
         /// <summary>The button on: every enemy in sight's at once.</summary>
         public bool On;
     }
@@ -721,6 +732,8 @@ namespace Bastion.UI.Hud
         public string AbandonLabel;
         public string AbandonTip;
         public string AbandonWaiting;
+        /// <summary>Why it is there at all, under it (an expedition's fight with no way out: Rules.AbandonAllowed); null, nothing.</summary>
+        public string AbandonWhy;
         /// <summary>«Salir de Bastión» (the desktop app; Lore's words).</summary>
         public bool Quit = true;
         /// <summary>Under «MENÚ»: the mission waits while it is open (the battle's); null, nothing.</summary>

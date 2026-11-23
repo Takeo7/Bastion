@@ -490,6 +490,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Arturo quiere abandonar la misión", Lore.AbandonAsk("Arturo"));
             Assert.Equal("Arturo quiere abandonar la misión: «Abandonar» o «Seguir», en tu barra.", Lore.AbandonBarNotice("Arturo"));
             Assert.Equal("Arturo quiere seguir.", Lore.AbandonRefusedLine("Arturo"));
+            Assert.Equal("No hay forma de llegar a La Lata: podéis abandonar sin perder a nadie.", Lore.AbandonText.NoWay);
+            Assert.Equal("Salís todos con lo que lleváis, y la expedición sigue. La etapa queda sin la recompensa.", Lore.AbandonText.StakesRun);
             Assert.Equal("Ana se queda fuera.", Lore.LeftBehindLine("Ana"));
 
             // quit, settings, rubble
@@ -500,7 +502,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Salir", Lore.QuitText.Accept);
             Assert.Equal("Seguir", Lore.QuitText.Refuse);
             Assert.Equal("Alojas tú la partida: si sales, Ana se desconecta hasta que vuelvas a abrirla.", Lore.QuitHostWarning("Ana"));
-            Assert.Equal("Arturo sigue la misión sin ti: tus soldados se quedan quietos donde están hasta que vuelvas.", Lore.QuitGuestWarning("Arturo"));
+            Assert.Equal("Arturo sigue la misión sin ti, y manda en tus soldados hasta que vuelvas.", Lore.QuitGuestWarning("Arturo"));
             Assert.Equal("Cuando la vuelva a abrir, podrás entrar de nuevo.", Lore.HostClosed.Back);
             Assert.Equal("Volver a entrar", Lore.HostClosed.Retry);
             Assert.Equal("Aún no está abierta.", Lore.HostClosed.NotYet);
@@ -3149,7 +3151,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Cadena de misiones y decisiones con un desenlace que se queda.", Lore.Glossary["Encargo"]);
             Assert.Equal("Cada misión llena más las barras.", Lore.Glossary["Taller de oficios"]);
             Assert.Equal("Lleva a la escuadra y la espera en la zona de evacuación. Moto, todoterreno, furgoneta y autobús: cada uno, más plazas.", Lore.Glossary["La Lata"]);
-            Assert.Equal("Al llegar a una casilla de La Lata, el soldado sube y está a salvo; en su turno puede bajar. La Lata sale cuando lo pide un jugador y lo acepta el otro, o sola cuando ya están todos dentro. Quien esté fuera se pierde. En una Limpieza, salir es retirarse, y la misión se pierde.", Lore.Glossary["Evacuar"]);
+            Assert.Equal("Al llegar a una casilla de La Lata, el soldado sube y está a salvo; en su turno puede bajar. La Lata sale cuando lo pide un jugador y lo acepta el otro, o sola cuando ya están todos dentro. Quien esté fuera se pierde. En una Limpieza, salir antes de acabar es retirarse: la etapa se supera sin la recompensa.", Lore.Glossary["Evacuar"]);
+            Assert.Equal("Abatid a todo lo que haya. Se gana sin volver a La Lata. Irse antes en La Lata es retirarse: la etapa se supera sin la recompensa.", Lore.StageLine(NodeKinds.Elimination));
             Assert.Equal("Quien acaba de unirse al Bastión, con un cuchillo.", Lore.Glossary["Recluta"]);
             Assert.Equal("Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Registrar y Forma física. Se llenan haciendo eso mismo en los combates. Cada barra llena sube un poco su habilidad y da un punto para el tablero.", Lore.Glossary["Barras"]);
             Assert.Equal("Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, al lado de una que ya tenga.", Lore.Glossary["Tablero"]);
@@ -3181,7 +3184,36 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Ana recoge una flecha.", Lore.LootTakenLine("Ana", new Loot { Arrows = 1 }));
             Assert.Equal("Mientras la escuadra está oculta, cada soldado tiene 3 puntos más: 11. Al romperse la ocultación, pierde 3 de los que le queden ese turno.", Lore.MoveText.Rules[1]);
             Assert.Equal("El jefe del capítulo 1: un muerto enorme que embiste y tumba. Matarlo supera el capítulo.", Lore.Glossary["El Toro"]);
-            Assert.Equal(42, Lore.Glossary.Count);
+            // The notes of 22/11: jumping (N2), the game's level and a stage's danger (N9), a game lost (N8).
+            Assert.Equal("Bajar de una planta por una ventana, sin escalera. Las azoteas tienen parapeto: de ellas se baja por la escalera. Quita 1 de salud por planta, aunque lleve blindaje, y puede matar. No hace ruido. Si se llega por la escalera, se va por ella; si solo se llega saltando, se avisa antes. Cargando a alguien no se salta. Caer con el suelo que hunde una granada hace el mismo daño. Los muertos también saltan y se hacen daño; los vivos bajan por la escalera.", Lore.Glossary["Saltar"]);
+            Assert.Equal("La de la partida: Fácil, Medio, Difícil o Supervivencia. Se elige al crearla y no se cambia. Cambia cuántos muertos hay, lo rápida que es la horda y cuántos suministros se encuentran y se ganan. En Supervivencia, además, las heridas no se curan al volver a la base. En todas, si no queda ningún soldado vivo, ni en la base, la partida se pierde.", Lore.Glossary["Dificultad"]);
+            Assert.Equal("Lo dura que es una etapa: sube con la fila del mapa y con el capítulo. Con más peligro, los enemigos son más y más duros, la horda trae más muertos y se encuentran algo más de suministros. No es la dificultad de la partida.", Lore.Glossary["Peligro"]);
+            Assert.Equal("Bajar de una planta por una ventana, sin escalera, es saltar: quita 1 de salud por planta, aunque lleve blindaje, y puede matar. No hace ruido.", Lore.MoveText.Rules[4]);
+            Assert.Equal("Salto de una planta: −1 de salud", Lore.JumpText.Note(1, false));
+            Assert.Equal("Salto de 3 plantas: −3 de salud, y muere", Lore.JumpText.Note(3, true));
+            Assert.Equal("Salto de 2 plantas: −2 de salud. Haz clic otra vez para saltar.", Lore.JumpText.Ask(2, false, false));
+            Assert.Equal("Salto de 2 plantas: −2 de salud, y muere. Toca otra vez para saltar.", Lore.JumpText.Ask(2, true, true));
+            Assert.Equal("Planta baja", Lore.FloorText.Name(0));
+            Assert.Equal("Planta 1 · RePág / AvPág: cambiar de planta", Lore.FloorText.Aim(1, false));
+            Assert.Equal("Planta 2 · ▲ ▼: cambiar de planta", Lore.FloorText.Aim(2, true));
+            Assert.Equal("Planta 1 · Fn + ↑ / Fn + ↓: cambiar de planta", Lore.FloorText.Aim(1, false, mac: true));
+            // Las cargas (cuadros 105 and 109): the stage's line, before anyone puts it on the maps (UI, 23/11), and the charge.
+            Assert.Equal("Volad el nido: un edificio lleno de muertos dormidos. La escuadra lleva 3 cargas en las mochilas; si cae quien lleva una, queda en el suelo. Cada una se pone con una acción, al lado de uno de los puntos marcados por fuera del edificio, y hace un poco de ruido. Al poner la tercera quedan 4 turnos: entonces estallan los tres puntos, con 10 de daño a 4 casillas, también a los vuestros, y La Lata sale. Quien esté fuera se pierde. Si salís antes de ponerlas todas, la etapa se supera sin la recompensa.", Lore.StageLine(NodeKinds.Charges));
+            Assert.Equal("Carga explosiva", Lore.GearName(GearKinds.Charge, null));
+            Assert.Equal("3 cargas explosivas", Lore.GearName(GearKinds.Charge, null, 3));
+            Assert.Equal("una carga explosiva", Lore.GearA(GearKinds.Charge, null));
+            Assert.Equal(LevelIds.All.Count, Lore.GameLevelText.Names.Count);
+            Assert.All(LevelIds.All, (l) => Assert.True(Lore.GameLevelText.Lines.ContainsKey(l), l));
+            Assert.Equal("Difícil", Lore.GameLevelText.NameOf(null));
+            Assert.Equal("Supervivencia", Lore.GameLevelText.NameOf(LevelIds.Survival));
+            Assert.Equal("Menos muertos, una horda más lenta y más suministros.", Lore.GameLevelText.Lines[LevelIds.Easy]);
+            Assert.Equal("Más muertos, una horda más rápida y menos suministros. Las heridas no se curan al volver a la base: solo en un Refugio, con medicinas o con «Curas en el camino».", Lore.GameLevelText.Lines[LevelIds.Survival]);
+            Assert.Contains($"«{Lore.UpgradeNames[UpgradeIds.Mend]}»", Lore.GameLevelText.Lines[LevelIds.Survival]);
+            Assert.Equal("No queda ningún soldado vivo, ni en la base. La partida está perdida.", RunTexts.GameLost);
+            Assert.Equal("No te quedan soldados. Al partir, mandas en la mitad de la escuadra de Ana.", Lore.LostText.NoneOfYourOwn("Ana", true));
+            Assert.Equal("No te quedan soldados. Puedes sacar a los de Ana y mandarlos mientras no esté.", Lore.LostText.NoneOfYourOwn("Ana", false));
+            Assert.Equal("Herido: sale con 5 de 8 de salud. Se cura en un Refugio o con medicinas.", Lore.WoundsText.Hurt(5, 8));
+            Assert.Equal(45, Lore.Glossary.Count);
             Assert.Equal("Un muerto del tamaño de dos.", Lore.EnemyFiles[TemplateIds.Brute].What);
             Assert.All(TemplateIds.All, (t) => Assert.True(!Content.Templates[t].Undead || Lore.EnemyFiles.ContainsKey(t), t));
             Assert.Equal("EL TORO", Lore.BossText.RoarBanner(Lore.BossName(1)));
@@ -3519,14 +3551,14 @@ namespace Bastion.Engine.Tests
             Assert.Equal("+4 de Disparo: dos disparos (+2 en la base)", Lore.LearnedLine("shooting", 4, new Deeds { ["shot"] = 2, ["swing"] = 1, ["search"] = 1, ["run"] = 1 }));
             Assert.Equal("+9 de Disparo: dos disparos (+7 en la base)", Lore.LearnedLine("shooting", 9, new Deeds { ["shot"] = 2, ["swing"] = 1, ["search"] = 1, ["run"] = 1 }));
             Assert.Equal("+40 de Disparo: dos disparos (+38 en la base)", Lore.LearnedLine("shooting", 40, new Deeds { ["shot"] = 2, ["swing"] = 1, ["search"] = 1, ["run"] = 1 }));
-            Assert.Equal("Ana llena  barras de Disparo: +0 % de puntería con armas de fuego. Tiene  puntos de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] {  }));
-            Assert.Equal("Ana llena una barra de Disparo: +7 % de puntería con armas de fuego. Tiene un punto de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] { 7 }));
-            Assert.Equal("Ana llena dos barras de Disparo: +15 % de puntería con armas de fuego. Tiene dos puntos de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] { 5, 10 }));
-            Assert.Equal("Ana llena tres barras de Disparo: +18 % de puntería con armas de fuego. Tiene tres puntos de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] { 5, 6, 7 }));
-            Assert.Equal("Ana llena 11 barras de Disparo: +55 % de puntería con armas de fuego. Tiene 11 puntos de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 }));
+            Assert.Equal("Ana llena  barras de Disparo: +0 % de puntería al disparar. Tiene  puntos de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] {  }));
+            Assert.Equal("Ana llena una barra de Disparo: +7 % de puntería al disparar. Tiene un punto de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] { 7 }));
+            Assert.Equal("Ana llena dos barras de Disparo: +15 % de puntería al disparar. Tiene dos puntos de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] { 5, 10 }));
+            Assert.Equal("Ana llena tres barras de Disparo: +18 % de puntería al disparar. Tiene tres puntos de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] { 5, 6, 7 }));
+            Assert.Equal("Ana llena 11 barras de Disparo: +55 % de puntería al disparar. Tiene 11 puntos de habilidad para el tablero.", Lore.BarLine("Ana", "shooting", new int[] { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 }));
             Assert.Equal("DISPARO +7 %", Lore.BarFillFloat("shooting", 7));
             Assert.Equal("+5–10 % · +1 punto", Lore.BarReward("shooting").Short);
-            Assert.Equal("Al llenarse: entre un 5 y un 10 % más de puntería con armas de fuego, y un punto de habilidad para el tablero.", Lore.BarReward("shooting").Long);
+            Assert.Equal("Al llenarse: entre un 5 y un 10 % más de puntería al disparar, y un punto de habilidad para el tablero.", Lore.BarReward("shooting").Long);
             Assert.Equal("+0 de Cuerpo a cuerpo", Lore.LearnedLine("melee", 0, new Deeds {  }));
             Assert.Equal("+1 de Cuerpo a cuerpo", Lore.LearnedLine("melee", 1, new Deeds {  }));
             Assert.Equal("+3 de Cuerpo a cuerpo", Lore.LearnedLine("melee", 3, new Deeds {  }));

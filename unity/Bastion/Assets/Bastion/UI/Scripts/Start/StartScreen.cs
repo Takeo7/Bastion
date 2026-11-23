@@ -62,6 +62,16 @@ namespace Bastion.UI.Start
         Page nameFrom;
         Func<string, string> afterName;
         string afterNameWaiting;
+        /// <summary>
+        /// The game's level (N9; cuadro 125, Arturo 23/11: the four as cards in the middle, Medio picked to start with), asked
+        /// with the name for a new game and to host one (the room makes it with this: RoomMenu, HostLevel).
+        /// </summary>
+        string level = Bastion.Engine.LevelIds.Medium;
+        bool askingLevel;
+        VisualElement levelsBox;
+        LevelPicker levelPicker;
+        /// <summary>The level the host picked before the room (cuadro 125: until the room asks it itself), for its «Nueva partida».</summary>
+        public static string HostLevel = Bastion.Engine.LevelIds.Medium;
         bool busy;
         NetLink link;
         /// <summary>The game the right card joins: the first of this version heard on the network; null, none (by address).</summary>
@@ -140,7 +150,7 @@ namespace Bastion.UI.Start
             }
             Debug.Log($"[inicio] vista previa: {open}, guardada {saved}, en la red {heardOf ?? "nadie"}");
             previewing = true;
-            previewSaved = saved ? new SavedCampaign { Chapter = 1, Row = 3, Soldiers = 4, Supplies = 245, NodesPlayed = 7 } : null;
+            previewSaved = saved ? new SavedCampaign { Chapter = 1, Row = 3, Soldiers = 4, Supplies = 245, NodesPlayed = 7, GameLevel = Bastion.Engine.LevelIds.Medium } : null;
             previewHeard = string.IsNullOrEmpty(heardOf) ? null : new LanGame { Name = heardOf, Address = "192.168.1.20:41391", Version = link.Version };
             Heard(heardList);
             ShowSaved();
@@ -148,6 +158,8 @@ namespace Bastion.UI.Start
             {
                 case "nombre": AskName(Page.Menu, name => null, StartText.Opening, StartText.Start); break;
                 case "nueva": NewGame(); break;
+                // «nueva-supervivencia»: the form with Supervivencia picked (the proposal's photo).
+                case "nueva-supervivencia": NewGame(); PickLevel(Bastion.Engine.LevelIds.Survival); break;
                 case "multijugador": Go(Page.Two); break;
                 case "direccion":
                     Go(Page.Two);
@@ -176,6 +188,10 @@ namespace Bastion.UI.Start
             oldNote = new Label();
             Ui.AddClasses(oldNote, "start__old");
             continueKey.parent.Insert(continueKey.parent.IndexOf(continueKey) + 1, oldNote);
+            // Under «Continuar partida», the saved game's chapter and level (cuadro 125: seen there only).
+            savedNote = new Label();
+            Ui.AddClasses(savedNote, "start__saved");
+            continueKey.parent.Insert(continueKey.parent.IndexOf(continueKey) + 1, savedNote);
             Key("new", StartText.New, NewGame);
             Key("two", StartText.Two, () => Go(Page.Two));
             Key("settings", StartText.Settings, OpenSettings);
@@ -205,6 +221,7 @@ namespace Bastion.UI.Start
             root.Q<Label>("key-label").text = StartText.KeyLabel;
             keyField = root.Q<TextField>("key");
             keyField.textEdition.placeholder = StartText.KeyPlaceholder;
+            Levels();
             goKey = Key("go", StartText.Start, FormGo);
             Key("form-back", StartText.Back, FormBack);
             // Intro in a field, as its key.
@@ -216,6 +233,22 @@ namespace Bastion.UI.Start
 
             status = root.Q<Label>("status");
             root.Q<Label>("version").text = StartText.Version(link.Version);
+        }
+
+        /// <summary>The four levels under the name (N9, cuadro 125): the shared LevelPicker, after the name in the form.</summary>
+        void Levels()
+        {
+            levelPicker = new LevelPicker(level);
+            levelPicker.Picked += id => level = id;
+            levelsBox = levelPicker.Root;
+            buttons.AddRange(levelPicker.Keys);
+            nameBox.parent.Insert(nameBox.parent.IndexOf(nameBox) + 1, levelsBox);
+        }
+
+        void PickLevel(string id)
+        {
+            level = id;
+            levelPicker?.Set(id);
         }
 
         Button Key(string name, string text, Action click)
@@ -261,9 +294,12 @@ namespace Bastion.UI.Start
             var asking = to == Page.Name || to == Page.Address;
             Ui.Show(form, asking);
             Ui.Show(nameBox, to == Page.Name || (to == Page.Address && NoName));
+            Ui.Show(levelsBox, to == Page.Name && askingLevel);
+            form.EnableInClassList("start__form--levels", to == Page.Name && askingLevel);
+            form.EnableInClassList("start__form--cards", to == Page.Name && askingLevel);
             Ui.Show(addressBox, to == Page.Address);
             Ui.Show(keyBox, to == Page.Address);
-            if (asking) (two ? root.Q("center") : side).Add(form);
+            if (asking) (two || (to == Page.Name && askingLevel) ? root.Q("center") : side).Add(form);
             if (to == Page.Address) goKey.text = StartText.Join.ToUpperInvariant();
             Say("", false);
             ShowScene(two ? "multijugador" : "menu");
@@ -289,6 +325,11 @@ namespace Bastion.UI.Start
         void ShowSaved()
         {
             if (continueKey != null) Ui.Show(continueKey, Saved != null);
+            if (savedNote != null)
+            {
+                Ui.Show(savedNote, Saved != null);
+                if (Saved != null) savedNote.text = StartText.SavedLine(Saved.Chapter, Bastion.Engine.Lore.GameLevelText.NameOf(Saved.GameLevel));
+            }
             if (oldNote == null) return;
             var old = previewing ? null : link.OldCampaign;
             Ui.Show(oldNote, Saved == null && old != null);
@@ -297,6 +338,8 @@ namespace Bastion.UI.Start
 
         /// <summary>The campaign from before the expeditions, where «Continuar partida» would be; hidden without one.</summary>
         Label oldNote;
+        /// <summary>Under «Continuar partida»: «Capítulo 1 · Medio».</summary>
+        Label savedNote;
 
         // ------------------------------------------------------------ the keys
 
@@ -309,7 +352,7 @@ namespace Bastion.UI.Start
         /// </summary>
         void NewGame()
         {
-            void Ask() => AskName(Page.Menu, name => link.NewGame(name), StartText.Opening, StartText.Start);
+            void Ask() => AskName(Page.Menu, name => link.NewGame(name, level), StartText.Opening, StartText.Start, true);
             var saved = Saved;
             if (saved == null)
             {
@@ -321,7 +364,12 @@ namespace Bastion.UI.Start
 
         void OpenSettings() => settings.Show(new GameMenuView { Settings = App.GameSettings.Views(), SettingsNote = StartText.SettingsHere }, "settings");
 
-        void Host() => WithName(Page.Two, name => link.Host(name), StartText.Opening, StartText.HostGo);
+        /// <summary>«Alojar partida»: the name and the level first (cuadro 125), the level kept for the room's «Nueva partida».</summary>
+        void Host() => AskName(Page.Two, name =>
+        {
+            HostLevel = level;
+            return link.Host(name);
+        }, StartText.Opening, StartText.HostGo, true);
 
         /// <summary>The right card: into the game heard on the network; with none, the address and its key asked.</summary>
         void JoinCard()
@@ -342,8 +390,9 @@ namespace Bastion.UI.Start
             else Attempt(link.LastName.Trim(), run, waiting);
         }
 
-        void AskName(Page from, Func<string, string> run, string waiting, string go)
+        void AskName(Page from, Func<string, string> run, string waiting, string go, bool levels = false)
         {
+            askingLevel = levels;
             nameFrom = from;
             afterName = run;
             afterNameWaiting = waiting;

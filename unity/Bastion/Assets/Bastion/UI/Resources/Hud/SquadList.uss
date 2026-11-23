@@ -210,6 +210,20 @@
     opacity: 0.4;
 }
 
+/* Over a fallen one's bust, its word across the middle (cuadro 124). */
+.squad-card__fallen {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 40%;
+    padding: 1px 0;
+    font-size: 11px;
+    letter-spacing: 1px;
+    -unity-text-align: middle-center;
+    color: #f0e8e0;
+    background-color: rgba(120, 20, 15, 0.85);
+}
+
 .squad-card--dead .squad-card__name {
     color: var(--t-muted);
 }

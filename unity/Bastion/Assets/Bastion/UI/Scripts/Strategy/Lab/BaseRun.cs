@@ -33,6 +33,7 @@ namespace Bastion.UI.Strategy
         readonly Queue<string> steps = new Queue<string>();
         bool asked;
         float pauseUntil;
+        int pauseFrames;
         GameObject screens;
         BaseSession session;
         object waitingFor;
@@ -90,7 +91,15 @@ namespace Bastion.UI.Strategy
             waited = -1;
             if (steps.Count == 0 || steps.Peek() == "abandon" || steps.Peek() == "tobase") return;
             // «pausa:20»: twenty seconds of the wall's clock before the next step (the partner's console client, U10).
-            if (Time.realtimeSinceStartup < pauseUntil) return;
+            if (Time.realtimeSinceStartup < pauseUntil || Time.frameCount < pauseFrames) return;
+            // «cuadros:3»: three frames before the next step (a capture's: at 1 fps, three seconds of its clock; revisión de la UI, 22/11).
+            if (steps.Peek().StartsWith("cuadros:"))
+            {
+                var wait = steps.Dequeue();
+                pauseFrames = Time.frameCount + int.Parse(wait.Substring(8));
+                Debug.Log($"[base-run] {wait} desde el cuadro {Time.frameCount}, a {Time.time:0.0} s");
+                return;
+            }
             if (steps.Peek().StartsWith("pausa:"))
             {
                 var pause = steps.Dequeue();
@@ -99,7 +108,7 @@ namespace Bastion.UI.Strategy
                 return;
             }
             var step = steps.Dequeue();
-            Debug.Log($"[base-run] {step}");
+            Debug.Log($"[base-run] {step} a {Time.time:0.0} s");
             if (Do(control, step))
             {
                 waitingFor = control.State;
@@ -185,6 +194,8 @@ namespace Bastion.UI.Strategy
                 case "board": control.OnBoard(); return false;
                 // «tablero:c1»: that one's board from the expedition's map, a stop or the report (U10's keys).
                 case "tablero": control.OnBoardFor(S(1)); return false;
+                // «celda:steadyHand» (N6): that cell of the open board shown, as the pointer over it.
+                case "celda": FindFirstObjectByType<StrategyRoot>()?.LabBoardCell(S(1)); return false;
                 // «ayuda:rnode-n4-0»: the help of the element by that name pinned open (the expedition map's node card).
                 case "ayuda":
                 {

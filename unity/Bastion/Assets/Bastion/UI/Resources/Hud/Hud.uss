@@ -127,6 +127,12 @@
     padding: 8px 10px;
 }
 
+/* With the finger, clear of the round buttons on the right (the floors, the rucksack, the map: TouchButtons, FloorPicker;
+   the review of 23/11, T04: «Cancelar» went over ▲): left of their two columns. */
+.touch .shot-panel {
+    right: 148px;
+}
+
 .side {
     position: absolute;
     right: var(--edge);

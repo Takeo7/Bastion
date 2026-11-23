@@ -162,6 +162,7 @@ namespace Bastion.UI.Hud
                     var entry = Entry(card, waiting ? view.AbandonWaiting : view.AbandonLabel, () => Choose(Abandon), "game-menu__entry--danger");
                     entry.SetEnabled(!waiting);
                     tips?.Attach(entry, waiting ? HudText.Menu.AbandonWaitingTip : view.AbandonTip);
+                    if (!string.IsNullOrEmpty(view.AbandonWhy)) Ui.Text(view.AbandonWhy, "game-menu__note", card);
                 }
                 // Not with the finger: iOS apps aren't closed from inside them (Apple; Application.Quit there looks like a crash. Red, 7/11;
                 // Gameplay, 8/11: wherever the game is played with the finger, the lab's too).

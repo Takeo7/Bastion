@@ -301,7 +301,7 @@ namespace Bastion.UI.Hud
                     new StatView { Kind = "hp", Tip = "Salud 6/7", Filled = 6, Total = 7 },
                     new StatView { Kind = "ap", Tip = "Acciones 2/2", Filled = 2, Total = 2 },
                     new StatView { Kind = "ammo", Tip = "Fusil de precisión: 3/4 · 2 de repuesto", Filled = 3, Total = 4, Value = "+2" },
-                    new StatView { Kind = "aim", Tip = "Puntería con armas de fuego 68", Value = "68" },
+                    new StatView { Kind = "aim", Tip = "Puntería al disparar 68", Value = "68" },
                     new StatView { Kind = "melee", Tip = "Puntería cuerpo a cuerpo 87", Value = "87" },
                     new StatView { Kind = "grenade", Tip = "Granadas: 2", Value = "×2" },
                 },

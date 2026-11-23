@@ -105,6 +105,14 @@ namespace Bastion.Engine
             return plan;
         }
 
+        /// <summary>The building `p`'s ground tile is of, by the map's plan as it stands now; -1 off any (a wall, a window, a door, the street).</summary>
+        public static int Of(GameState s, Pos p)
+        {
+            var of = PlanOf(s).Of;
+            var i = Grid.TileIndex(s, p.X, p.Y);
+            return Grid.InBounds(s, p.X, p.Y) && i < of.Length ? of[i] : -1;
+        }
+
         /// <summary>G23.6: the map's buildings as it stands now, each its ground tiles (a copy: Evacuación's houses to hide the civilians in).</summary>
         public static List<List<int>> GroundTiles(GameState s) => PlanOf(s).Tiles.Select((t) => new List<int>(t)).ToList();
 

@@ -571,7 +571,7 @@ namespace Bastion.Client.Audio
                 var now = s.Fires?.Where((f) => f.Turns != null).ToList() ?? new List<Fire>();
                 foreach (var f in now)
                     if (!blazes.ContainsKey(f.Id))
-                        blazes[f.Id] = new Blaze { at = world(s, new Pos { X = f.Source % s.Width, Y = f.Source / s.Width }) };
+                        blazes[f.Id] = new Blaze { at = world(s, Bastion.Engine.Grid.PosOf(s, f.Source)) };
                 foreach (var (id, b) in blazes.ToList())
                 {
                     if (!b.gone && now.All((f) => f.Id != id)) b.gone = true;

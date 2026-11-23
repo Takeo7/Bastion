@@ -76,8 +76,17 @@ namespace Bastion.UI.Strategy
                 seriesScene = item.Length > 1 && item[1] != "" ? item[1] : null;
                 runsChosen = null;
                 Debug.Log($"[serie] {seriesNext} {item[0]} {seriesScene} a {Time.time:0.0} s");
+                root.UnpinTip();
                 RunsSample(item[0]);
+                // «path|scene|help» (revisión de la UI, 22/11): that help pinned once it is laid out, as BASTION_ESTRATEGIA_AYUDA.
+                seriesHelp = item.Length > 2 && item[2] != "" ? item[2] : null;
+                seriesHelpAt = Time.frameCount + 3;
                 seriesAt += 2;
+            }
+            if (seriesHelp != null && Time.frameCount >= seriesHelpAt)
+            {
+                PinHelp(seriesHelp);
+                seriesHelp = null;
             }
             // BASTION_ESTRATEGIA_PARPADEO / _LATIDO: an element by its class blinking (StrategyRoot.Blink) or pulsing (Pulse), with the press.
             if (shown && pressAt >= 0 && Time.frameCount >= pressAt && !blinked)
@@ -107,20 +116,7 @@ namespace Bastion.UI.Strategy
                 // BASTION_ESTRATEGIA_AYUDA=strat-well--credits[:n|:off]: that element's help open (the n-th with the class, or the
                 // first whose key is off), scrolled into sight.
                 var help = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_AYUDA");
-                if (!string.IsNullOrEmpty(help))
-                {
-                    var bits = help.Split(':');
-                    var all = UnityEngine.UIElements.UQueryExtensions.Query(root.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement, className: bits[0]).ToList();
-                    var off = bits.Length > 1 && bits[1] == "off";
-                    var at = !off && bits.Length > 1 && int.TryParse(bits[1], out var n) ? n : 0;
-                    var over = off
-                        ? all.FirstOrDefault(e => UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Button>(e) is var b && b != null && !b.enabledSelf)
-                        : at < all.Count ? all[at] : null;
-                    over?.GetFirstAncestorOfType<UnityEngine.UIElements.ScrollView>()?.ScrollTo(over);
-                    // Pinned, not a synthetic enter: the editor's own pointer enters other elements with help as it likes.
-                    if (over != null) root.PinTip(over);
-                    Debug.Log($"[estrategia] ayuda de «{help}»: {(over != null ? "abierta" : "no está")} ({all.Count} con la clase)");
-                }
+                if (!string.IsNullOrEmpty(help)) PinHelp(help);
             }
             if (shown && drag != 0 && pressAt >= 0 && Time.frameCount >= pressAt && Time.timeSinceLevelLoad >= dragAt) Drag();
             if (shown && figure != null && pressAt >= 0 && Time.frameCount >= pressAt) Figure();
@@ -440,7 +436,7 @@ namespace Bastion.UI.Strategy
             };
             var sheet = new SoldierSheetView
             {
-                Name = "Rafael Costa", NameTip = "Misiones: 3 · Bajas: 2\nPuntería con armas de fuego 68 · cuerpo a cuerpo 63\nVoluntad 40 · Esquiva 10",
+                Name = "Rafael Costa", NameTip = "Misiones: 3 · Bajas: 2\nPuntería al disparar 68 · cuerpo a cuerpo 63\nVoluntad 40 · Esquiva 10",
                 Hp = 10, HpTip = "Salud: 10", Ap = 2, ApTip = "2 acciones por turno", Moves = 8, MovesTip = "Movimiento: 8 casillas por turno",
                 Note = "Ana no está: lo preparas tú hasta que vuelva.", Customizable = true,
             };
@@ -711,6 +707,25 @@ namespace Bastion.UI.Strategy
             if (System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_LUGARES") == "1") PlaceDrawings();
         }
 
+        string seriesHelp;
+        int seriesHelpAt;
+
+        /// <summary>«class[:n|:off]»: that element's help open (the n-th with the class, or the first whose key is off), scrolled into sight.</summary>
+        void PinHelp(string help)
+        {
+            var bits = help.Split(':');
+            var all = UnityEngine.UIElements.UQueryExtensions.Query(root.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement, className: bits[0]).ToList();
+            var off = bits.Length > 1 && bits[1] == "off";
+            var at = !off && bits.Length > 1 && int.TryParse(bits[1], out var n) ? n : 0;
+            var over = off
+                ? all.FirstOrDefault(e => UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Button>(e) is var b && b != null && !b.enabledSelf)
+                : at < all.Count ? all[at] : null;
+            over?.GetFirstAncestorOfType<UnityEngine.UIElements.ScrollView>()?.ScrollTo(over);
+            // Pinned, not a synthetic enter: the editor's own pointer enters other elements with help as it likes.
+            if (over != null) root.PinTip(over);
+            Debug.Log($"[estrategia] ayuda de «{help}»: {(over != null ? "abierta" : "no está")} ({all.Count} con la clase)");
+        }
+
         System.Action<string> runsShow;
         readonly string[] series = System.Environment.GetEnvironmentVariable("BASTION_RUNS_SERIE")?.Split(';', System.StringSplitOptions.RemoveEmptyEntries);
         int seriesNext;
@@ -755,6 +770,26 @@ namespace Bastion.UI.Strategy
             if (scene == "personalizar" && p.State.Soldiers.Find(s => s.Id == pick.Soldier) is Bastion.Engine.CampaignSoldier own)
                 pick.Draft = new CustomDraft { Soldier = own.Id, Name = own.Name, Nickname = own.Nickname ?? "", Look = CustomDraft.Copy(own.Appearance) ?? Bastion.Engine.Appearances.DefaultAppearance(own.Owner, null, null, own.Id) };
             if (view == "runmap") root.SetRunMap(p.Expedition(runsChosen));
+            // The stage map's proposals for the cuadro (BASTION_MAPA_PROPUESTA: carretera, filas, valle), over it, once laid out.
+            if (view == "runmap" && MapProposals.Kind != null)
+            {
+                var doc = root.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement;
+                void Draw() => MapProposals.Draw(doc, p, p.Expedition(runsChosen), root.IconFor, id => root.PortraitOf?.Invoke(id));
+                // Drawn again as the busts come (they are drawn after the screen).
+                if (!proposalBusts)
+                {
+                    proposalBusts = true;
+                    Bastion.Client.Portraits.Changed += _ => Draw();
+                }
+                // (A capture's scheduler doesn't run: drawn now if laid out, else at the first layout.)
+                if (!float.IsNaN(doc.layout.width) && doc.layout.width > 0) Draw();
+                else
+                {
+                    UnityEngine.UIElements.EventCallback<UnityEngine.UIElements.GeometryChangedEvent> once = null;
+                    once = _ => { doc.UnregisterCallback(once); Draw(); };
+                    doc.RegisterCallback(once);
+                }
+            }
             else if (view == "upgrades") root.SetUpgrades(p.Upgrades());
             else if (view == "squad") root.SetSquad(p.RunSquad());
             else if (view == "barracks") root.SetSoldiers(p.Soldiers(pick));
@@ -779,6 +814,7 @@ namespace Bastion.UI.Strategy
         }
 
         string runsChosen;
+        bool proposalBusts;
 
         /// <summary>The grids of a runs sample with the engine's rules: each move asked (Gears.*Refusal) and applied as the server would.</summary>
         sealed class RunsGear : IGearHandlers

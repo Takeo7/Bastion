@@ -56,6 +56,17 @@ namespace Bastion.Client.Units
         /// <summary>A tile's middle on its floor in 0.10.1's frame (tileToWorld).</summary>
         Vector3 TileTiles(Pos p) => new Vector3(p.X + 0.5f, MapSpace.FloorAt(state, p) / MapSpace.Tile, p.Y + 0.5f);
 
+        /// <summary>
+        /// A jump off a storey or more (N2, Gameplay's contract of 22/11: a point of health a storey, it may kill): how long
+        /// it gathers at the edge, how much slower than a body really falls it is seen to (in 0.36 s a storey, as a hop's,
+        /// nobody saw it: on the street by the second frame at 10 fps), how long it stays down where it lands and how much
+        /// longer a storey more, and how long it takes to rise from there (seconds).
+        /// </summary>
+        const float JumpGather = 0.22f, FallSlow = 1.15f, LandHold = 0.18f, LandHoldStorey = 0.1f, LandRise = 0.45f;
+
+        /// <summary>The seconds a fall of `tiles` (a tile's side each) takes, as a body's from rest, FallSlow slower.</summary>
+        static float FallSeconds(float tiles) => Mathf.Sqrt(2 * tiles * MapSpace.Tile / 9.81f) * FallSlow;
+
         /// <summary>What the step from `from` to `to` is, and its seconds at a tile's `tile` seconds on the flat (stepOf).</summary>
         (StepKind kind, float seconds) StepOf(Pos from, Pos to, float tile)
         {
@@ -73,10 +84,10 @@ namespace Bastion.Client.Units
                 return (StepKind.Stairs, tile * (Mathf.Abs(rise) > 0.5f ? 1.6f : 1) * Mathf.Max(1, length / 1.6f));
             }
             if (Mathf.Abs(rise) < 0.5f && WindowAt(to)) return (StepKind.Sill, HopSeconds * 1.8f);
-            if (WindowAt(from)) return (StepKind.OffSill, HopSeconds * (1.2f + 0.45f * Mathf.Max(0, -rise)));
+            if (WindowAt(from)) return (StepKind.OffSill, HopSeconds * 1.2f + (rise < -1 ? FallSeconds(-rise) : HopSeconds * 0.45f * Mathf.Max(0, -rise)));
             if (rise > 0.5f) return (StepKind.LadderUp, tile + LadderSeconds * (rise / storey));
             if (rise < -0.5f && LadderDown(from, to, rise)) return (StepKind.LadderDown, tile + LadderSeconds * (-rise / storey));
-            if (rise < -0.5f) return (StepKind.Drop, HopSeconds * (1.2f + 0.45f * -rise));
+            if (rise < -0.5f) return (StepKind.Drop, rise < -1 ? JumpGather + FallSeconds(-rise) : HopSeconds * (1.2f + 0.45f * -rise));
             return (StepKind.Flat, tile * (from.X != to.X && from.Y != to.Y ? 1.4f : 1));
         }
 
@@ -262,18 +273,22 @@ namespace Bastion.Client.Units
                     // Off it, still crouched through the frame, then down to the ground beyond (or the fall, from a storey up).
                     anim?.Motion("idle");
                     float out_ = UnderLintel * MapSpace.Tile / Mathf.Max(0.5f * MapSpace.Tile, Mathf.Sqrt((end.x - start.x) * (end.x - start.x) + (end.z - start.z) * (end.z - start.z)));
+                    // (From a storey up, N2: out of the frame in a hop's time, then the fall in its own, and its landing.)
+                    bool falls = rise < -MapSpace.Tile;
+                    float hop = falls ? HopSeconds * 1.2f / seconds : 1;
                     await Tween(seconds, t =>
                     {
-                        float along = Mathf.Min(1, t * 1.3f);
+                        float along = Mathf.Min(1, t / hop * (falls ? 1 : 1.3f));
                         var at = Vector3.Lerp(start, end, along);
-                        float down = Mathf.Clamp01((along - out_) / (1 - out_));
+                        float down = falls ? Mathf.Clamp01((t - hop * out_) / (1 - hop * out_)) : Mathf.Clamp01((along - out_) / (1 - out_));
                         at.y = start.y + rise * down * down;
                         v.root.position = at;
-                        if (anim != null) anim.Crouch = along < out_ ? 1 : 1 - 0.6f * EaseInOut(down);
+                        if (anim != null) anim.Crouch = along < out_ ? 1 : falls ? 0.45f : 1 - 0.6f * EaseInOut(down);
                     });
                     v.onSill = false;
+                    if (falls) await Land(v, end, -rise / MapSpace.Storey, ct);
                     anim?.Motion(gait.motion, clip);
-                    _ = Dip(v, t => Mathf.Max(0, 0.4f + Mathf.Sin(t * Mathf.PI) * 0.4f - 0.4f * t));
+                    if (!falls) _ = Dip(v, t => Mathf.Max(0, 0.4f + Mathf.Sin(t * Mathf.PI) * 0.4f - 0.4f * t));
                     break;
                 }
                 case StepKind.LadderUp:
@@ -281,6 +296,24 @@ namespace Bastion.Client.Units
                     await ClimbLadder(v, id, kind == StepKind.LadderUp ? v.place : to, kind == StepKind.LadderUp ? to : v.place, kind == StepKind.LadderUp, start, end, tile, gait, clip, Tween);
                     break;
                 case StepKind.Drop:
+                    if (rise < -MapSpace.Tile)
+                    {
+                        // A jump off a storey or more (N2): down at the edge a moment, out with a little hop as it falls in
+                        // a body's time, its legs still and drawn up, then the landing (Land).
+                        float gather = JumpGather / seconds;
+                        anim?.Motion(IdleOf(v));
+                        await Tween(seconds, t =>
+                        {
+                            float u = Mathf.Clamp01((t - gather) / (1 - gather));
+                            var at = Vector3.Lerp(start, end, Mathf.Min(1, u * 1.6f));
+                            at.y = start.y + rise * u * u + Mathf.Sin(Mathf.Min(1, u * 2.5f) * Mathf.PI) * 0.25f * MapSpace.Tile;
+                            v.root.position = at;
+                            if (anim != null) anim.Crouch = t < gather ? 0.7f * EaseInOut(t / gather) : Mathf.Lerp(0.7f, 0.45f, Mathf.Min(1, u * 4));
+                        });
+                        await Land(v, end, -rise / MapSpace.Storey, ct);
+                        anim?.Motion(gait.motion, clip);
+                        break;
+                    }
                     // A short hop out, then the fall, longer the higher it is; a crouch on landing.
                     await Tween(seconds, t =>
                     {
@@ -294,6 +327,30 @@ namespace Bastion.Client.Units
         }
 
         static float EaseInOut(float t) => t < 0.5f ? 2 * t * t : 1 - Mathf.Pow(-2 * t + 2, 2) / 2;
+
+        /// <summary>
+        /// Landed from `storeys` up (N2): down on its legs at once, dust thrown up round its feet, held there longer the
+        /// higher it fell from, then up as it goes on (not waited for).
+        /// </summary>
+        async Awaitable Land(View v, Vector3 at, float storeys, CancellationToken ct)
+        {
+            v.root.position = at;
+            if (v.anim != null) v.anim.Crouch = 1;
+            Effects.Fx.Current?.Dust(at + Vector3.up * 0.05f, 5 + Mathf.RoundToInt(3 * storeys));
+            await Awaitable.WaitForSecondsAsync(LandHold + LandHoldStorey * storeys, ct);
+            _ = Rise(v);
+        }
+
+        static async Awaitable Rise(View v)
+        {
+            for (float t = 0; t < LandRise; t += Time.deltaTime)
+            {
+                if (v.anim == null || v.onSill) return;
+                v.anim.Crouch = 1 - EaseInOut(t / LandRise);
+                await Awaitable.NextFrameAsync();
+            }
+            if (v.anim != null && !v.onSill) v.anim.Crouch = 0;
+        }
 
         /// <summary>A crouch over 0.2 s as `at` has it (0 to 1 through it), then none: a landing.</summary>
         static async Awaitable Dip(View v, System.Func<float, float> at)

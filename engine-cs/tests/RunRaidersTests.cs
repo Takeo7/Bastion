@@ -407,20 +407,20 @@ namespace Bastion.Engine.Tests
         // ------------------------------------------------------------------ the horde
 
         [Fact]
-        public void TheLivingsShotsWindTheHordeOnlyAtACamp()
+        public void TheLivingsShotsWindTheHordeAnywhereNotTheDeads()
         {
+            // N3 (Arturo, 22/11): the living's noise winds the horde in every stage now, not only at a camp; the dead's never.
             var (_, s) = Raid(3, Places.Country);
             var guard = Guards(s)[0];
             var before = s.Mission.Noise ?? 0;
             Events.ApplyEvent(s, new NoiseEvent { Tile = guard.Pos, Radius = 14, By = guard.Id, Heard = new List<string>() });
             Assert.Equal(before + Content.HordePoints(14), s.Mission.Noise ?? 0);
-            // Not without the camp, nor the dead's.
             var zombie = s.Units.First((u) => u.Alive && Content.Templates[u.Template].Undead);
             Events.ApplyEvent(s, new NoiseEvent { Tile = zombie.Pos, Radius = 14, By = zombie.Id, Heard = new List<string>() });
             Assert.Equal(before + Content.HordePoints(14), s.Mission.Noise ?? 0);
             s.Mission.Raiders = null;
             Events.ApplyEvent(s, new NoiseEvent { Tile = guard.Pos, Radius = 14, By = guard.Id, Heard = new List<string>() });
-            Assert.Equal(before + Content.HordePoints(14), s.Mission.Noise ?? 0);
+            Assert.Equal(before + 2 * Content.HordePoints(14), s.Mission.Noise ?? 0);
         }
 
         // ------------------------------------------------------------------ saved

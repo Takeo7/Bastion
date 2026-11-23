@@ -64,7 +64,7 @@ namespace Bastion.UI.Combat
             Stat("Salud", $"{u.Hp} de {u.MaxHp}");
             Stat("Acciones", $"{u.Ap} de {Content.ApPerTurnOf(u)}");
             if (Paths.FullMoves(Shown, u) > 0) Stat(HudText.Moves.Stat, $"{HudText.Moves.Tiles(Paths.MoveBudget(Shown, u))} de {HudText.Moves.Tiles(Paths.FullMoves(Shown, u))} puntos");
-            Stat("Puntería con armas de fuego", (t.Aim + u.Mods.Aim + u.Mods.GunAim).ToString());
+            Stat("Puntería al disparar", (t.Aim + u.Mods.Aim + u.Mods.GunAim).ToString());
             Stat("Puntería cuerpo a cuerpo", (t.Aim + u.Mods.Aim + u.Mods.MeleeAim).ToString());
             Stat("Voluntad", u.Will.ToString());
             // What Forma física's bars grow (Arturo, 6/11), as the shot counts it (Aim.PreviewShot), without hunkering.
@@ -87,7 +87,7 @@ namespace Bastion.UI.Combat
             var cs = !string.IsNullOrEmpty(u.CampaignId) ? Campaign?.Invoke()?.Soldiers.FirstOrDefault(x => x.Id == u.CampaignId) : null;
             if (cs != null)
             {
-                v.Board = Bastion.UI.Strategy.StrategyPresenter.BoardOf(cs, false);
+                v.Board = Bastion.UI.Strategy.StrategyPresenter.BoardOf(cs, false, Campaign?.Invoke());
                 // Its bust for the board's head: nobody asks for it in a battle (the base does, BaseController).
                 Bastion.Client.Portraits.Know(cs.Id, cs.Appearance, cs.Name);
             }

@@ -220,7 +220,11 @@ namespace Bastion.Engine.Tests
             }
             Assert.All(all, (p) => Assert.Equal(0, p.Refused));
             Assert.All(all, (p) => Assert.Equal(0, p.Lost));
-            if (rifles) Assert.Contains(all, (p) => p.Antiviral == AntiviralPlaces.Used && p.Outcome == Outcomes.Victory);
+            // Cured and out with it: with knives (6 of 20 before and after the stairs rule, cuadro 122). With rifles, vests and
+            // mags the bitten turns first in nearly all (1 of 20 cured and out before that rule, none after; Gameplay, 22/11):
+            // the antiviral used.
+            if (rifles) Assert.Contains(all, (p) => p.Antiviral == AntiviralPlaces.Used);
+            else Assert.Contains(all, (p) => p.Antiviral == AntiviralPlaces.Used && p.Outcome == Outcomes.Victory);
         }
     }
 }

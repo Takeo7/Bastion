@@ -569,8 +569,7 @@ namespace Bastion.Engine
             if (ability == AbilityIds.Smash) return BreakablesBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Pry) return BoardedBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.SetDown) return SetDownTiles(s, u).Any((p) => Grid.SamePos(p, tile));
-            // Fire burns on the ground only (Burning): a molotov is thrown at the street or a ground floor.
-            if (ability == AbilityIds.Molotov && tile.Z != 0) return false;
+            // A molotov to any floor seen, as a grenade (N4, cuadro 120): its fire burns on that floor (Burning).
             return s.Units.Any((o) => Los.IsViewer(o, u.Team) && Los.CanSeeTile(s, o.Pos, tile, Los.SightTo(s, o, tile), Los.WindowReachOf(o.Team)));
         }
 

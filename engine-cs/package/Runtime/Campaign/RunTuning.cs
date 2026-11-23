@@ -15,7 +15,9 @@ namespace Bastion.Engine
             /// <summary>What the base gives when nobody is left (NobodyLeft).</summary>
             public static class Wipes
             {
-                /// <summary>Today's: one recruit with a knife for each player with nobody alive.</summary>
+                /// <summary>Today's (N8, Arturo 22/11): nothing; nobody alive in the game, it is lost.</summary>
+                public const string Lose = "lose";
+                /// <summary>Before N8: one recruit with a knife for each player with nobody alive (a bench measuring past it).</summary>
                 public const string One = "one";
                 /// <summary>Recruits with a knife till the squad's seats are full (SeatsOf).</summary>
                 public const string Fill = "fill";
@@ -25,7 +27,7 @@ namespace Bastion.Engine
 
             public sealed class Settings
             {
-                public string Wipe { get; set; } = Wipes.One;
+                public string Wipe { get; set; } = Wipes.Lose;
                 /// <summary>When the whole squad falls, the share of the § they carried that comes back to the stash (0 today).</summary>
                 public double SalvageSupplies { get; set; }
                 /// <summary>When the whole squad falls, whether their firearms come back to the stash (false today).</summary>

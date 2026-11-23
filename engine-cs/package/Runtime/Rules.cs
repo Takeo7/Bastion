@@ -638,17 +638,18 @@ namespace Bastion.Engine
             CoveringFire(u);
             if (!u.Alive || Over) return;
             Emit(new ExplosiveEvent { Unit = u.Id, Ability = AbilityIds.Molotov, Target = center });
+            // N4 (Arturo, 22/11, cuadro 120): on whatever floor it lands, and only there (a floor stops it: BlastTiles).
             var tiles = Abilities.BlastTiles(S, AbilityIds.Molotov, center, u)
-                .Where((p) => p.Z == 0 && Grid.IsWalkable(Grid.KindAt(S, p)))
-                .Select((p) => Grid.TileIndex(S, p.X, p.Y))
+                .Where((p) => Grid.IsWalkable(Grid.KindAt(S, p)))
+                .Select((p) => Grid.NodeOf(S, p))
                 .ToList();
-            var victims = S.Units.Where((v) => v.Alive && !v.Evacuated && !v.Objective && v.Pos.Z == 0 && tiles.Contains(Grid.TileIndex(S, v.Pos.X, v.Pos.Y))).ToList();
+            var victims = S.Units.Where((v) => v.Alive && !v.Evacuated && !v.Objective && tiles.Contains(Grid.NodeOf(S, v.Pos))).ToList();
             if (tiles.Count > 0)
             {
                 // Its own id, after the molotovs still burning: «m1», «m2»…, the light's the same.
                 var n = 1 + (S.Fires ?? new List<Fire>()).Where((f) => f.Id.StartsWith("m")).Select((f) => int.TryParse(f.Id.Substring(1), out var k) ? k : 0).DefaultIfEmpty(0).Max();
-                var at = new Pos { X = center.X, Y = center.Y, Z = 0 };
-                Emit(new FireLitEvent { Unit = u.Id, Fire = new Fire { Id = $"m{n}", Source = Grid.TileIndex(S, center.X, center.Y), Tiles = tiles, Turns = Content.MolotovTurns } });
+                var at = new Pos { X = center.X, Y = center.Y, Z = center.Z };
+                Emit(new FireLitEvent { Unit = u.Id, Fire = new Fire { Id = $"m{n}", Source = Grid.NodeOf(S, center), Tiles = tiles, Turns = Content.MolotovTurns } });
                 Emit(new LightOnEvent { Light = new Light { Id = $"m{n}", Tile = at, Radius = Content.Flames.Light, Turns = Content.MolotovTurns, Tiles = Los.LightTiles(S, at, Content.Flames.Light, Content.Flames.LightHeight) } });
             }
             foreach (var v in victims)
@@ -947,6 +948,15 @@ namespace Bastion.Engine
                 }
                 segment.Add(step);
 
+                // N2 (Arturo, 22/11, cuadro 119): a jump down off a storey hurts, a point a storey, through armour; it may kill.
+                var fell = Paths.FallOf(S, i == 0 ? origin : path[i - 1], step);
+                if (fell > 0)
+                {
+                    Flush();
+                    Damage(u, Content.FallDamage * fell, 0, null, u.Armor);
+                    if (!u.Alive || Over) return;
+                }
+
                 // A trap of the base under one of the dead (docs/FASE12.md §11.4): it stops there.
                 if (u.Team == Teams.Alien && SpringTrap(u, step, Flush)) return;
                 // Fire underfoot (Arturo, 1/11): every burning tile it steps on burns it, and it goes on if it can.
@@ -1204,9 +1214,13 @@ namespace Bastion.Engine
         {
             if (radius <= 0 || Over) return;
             radius = Rules.SquadNoiseRadius(S, radius, by);
+            // N3 (Red's R18, 22/11): one of the living's noise (a Cuervo at the dead, Ai.FendOff) only the dead go to look at; the
+            // living don't come looking for the squad for it (one that heard something watches all round: Los.InNoticeCone).
+            var living = by != null && by.Team == Teams.Alien && !Content.Templates[by.Template].Undead;
             var heard = S.Units.Where((o) =>
                 o.Alive &&
                 o.Team == Teams.Alien &&
+                !(living && !Content.Templates[o.Template].Undead) &&
                 !o.Objective &&
                 string.IsNullOrEmpty(o.ControlledBy) &&
                 o.Id != by?.Id &&
@@ -1227,6 +1241,9 @@ namespace Bastion.Engine
         /// <summary>`u` was attacked (by `attacker`): its pod comes alive.</summary>
         public void ActivatePodOf(Unit u, Unit? attacker = null)
         {
+            // N3 (Red's R18, 22/11): a camp's guard the dead go for stays at its post, fending them off (Ai.FendOff), the camp
+            // asleep: only the squad wakes it.
+            if (u.Guard != null && attacker != null && Content.Templates[attacker.Template].Undead) return;
             if (!string.IsNullOrEmpty(u.PodId)) ActivatePods(new List<string> { u.PodId! }, new Activation { Cause = PodCauses.Attacked, Unit = attacker?.Team == Teams.Xcom ? attacker.Id : null, By = u.Id });
         }
 
@@ -1354,10 +1371,12 @@ namespace Bastion.Engine
             var s = S;
             var soldiers = Grid.Combatants(s, Teams.Xcom);
             if (soldiers.Count == 0) return null;
-            // Never into a police station's cell (H9): nobody could go in to finish them.
+            // Never into a police station's cell (H9): nobody could go in to finish them. Nor into a pit (cuadro 122: nobody
+            // could get them out).
+            var pits = s.Mission.Pits != null ? new HashSet<int>(s.Mission.Pits) : null;
             bool Free(int x, int y) =>
                 Grid.InBounds(s, x, y) && Flights.CanStopAt(s, new Pos { X = x, Y = y, Z = 0 }) && Js.At(s.Elev, Grid.TileIndex(s, x, y), 0) == 0 && Grid.UnitAt(s, new Pos { X = x, Y = y, Z = 0 }) == null &&
-                (s.Interiors == null || InteriorSite.UseAt(s, new Pos { X = x, Y = y, Z = 0 }) != PoliceUses.Cells);
+                (s.Interiors == null || InteriorSite.UseAt(s, new Pos { X = x, Y = y, Z = 0 }) != PoliceUses.Cells) && (pits == null || !pits.Contains(Grid.TileIndex(s, x, y)));
             bool[] Sides(int x, int y, int band) => new[] { y < band, x >= s.Width - band, y >= s.Height - band, x < band };
             bool Middle(int along, int span) => along >= span / 4.0 && along < (span * 3) / 4.0;
             // In a siege, never in a glade the pines close off: only where the way to the squad is open, or opened by breaking what was built.
@@ -1556,7 +1575,15 @@ namespace Bastion.Engine
             // A few every turn, always (playtest 2026-10-15, #11); twice as many while a sabotage's alarm still sounds (#14).
             var alarm = m.Kind == MissionKinds.Sabotage && !m.ObjectiveDone ? 2 : 1;
             // A bigger map, more edge to come in by (docs/MAPAS.md §6): as many more as it is longer a side than 48.
-            var few = (int)Js.Round(Content.Horde.Trickle[Math.Max(1, Math.Min(4, m.Difficulty ?? 2))] * alarm * Math.Max(1, Math.Max(S.Width, S.Height) / 48.0));
+            var few = (int)Js.Round(Content.Horde.Trickle[Math.Max(1, Math.Min(4, m.Difficulty ?? 2))] * alarm * Math.Max(1, Math.Max(S.Width, S.Height) / 48.0) * (m.HordeScale ?? 1));
+            // N9's level (Producto's review of 23/11): its share of the trickle for real, spread over the turns (what turn t
+            // adds to the whole so far, floor(rate × t) − floor(rate × (t − 1))): a half comes one turn in two. A hard
+            // game's, as it was.
+            if (m.HordeScale != null && m.HordeScale != 1)
+            {
+                var rate = Content.Horde.Trickle[Math.Max(1, Math.Min(4, m.Difficulty ?? 2))] * alarm * Math.Max(1, Math.Max(S.Width, S.Height) / 48.0) * m.HordeScale.Value;
+                few = (int)(Math.Floor(rate * turn + 1e-9) - Math.Floor(rate * (turn - 1) + 1e-9));
+            }
             // Not in a Limpieza (Arturo, 29/10): there only the noise brings them, or the map would never be cleared.
             if (few != 0 && m.Kind != MissionKinds.Elimination)
             {
@@ -1565,7 +1592,7 @@ namespace Bastion.Engine
             }
             // And a whole wave now and then, sooner the more noise the squad makes.
             var sent = S.Mission.Reinforcements.Count((r) => r.Horde == true && r.Trickle != true);
-            var due = (int)Math.Floor((double)Rules.HordeClock(m) / Content.Horde.Wave);
+            var due = (int)Math.Floor((double)Rules.HordeClock(m) * (m.HordeScale ?? 1) / Content.Horde.Wave);
             if (due <= sent) return;
             // Heard coming: they're in by an edge at the end of the next enemy turn, and nobody knows where.
             var wave = new Reinforcement { Id = $"r{S.Mission.Reinforcements.Count + 1}", Turn = turn + 1, Pos = null, Units = new List<string>(m.Horde), Landed = false, Horde = true, Side = m.HordeSide };
@@ -1585,7 +1612,8 @@ namespace Bastion.Engine
                     {
                         if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r) continue;
                         var p = new Pos { X = center.X + dx, Y = center.Y + dy, Z = center.Z };
-                        if (Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null && !zone.Any((z) => Grid.SamePos(z, p))) zone.Add(p);
+                        if (Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null && !zone.Any((z) => Grid.SamePos(z, p))
+                            && (s.Mission.Pits == null || !s.Mission.Pits.Contains(Grid.NodeOf(s, p)))) zone.Add(p);
                     }
                 }
             }
@@ -1769,6 +1797,17 @@ namespace Bastion.Engine
                 }
                 if (Events.Count == before) break;
             }
+            // N3: the dead asleep that see one of the living (not of the squad) wake for them, the squad still hidden; they go
+            // for them from the next turn, as those who rise. And the living still unaware of the squad shoot at the dead they see
+            // close, from where they stand.
+            WakeForTheLiving();
+            if (Over) return;
+            foreach (var id in S.Units.Where((x) => x.Alive && x.Team == Teams.Alien && !Content.Templates[x.Template].Undead && !x.Objective && !x.Captive
+                && x.Caged != true && !(S.Pods.Find((p) => p.Id == x.PodId)?.Active ?? false)).Select((x) => x.Id).ToList())
+            {
+                if (Over) return;
+                Ai.FendOff(this, Grid.GetUnit(S, id)!);
+            }
             // What the squad did on the enemy's move (overwatch, the blade on guard) fills bars too.
             SettleBars();
             // Pods still unaware walk their round, or go to look where they heard something; with neither, they look about (ai.ts lookRound).
@@ -1822,6 +1861,30 @@ namespace Bastion.Engine
                 }
             }
             CheckOutcome();
+        }
+
+        /// <summary>
+        /// N3 (Arturo, 22/11): of the dead asleep, whoever sees one of the living that isn't of the squad (a Cuervo), within its
+        /// detection, wakes and goes for them (its HuntingEvent): woken by them, not by the squad, which stays hidden
+        /// (ActivatePods, attacked by nobody of it: Perceivers wakes only the one who saw).
+        /// </summary>
+        private void WakeForTheLiving()
+        {
+            foreach (var pod in S.Pods.Where((p) => !p.Active).ToList())
+            {
+                var members = pod.UnitIds.Select((id) => Grid.GetUnit(S, id)).Where((m) => m != null && m.Alive && m.Caged != true).Select((m) => m!).ToList();
+                if (members.Count == 0 || members.Any((m) => !Content.Templates[m.Template].Undead)) continue;
+                foreach (var m in members)
+                {
+                    var living = S.Units.Where((o) => o.Alive && o.Team == Teams.Alien && !o.Captive && !o.Objective && !Content.Templates[o.Template].Undead
+                        && Grid.Distance(m.Pos, o.Pos) <= Content.Templates[m.Template].Detection && Los.CanSee(S, m, o)).OrderBy((o) => Grid.Distance(m.Pos, o.Pos)).ThenBy((o) => o.Id, StringComparer.Ordinal).FirstOrDefault();
+                    if (living == null) continue;
+                    ActivatePods(new List<string> { pod.Id }, new Activation { Cause = PodCauses.Attacked, Unit = null, By = m.Id });
+                    Emit(new HuntingEvent { Unit = m.Id, Target = living.Id, Missed = 0 });
+                    break;
+                }
+                if (Over) return;
+            }
         }
 
         /// <summary>Players take turns opening the squad's turn, skipping one who isn't here or has nobody left.</summary>
@@ -2007,7 +2070,7 @@ namespace Bastion.Engine
             var m = s.Mission;
             if (m.Horde == null || m.Horde.Count == 0) return null;
             var sent = m.Reinforcements.Count((r) => r.Horde == true && r.Trickle != true);
-            return Math.Max(0, Math.Min(1, (double)(HordeClock(m) - sent * Content.Horde.Wave) / Content.Horde.Wave));
+            return Math.Max(0, Math.Min(1, (HordeClock(m) * (m.HordeScale ?? 1) - sent * Content.Horde.Wave) / Content.Horde.Wave));
         }
 
         /// <summary>
@@ -2491,10 +2554,21 @@ namespace Bastion.Engine
             return false;
         }
 
-        /// <summary>Ends the mission early (either player can abandon).</summary>
+        /// <summary>
+        /// Whether the mission may be abandoned: not a run's fight (Arturo, 22/11, cuadro 122: «quitamos el abandonar
+        /// combate»: it ends on La Lata, by its clock or with the squad fallen), but one with no way out (Producto's review
+        /// of 23/11): no La Lata (a fight saved half played before the 0.14.0, a Limpieza had none), or a soldier with no way
+        /// to it (Paths.Cut). For the room and UI too.
+        /// </summary>
+        public static bool AbandonAllowed(GameState s)
+        {
+            return s.Outcome == null && (s.Run == null || s.Mission.EvacZone.Count == 0 || Paths.Cut(s).Count > 0);
+        }
+
+        /// <summary>Ends the mission early (either player can abandon, when it may be: AbandonAllowed).</summary>
         public static List<GameEvent> AbandonMission(GameState s)
         {
-            if (s.Outcome != null) return new List<GameEvent>();
+            if (!AbandonAllowed(s)) return new List<GameEvent>();
             var e = new MissionEndedEvent { Outcome = Outcomes.Defeat, Reason = EndReasons.Abandoned };
             Events.ApplyEvent(s, e);
             return new List<GameEvent> { e };
@@ -2507,7 +2581,7 @@ namespace Bastion.Engine
         /// </summary>
         public static List<GameEvent> CallAbandon(GameState s, int slot, IReadOnlyList<int> connected)
         {
-            if (s.Outcome != null) return new List<GameEvent>();
+            if (!AbandonAllowed(s)) return new List<GameEvent>();
             var partner = slot == 0 ? 1 : 0;
             if (!connected.Contains(partner) || s.AbandonCall?.By == partner) return AbandonMission(s);
             if (s.AbandonCall?.By == slot) return new List<GameEvent>();

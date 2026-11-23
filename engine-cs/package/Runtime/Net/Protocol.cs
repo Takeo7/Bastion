@@ -93,10 +93,18 @@ namespace Bastion.Net
         public override string T => "leaveCampaign";
     }
 
-    /// <summary>A campaign afresh, from the lobby: the one there was is kept as it was, next to the save.</summary>
+    /// <summary>
+    /// A campaign afresh, from the lobby (or from the base of one lost, N8): the one there was is kept as it was, next to
+    /// the save.
+    /// </summary>
     public sealed class NewCampaignMessage : ClientMessage
     {
         public override string T => "newCampaign";
+        /// <summary>
+        /// N9 (Arturo, 22/11, cuadro 114): the level it is played at, chosen now and never changed (LevelIds); null, Difícil,
+        /// as every game before. One the room doesn't know starts nothing.
+        /// </summary>
+        public string? Level { get; set; }
     }
 
     /// <summary>Back to the campaign: to its mission left half played, as it was, or else to the base.</summary>
@@ -275,6 +283,8 @@ namespace Bastion.Net
         public int NodesPlayed { get; set; }
         /// <summary>The mission (in the runs, the node) left half played, by its name; null without one.</summary>
         public string? InMission { get; set; }
+        /// <summary>N9: the game's level (LevelIds; a game of before, Difícil); null in a campaign of before the runs.</summary>
+        public string? GameLevel { get; set; }
 
         /// <summary>
         /// The room's (RoomMessage) and the start screen's (SaveStore.Peek, «Continuar partida», 0.12.24) from the same
@@ -295,6 +305,7 @@ namespace Bastion.Net
                     Supplies = Runs.StashSupplies(campaign),
                     NodesPlayed = campaign.NodesPlayed ?? 0,
                     InMission = inMission,
+                    GameLevel = Levels.Of(campaign).Id,
                 };
             }
             return new SavedCampaign { Day = campaign.Day, Missions = campaign.MissionsFlown ?? 0, Doom = campaign.Doom, Level = Progression.BastionLevel(campaign.Level), InMission = inMission };
