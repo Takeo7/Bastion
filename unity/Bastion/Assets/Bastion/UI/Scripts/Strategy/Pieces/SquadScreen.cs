@@ -44,6 +44,14 @@ namespace Bastion.UI.Strategy
             // 2560 × 1440), on torn plates; the lists and the mission's plate torn too, no steel.
             cards = new LineupCards(view, tips, handlers) { Floor = () => bottom.worldBound.yMin, Busts = false, Level = true, Width = 119 };
             cards.Layer.AddToClassList("lineup-cards--squad");
+            // The sheet in short over a soldier's card too, under their figure (M4, Arturo 23/11).
+            cards.Over = (id, card) => Peek(id, OverCard ? card : null);
+            cards.Out = id =>
+            {
+                if (peeking != id) return;
+                peeking = null;
+                Ui.Show(peek, false);
+            };
             left = Ui.El("strat-side strat-side--left strat-side--fit squad-list torn", view);
             right = Ui.El("strat-side strat-side--right strat-side--fit squad-list torn", view);
             bottom = Ui.El("squad-bottom", view);
@@ -186,10 +194,11 @@ namespace Bastion.UI.Strategy
         /// A soldier's sheet in short (Arturo, 1/11 #2), beside their list and never over it (right of the left one, left of
         /// the right one), level with their row and above the mission's plate.
         /// </summary>
-        void Peek(string id)
+        void Peek(string id, VisualElement card = null)
         {
             if (!peeks.TryGetValue(id, out var at)) return;
             peeking = id;
+            over = card;
             var p = at.peek;
             peek.Clear();
             Ui.Text(p.Kicker.ToUpperInvariant(), "squad-peek__kicker font-title", peek);
@@ -207,20 +216,53 @@ namespace Bastion.UI.Strategy
                 Ui.Text(head, "squad-peek__head font-title", line);
                 Ui.Text(text, "squad-peek__text", line);
             }
-            Line("ARMA", p.Weapon);
+            Line("ARMAS", p.Weapon);
+            if (!string.IsNullOrEmpty(p.Vest)) Line("CHALECO", p.Vest);
             if (!string.IsNullOrEmpty(p.Belt)) Line("CINTURÓN", p.Belt);
+            if (!string.IsNullOrEmpty(p.Pack)) Line("MOCHILA", p.Pack);
+            if (!string.IsNullOrEmpty(p.Experience)) Line("EXPERIENCIA", p.Experience);
             Line("HABILIDADES", p.Abilities.Count > 0 ? string.Join(" · ", p.Abilities) : "Ninguna todavía");
+            if (!string.IsNullOrEmpty(p.Points)) Ui.Text(p.Points, "squad-peek__points font-title", peek);
             var health = Ui.Text(p.Health, "squad-peek__health font-title", peek);
             if (!string.IsNullOrEmpty(p.HealthTone)) health.AddToClassList("squad-peek__health--" + p.HealthTone);
-            var list = at.atLeft ? left : right;
-            var x = at.atLeft ? list.worldBound.xMax + PeekGap : list.worldBound.xMin - PeekGap - PeekWidth;
-            var place = view.WorldToLocal(new Vector2(x, at.row.worldBound.yMin));
-            peekTop = place.y;
-            peek.style.left = place.x;
+            if (card != null)
+            {
+                // Over the card, centred on it (Clamp puts it above once its height is known).
+                var mid = view.WorldToLocal(new Vector2(card.worldBound.center.x, card.worldBound.yMin));
+                peek.style.left = Mathf.Clamp(mid.x - PeekWidth / 2, PeekGap, view.layout.width - PeekWidth - PeekGap);
+                peekTop = mid.y;
+            }
+            else
+            {
+                var list = at.atLeft ? left : right;
+                // Where beside the list it would reach the line-up's cards (under the figures: the Duo, Producto 24/11, it
+                // touched the first one): under its list instead, against the edge, over the clearing's side.
+                var besideX = at.atLeft ? list.worldBound.xMax + PeekGap : list.worldBound.xMin - PeekGap - PeekWidth;
+                var narrow = false;
+                cards.Layer.Query(className: "lineup-card").ForEach(c =>
+                {
+                    if (c.resolvedStyle.display == DisplayStyle.None || float.IsNaN(c.worldBound.xMin)) return;
+                    if (besideX < c.worldBound.xMax + PeekGap && besideX + PeekWidth + PeekGap > c.worldBound.xMin) narrow = true;
+                });
+                var x = narrow ? (at.atLeft ? list.worldBound.xMin : list.worldBound.xMax - PeekWidth)
+                    : at.atLeft ? list.worldBound.xMax + PeekGap : list.worldBound.xMin - PeekGap - PeekWidth;
+                var place = view.WorldToLocal(new Vector2(x, narrow ? list.worldBound.yMax + PeekGap : at.row.worldBound.yMin));
+                peekTop = place.y;
+                peek.style.left = place.x;
+            }
             peek.style.top = peekTop;
             Ui.Show(peek, true);
             Clamp();
         }
+
+        /// <summary>The card the sheet is over (M4); null, beside a list's row.</summary>
+        VisualElement over;
+
+        /// <summary>
+        /// (M4's maqueta, BASTION_FICHA_SOBRE_TARJETA=1: from a card the sheet over it, covering the figure, to compare with
+        /// the default, beside the list as from the row.)
+        /// </summary>
+        static readonly bool OverCard = System.Environment.GetEnvironmentVariable("BASTION_FICHA_SOBRE_TARJETA") == "1";
 
         /// <summary>The sheet's width (Squad.uss .squad-peek) and its gap to the list.</summary>
         const float PeekWidth = 228;
@@ -232,7 +274,8 @@ namespace Bastion.UI.Strategy
             var height = peek.resolvedStyle.height;
             if (float.IsNaN(height) || peek.resolvedStyle.display == DisplayStyle.None) return;
             var floor = view.WorldToLocal(new Vector2(0, bottom.worldBound.yMin)).y - PeekGap;
-            var top = Mathf.Max(PeekGap, Mathf.Min(peekTop, floor - height));
+            // Over a card: its bottom on the card's top.
+            var top = over != null ? Mathf.Max(PeekGap, peekTop - PeekGap - height) : Mathf.Max(PeekGap, Mathf.Min(peekTop, floor - height));
             if (!Mathf.Approximately(peek.resolvedStyle.top, top)) peek.style.top = top;
         }
 

@@ -26,6 +26,8 @@ namespace Bastion.UI.Gear
         /// <summary>Its size in cells, not turned: lying across (Content.GearSize).</summary>
         public int W = 1, H = 1;
         public int Count = 1;
+        /// <summary>A weapon's mods mounted (WeaponModIds), shown as marks on its tile (M13); null, none.</summary>
+        public List<string> Mods;
         /// <summary>How many fit in one place (Content.PileOf): above 1, its count shows.</summary>
         public int Pile = 1;
         /// <summary>The words on hover when there is no card.</summary>
@@ -95,6 +97,11 @@ namespace Bastion.UI.Gear
         public string Onto;
         /// <summary>Let go on the bin: thrown away (DropGearCommand), once asked.</summary>
         public bool Throw;
+        /// <summary>
+        /// `Slot` for a thing let go on a soldier's bust (M12): wherever it goes on them, its own place if empty, else the
+        /// first room of their pack; the handlers say where (the engine's helpers).
+        /// </summary>
+        public const string Anywhere = "*";
 
         public override string ToString() => Throw ? $"{Gear} a la basura" : Onto != null ? $"{Gear} sobre {Onto}" : $"{Gear}{(Count > 0 ? "×" + Count : "")} → {To}{(Slot != null ? "." + Slot : "")} {X},{Y}{(Turned ? " girado" : "")}";
     }

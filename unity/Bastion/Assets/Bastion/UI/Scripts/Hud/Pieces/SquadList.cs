@@ -153,7 +153,7 @@ namespace Bastion.UI.Hud
                 card.style.borderTopColor = card.style.borderBottomColor = card.style.borderLeftColor = card.style.borderRightColor = owner;
                 card.style.borderTopWidth = card.style.borderBottomWidth = card.style.borderLeftWidth = card.style.borderRightWidth = 2;
             }
-            if (c.Dead) Ui.Text(HudText.Squad.Fallen, "squad-card__fallen font-title", tree.Q("bust")).pickingMode = PickingMode.Ignore;
+            if (c.Dead) Ui.Text(c.Female ? HudText.Squad.FallenFemale : HudText.Squad.Fallen, "squad-card__fallen font-title", tree.Q("bust")).pickingMode = PickingMode.Ignore;
             var face = tree.Q("face");
             var portrait = c.Bust ? PortraitOf?.Invoke(c.Id) : null;
             if (portrait is RenderTexture rt) face.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));

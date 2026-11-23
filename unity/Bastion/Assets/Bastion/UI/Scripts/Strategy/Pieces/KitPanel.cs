@@ -168,13 +168,15 @@ namespace Bastion.UI.Strategy
                 var id = s.Id;
                 var b = new Button(() => handlers.OnSoldier(id));
                 Ui.AddClasses(b, "stash-tab font-title");
+                // A thing let go over another's bust goes onto them (M12, Arturo 23/11: between stages too).
+                board.SetSoldier(b, id, s.Mine);
                 b.EnableInClassList("stash-tab--on", s.On);
                 b.EnableInClassList("stash-tab--theirs", !s.Mine);
                 b.EnableInClassList("stash-tab--hp", s.HpMax > 0);
                 var face = Ui.El("stash-tab__face", b);
                 face.pickingMode = PickingMode.Ignore;
-                SoldiersScreen.Studio(face, !s.Mine);
-                Bastion.Client.Portraits.Light(id, s.Mine ? SoldiersScreen.MineLight : SoldiersScreen.TheirLight);
+                SoldiersScreen.Studio(face, s.Theirs);
+                Bastion.Client.Portraits.Light(id, s.Theirs ? SoldiersScreen.TheirLight : SoldiersScreen.MineLight);
                 var bust = Ui.El("stash-tab__bust", face);
                 bust.pickingMode = PickingMode.Ignore;
                 var portrait = PortraitOf?.Invoke(id);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Bastion.Client;
 using Bastion.UI.Hud;
 using UnityEngine;
@@ -18,7 +19,12 @@ namespace Bastion.UI.Gear
     ///   Esc lets it go back.
     /// - **A click** picks it: under it its orders, Girar (in place), Partir (how many, into the first room of its grid),
     ///   Tirar and the handlers' own (Usar…). The same for the finger, which can't press R.
+    /// - **Mayús and a click** (M3, Arturo 23/11) sends it, the whole pile, to the other side (Send): from a soldier to the
+    ///   stash or the floor; from there to the soldier, its own place first if empty, else the first room of its pack.
+    ///   Nothing it carries is moved for it. With one soldier only (the map's «Equipo ▸»), between its places and its pack.
     /// - **The bin:** let go over it, or Tirar, asks first; then GearDropped.
+    /// - **A soldier's bust** (M12, Arturo 23/11: between stages, from one soldier to another): let go over another's, it
+    ///   goes onto them wherever it fits (GearMove.Anywhere), the bust lit green while it would, with the reason if not.
     /// - **The card** on hover, the handlers' (name, figures); not while dragging.
     /// Until the engine's answer comes the dropped thing is hidden where it was (1.5 s at most: refused, it shows again).
     /// </summary>
@@ -30,6 +36,11 @@ namespace Bastion.UI.Gear
         public Func<string, string, Texture> PictureOf;
         /// <summary>Things can be thrown away (the base's bin, Tirar); not in combat, where Soltar leaves them on the floor.</summary>
         public bool CanThrow = true;
+        /// <summary>
+        /// Where a thing sent from a soldier's pack goes when no other side is drawn (Send): combat's floor, whose grid shows
+        /// only with something on it. Null: none (the base's soldier alone on the map: between its places and its pack).
+        /// </summary>
+        public string Ground;
 
         const float LiftPoints = 6;
         const float PendingSeconds = 1.5f;
@@ -237,6 +248,33 @@ namespace Bastion.UI.Gear
             Button(row, GearText.No, null, () => Ask(null));
         }
 
+        /// <summary>
+        /// A soldier's bust (drawn by its screen, not here) as a place to let things go (M12): over it, onto `owner`
+        /// wherever it fits. Called again as the busts are drawn anew; the gone ones drop as a drag starts.
+        /// </summary>
+        public void SetSoldier(VisualElement bust, string owner, bool mine)
+        {
+            if (!byHolder.TryGetValue(bust, out var t))
+            {
+                t = new Target { Holder = bust, Kind = TargetKind.Soldier };
+                byHolder[bust] = t;
+                targets.Add(t);
+            }
+            t.Element = bust;
+            t.Owner = owner;
+            t.Mine = mine;
+            t.Key = "soldier:" + owner;
+            // Drawn anew while something is dragged (the busts are, as their portraits come): lit again, and marked if the
+            // pointer was over the one it replaces.
+            if (!Dragging || !mine || owner == press.From.Owner) return;
+            bust.EnableInClassList("gear-bust--takes", handlers.GearRefusal(new GearMove { Gear = press.Gear.Id, Count = press.Count, To = owner, Slot = GearMove.Anywhere }) == null);
+            if (press.Over != null && press.Over != t && press.Over.Key == t.Key && press.Move != null)
+            {
+                press.Over = t;
+                bust.AddToClassList(press.Why == null ? "gear-bust--ok" : "gear-bust--no");
+            }
+        }
+
         /// <summary>The holder's target, drawn anew (cleared) if its key changed; null if it is as it was.</summary>
         Target Own(VisualElement holder, string key, TargetKind kind)
         {
@@ -271,6 +309,7 @@ namespace Bastion.UI.Gear
             // The weapons' names, where the tile is wide enough to read them (not on one turned on end).
             if (g.Kind == "weapon" && !string.IsNullOrEmpty(g.Name) && w >= 2 * Cell - 1) Ui.Text(g.Name, "gear-item__name", el).pickingMode = PickingMode.Ignore;
             if (g.Pile > 1) Ui.Text(g.Count.ToString(), "gear-item__count font-title", el).pickingMode = PickingMode.Ignore;
+            Mods(el, g);
             if (g.Card != null) tips.Attach(el, g.Card);
             else tips.Attach(el, g.Tip ?? g.Name);
             el.RegisterCallback<PointerDownEvent>(e =>
@@ -288,7 +327,8 @@ namespace Bastion.UI.Gear
                     Grab = new Vector2(at.x / Cell, at.y / Cell),
                     Turned = turned,
                     WasTurned = turned,
-                    Count = GameInput.Shift && g.Count > 1 ? g.Count / 2 : 0,
+                    Count = (GameInput.Shift || e.shiftKey) && g.Count > 1 ? g.Count / 2 : 0,
+                    Shift = (GameInput.Shift || e.shiftKey) && !GameInput.Touch,
                 };
                 // In a kit's place it is drawn fitted to the box: grabbed in its middle.
                 if (from.Kind == TargetKind.Slot) press.Grab = new Vector2(g.W / 2f, g.H / 2f);
@@ -340,6 +380,28 @@ namespace Bastion.UI.Gear
             }
         }
 
+        /// <summary>
+        /// A weapon's mounted mods (M13, Arturo 23/11: «que aparezcan en el icono del arma»): each mod's own picture, small,
+        /// on a dark round in the tile's bottom right corner, side by side (two at most: Content.ModSlots). Its card says
+        /// which as ever.
+        /// </summary>
+        void Mods(VisualElement el, GearItemView g)
+        {
+            if (g.Mods == null || g.Mods.Count == 0) return;
+            var row = Ui.El("gear-item__mods", el);
+            row.pickingMode = PickingMode.Ignore;
+            var side = Mathf.Round(Cell * 0.42f);
+            foreach (var mod in g.Mods)
+            {
+                var mark = Ui.El("gear-item__mod", row);
+                mark.pickingMode = PickingMode.Ignore;
+                mark.style.width = side;
+                mark.style.height = side;
+                if (PictureOf?.Invoke("mod", mod) is Texture2D art) mark.style.backgroundImage = new StyleBackground(art);
+                else if (icon?.Invoke("stat:weapon") is Sprite sprite) mark.style.backgroundImage = new StyleBackground(sprite);
+            }
+        }
+
         static void Lines(MeshGenerationContext ctx, int w, int h, float cell)
         {
             var p = ctx.painter2D;
@@ -382,7 +444,8 @@ namespace Bastion.UI.Gear
             if (!was.Lifted)
             {
                 End();
-                Pick(was.Gear, was.From);
+                if (was.Shift) Send(was.Gear, was.From, was.At == default ? was.Start : was.At);
+                else Pick(was.Gear, was.From);
                 return;
             }
             var move = was.Move;
@@ -412,6 +475,20 @@ namespace Bastion.UI.Gear
                 var m = new GearMove { Gear = g.Id, Count = press.Count, To = t.Owner, Slot = t.Slot };
                 t.Element.EnableInClassList("gear-slot--takes", handlers.GearRefusal(m) == null);
             }
+            // The other soldiers' busts that would take it, lit as the kit's places are (M12).
+            foreach (var t in targets)
+                if (t.Kind == TargetKind.Soldier && t.Mine && t.Owner != press.From.Owner)
+                    t.Element.EnableInClassList("gear-bust--takes", handlers.GearRefusal(new GearMove { Gear = g.Id, Count = press.Count, To = t.Owner, Slot = GearMove.Anywhere }) == null);
+            // A weapon mod (M9, Arturo 23/11): every weapon drawn that the engine would mount it on, in green, wherever it
+            // is (the stash, a pack, a kit's place); the others as they are, no red.
+            if (g.Kind == "mod")
+                foreach (var t in targets)
+                    t.Element.Query(className: "gear-item").ForEach(e =>
+                    {
+                        var id = e.userData as string;
+                        if (id == null || id == g.Id || Find(t, id) is not GearItemView w || w.Kind != "weapon") return;
+                        e.EnableInClassList("gear-item--takes", handlers.GearRefusal(new GearMove { Gear = g.Id, Onto = id }) == null);
+                    });
         }
 
         /// <summary>The dragged thing's picture, as it lies now (turned or not).</summary>
@@ -461,6 +538,7 @@ namespace Bastion.UI.Gear
                     break;
                 }
             }
+            press.Ghost.EnableInClassList("gear-ghost--bust", over?.Kind == TargetKind.Soldier);
             GearMove move = null;
             PlacedView pile = null;
             PlacedView onto = null;
@@ -494,6 +572,8 @@ namespace Bastion.UI.Gear
                 move = new GearMove { Gear = g.Id, Count = press.Count, To = over.Owner, Slot = over.Slot };
             else if (over != null && over.Kind == TargetKind.Bin)
                 move = new GearMove { Gear = g.Id, Throw = true };
+            else if (over != null && over.Kind == TargetKind.Soldier && over.Owner != press.From.Owner)
+                move = new GearMove { Gear = g.Id, Count = press.Count, To = over.Owner, Slot = GearMove.Anywhere };
 
             var asked = move?.ToString() ?? "";
             if (asked == press.Asked && over == press.Over) return;
@@ -522,6 +602,7 @@ namespace Bastion.UI.Gear
                 press.Foot = foot;
             }
             else if (over != null && over.Kind == TargetKind.Slot) over.Element.AddToClassList(ok ? "gear-slot--ok" : "gear-slot--no");
+            else if (over != null && over.Kind == TargetKind.Soldier && move != null) over.Element.AddToClassList(ok ? "gear-bust--ok" : "gear-bust--no");
             else if (over != null && over.Kind == TargetKind.Bin)
             {
                 over.Element.AddToClassList(ok ? "gear-bin--over" : "gear-bin--no");
@@ -566,6 +647,8 @@ namespace Bastion.UI.Gear
             if (t?.Element == null) return;
             t.Element.RemoveFromClassList("gear-slot--ok");
             t.Element.RemoveFromClassList("gear-slot--no");
+            t.Element.RemoveFromClassList("gear-bust--ok");
+            t.Element.RemoveFromClassList("gear-bust--no");
             if (t.Kind == TargetKind.Bin)
             {
                 t.Element.RemoveFromClassList("gear-bin--over");
@@ -594,7 +677,12 @@ namespace Bastion.UI.Gear
             if (!was.Lifted) return;
             Unmark(was);
             was.Ghost?.RemoveFromHierarchy();
-            foreach (var t in targets) t.Element?.RemoveFromClassList("gear-slot--takes");
+            foreach (var t in targets)
+            {
+                t.Element?.RemoveFromClassList("gear-slot--takes");
+                t.Element?.RemoveFromClassList("gear-bust--takes");
+                t.Element?.Query(className: "gear-item--takes").ForEach(e => e.RemoveFromClassList("gear-item--takes"));
+            }
             Away(was.Gear.Id, was.Gear.Id == pending);
         }
 
@@ -635,6 +723,111 @@ namespace Bastion.UI.Gear
             var before = redraws;
             order();
             if (redraws == before) Hide(id);
+        }
+
+        // ------------------------------------------------------------------ sending
+
+        /// <summary>How long the reason a thing couldn't be sent stays beside the pointer (s).</summary>
+        const float SentWhySeconds = 2.5f;
+        IVisualElementScheduledItem whyGone;
+
+        /// <summary>
+        /// Mayús and a click (M3): the whole of `g` to the other side, the first place there the engine takes, nothing in
+        /// it moved for it; else nothing moves and the reason (the engine's, for a room in a grid: an empty place of the kit
+        /// only says it doesn't go there) shows at `p` for a moment. Whether it went.
+        /// </summary>
+        bool Send(GearItemView g, Target from, Vector2 p)
+        {
+            Unpick();
+            var why = (string)null;
+            foreach (var m in Sends(g, from))
+            {
+                var no = handlers.GearRefusal(m);
+                if (no == null)
+                {
+                    Give(g.Id, () => handlers.GearMoved(m));
+                    return true;
+                }
+                // (The machine gun tried on the empty belt first: «no va en ese hueco» said nothing of why it stays.)
+                if (targets.Exists(t => t.Kind == TargetKind.Grid && t.Owner == m.To && (t.Slot ?? "") == (m.Slot ?? ""))) why ??= no;
+                else if (m.To == Ground) why ??= no;
+            }
+            this.why.text = why ?? GearText.NowhereToSend;
+            Ui.Show(this.why, true);
+            layer.BringToFront();
+            Why(p);
+            whyGone?.Pause();
+            whyGone = this.why.schedule.Execute(() =>
+            {
+                if (press == null) Ui.Show(this.why, false);
+            }).StartingIn((long)(SentWhySeconds * 1000));
+            return false;
+        }
+
+        /// <summary>
+        /// Where a thing sent from `from` may go, best first: the other side's (another owner's: the stash, the floor, the
+        /// soldier, never a partner's «give»); with none shown, its own soldier's other places. On a soldier, its empty
+        /// places (or a pile of the same there), then its pack; on a grid, a pile of the same with room for all of it,
+        /// then where it first fits, lying as it is, then turned.
+        /// </summary>
+        IEnumerable<GearMove> Sends(GearItemView g, Target from)
+        {
+            var live = targets.FindAll(t => t.Element != null && t.Element.panel != null && (t.Kind == TargetKind.Grid || t.Kind == TargetKind.Slot) && t.Mine && t.Slot != "give");
+            var there = live.FindAll(t => t.Owner != from.Owner);
+            // Nothing at its feet in combat: dropped there all the same.
+            if (there.Count == 0 && Ground != null && from.Kind == TargetKind.Grid && from.Owner != Ground)
+            {
+                yield return new GearMove { Gear = g.Id, To = Ground };
+                yield break;
+            }
+            // One soldier only (the map's «Equipo ▸»): from a place to its pack, from the pack to a place.
+            if (there.Count == 0) there = live.FindAll(t => t.Owner == from.Owner && t != from && (from.Kind == TargetKind.Grid ? t.Kind == TargetKind.Slot : t.Kind == TargetKind.Grid));
+            foreach (var t in there)
+            {
+                if (t.Kind != TargetKind.Slot) continue;
+                if (t.Gear == null || (g.Pile > 1 && t.Gear.Kind == g.Kind && t.Gear.Type == g.Type && t.Gear.Pile - t.Gear.Count >= g.Count))
+                    yield return new GearMove { Gear = g.Id, To = t.Owner, Slot = t.Slot };
+            }
+            foreach (var t in there)
+            {
+                if (t.Kind != TargetKind.Grid || t.Items == null) continue;
+                if (g.Pile > 1)
+                    foreach (var it in t.Items)
+                        if (it.Gear.Id != g.Id && it.Gear.Kind == g.Kind && it.Gear.Type == g.Type && it.Gear.Pile - it.Gear.Count >= g.Count)
+                            yield return new GearMove { Gear = g.Id, To = t.Owner, Slot = t.Slot, X = it.X, Y = it.Y, Turned = it.Turned };
+                if (FirstRoom(t, g) is (int x, int y, bool turned)) yield return new GearMove { Gear = g.Id, To = t.Owner, Slot = t.Slot, X = x, Y = y, Turned = turned };
+            }
+            // In combat, from a place of the kit (which can't go to the floor): into its own pack.
+            if (Ground != null && from.Kind == TargetKind.Slot)
+                foreach (var t in live)
+                    if (t.Kind == TargetKind.Grid && t.Owner == from.Owner && t.Items != null && FirstRoom(t, g) is (int x, int y, bool turned))
+                        yield return new GearMove { Gear = g.Id, To = t.Owner, Slot = t.Slot, X = x, Y = y, Turned = turned };
+        }
+
+        /// <summary>Where `g` first fits in grid `t` as drawn (row by row, lying as it is, then turned); null, nowhere.</summary>
+        static (int, int, bool)? FirstRoom(Target t, GearItemView g)
+        {
+            foreach (var turned in new[] { false, true })
+            {
+                var (w, h) = Size(g, turned);
+                for (var y = 0; y + h <= t.H; y++)
+                    for (var x = 0; x + w <= t.W; x++)
+                    {
+                        var free = true;
+                        foreach (var it in t.Items)
+                        {
+                            if (it.Gear.Id == g.Id) continue;
+                            var (iw, ih) = Size(it.Gear, it.Turned);
+                            if (x < it.X + iw && it.X < x + w && y < it.Y + ih && it.Y < y + h)
+                            {
+                                free = false;
+                                break;
+                            }
+                        }
+                        if (free) return (x, y, turned);
+                    }
+            }
+            return null;
         }
 
         // ------------------------------------------------------------------ picking
@@ -882,8 +1075,46 @@ namespace Bastion.UI.Gear
             }
             if (g == null) return false;
             var (w, h) = Size(g, turned);
-            var at = t.Kind == TargetKind.Slot ? t.Element.worldBound.center : t.Element.worldBound.position + new Vector2((x + w / 2f) * Cell, (y + h / 2f) * Cell);
+            // (A place of the kit or a soldier's bust, M12: its middle.)
+            var at = t.Kind == TargetKind.Slot || t.Kind == TargetKind.Soldier ? t.Element.worldBound.center : t.Element.worldBound.position + new Vector2((x + w / 2f) * Cell, (y + h / 2f) * Cell);
             return TestDrag(id, at, turned != was ? 1 : 0, release);
+        }
+
+        /// <summary>Tests: Mayús and a click on `id`'s tile (M3), as Up takes a press let go where it was; whether it went.</summary>
+        public bool TestSend(string id)
+        {
+            foreach (var t in targets)
+            {
+                var g = t.Element != null && t.Element.panel != null ? Find(t, id) : null;
+                if (g == null) continue;
+                if (press != null) End();
+                var start = t.Element.worldBound.center;
+                t.Element.Query(className: "gear-item").ForEach(e =>
+                {
+                    if (e.userData as string == id) start = e.worldBound.center;
+                });
+                // (As Up does with a press not lifted.)
+                return Send(g, t, start);
+            }
+            return false;
+        }
+
+        /// <summary>Tests: every place drawn and what lies in it, for the log («stash: g3 knife ×1 @0,0 …»).</summary>
+        public string TestList()
+        {
+            var lines = new List<string>();
+            foreach (var t in targets)
+            {
+                if (t.Element == null || t.Element.panel == null || t.Kind == TargetKind.Bin) continue;
+                var name = t.Owner + (t.Slot != null ? "/" + t.Slot : "") + (t.Kind == TargetKind.Soldier ? " (busto)" : "") + (t.Mine ? "" : " (ajeno)");
+                var things = t.Kind == TargetKind.Grid ? string.Join(" ", (t.Items ?? new List<PlacedView>()).Select(p => $"{p.Gear.Id} {p.Gear.Type} ×{p.Gear.Count} @{p.X},{p.Y}{(p.Turned ? "~" : "")}"))
+                    : t.Kind == TargetKind.Slot ? (t.Gear != null ? $"{t.Gear.Id} {t.Gear.Type} ×{t.Gear.Count}" : "vacío")
+                    : string.Join(" ", t.Element.GetClasses().Where(c => c.StartsWith("gear-bust")))
+                        + (press != null ? $" [{handlers.GearRefusal(new GearMove { Gear = press.Gear.Id, Count = press.Count, To = t.Owner, Slot = GearMove.Anywhere }) ?? "lo admite"}]" : "");
+                lines.Add($"{name}: {things}");
+            }
+            if (press != null) lines.Insert(0, $"arrastrando {press.Gear.Id} sobre {press.Over?.Key ?? "nada"} ({press.Move?.ToString() ?? "sin orden"}: {press.Why ?? "vale"})");
+            return string.Join(" | ", lines);
         }
 
         /// <summary>Tests: a click on `id`'s tile (its orders open), with Partir open at `split` if above 0.</summary>
@@ -920,7 +1151,7 @@ namespace Bastion.UI.Gear
 
         // ------------------------------------------------------------------ kinds
 
-        enum TargetKind { Grid, Slot, Bin }
+        enum TargetKind { Grid, Slot, Bin, Soldier }
 
         sealed class Target
         {
@@ -952,6 +1183,8 @@ namespace Bastion.UI.Gear
             public bool WasTurned;
             /// <summary>0: the whole pile; else half of it (Mayús).</summary>
             public int Count;
+            /// <summary>Mayús held as it was pressed: let go without dragging, it is sent to the other side (Send).</summary>
+            public bool Shift;
             public bool Lifted;
             public VisualElement Ghost;
             public VisualElement Foot;

@@ -1,8 +1,8 @@
 /*
- * The map of an expedition (RunMapScreen) as a map drawn on paper (cuadros 126–132, P1: the light paper, Arte's valley):
- * the game's dark ground around it, the heading and «Volver a la base» over the sheet, the legend on the same paper under
- * it; on the right the squad folded to its busts (KitPanel, Stash.uss) over the stage's card in parts. The ways, the rings
- * and the pin are drawn in C# (DrawInk); the words are labels on a halo of paper.
+ * The map of an expedition (RunMapScreen), in the dark (cuadro 143: the paper of the cuadros 126–135 out): the heading and
+ * «Volver a la base» over the sheet, the legend under it; on the right the squad folded to its busts (KitPanel, Stash.uss)
+ * over the stage's card in parts. The ways, the rings and the pin are drawn in C# (DrawInk); the words are labels on a
+ * halo of the ground.
  */
 
 /* Over the whole screen, under the top strip and down where the base's tabs are (hidden on the map): no band of the
@@ -112,7 +112,7 @@
     bottom: 0;
     -unity-text-align: middle-center;
     font-size: 17px;
-    color: rgba(97, 84, 69, 0.85);
+    color: rgba(161, 167, 157, 0.85);
 }
 
 .runmap-symbol {
@@ -120,7 +120,7 @@
     -unity-background-scale-mode: scale-to-fit;
 }
 
-/* A stage's words at its right: its name and its notes, each on a halo of paper (no line of the valley under a word). */
+/* A stage's words at its right: its name and its notes, each on a halo of the ground (cuadro 143: dark, no paper). */
 .runmap-words-at {
     position: absolute;
     align-items: flex-start;
@@ -130,7 +130,7 @@
     padding: 0 4px;
     font-size: 13px;
     white-space: nowrap;
-    background-color: rgba(224, 214, 189, 0.9);
+    background-color: rgba(17, 20, 22, 0.85);
     border-radius: 3px;
 }
 
@@ -143,7 +143,7 @@
     align-items: center;
     margin-top: 1px;
     padding: 0 4px;
-    background-color: rgba(224, 214, 189, 0.9);
+    background-color: rgba(17, 20, 22, 0.85);
     border-radius: 3px;
 }
 
@@ -151,8 +151,8 @@
     margin-top: 1px;
     padding: 0 4px;
     font-size: 11px;
-    color: #7a140d;
-    background-color: rgba(224, 214, 189, 0.9);
+    color: #ff6a55;
+    background-color: rgba(17, 20, 22, 0.85);
     border-radius: 3px;
 }
 
@@ -184,14 +184,16 @@
     align-items: center;
     margin-top: 6px;
     padding: 5px 12px;
-    background-color: #e0d6bd;
+    background-color: #16191b;
+    border-width: 1px;
+    border-color: #262a2d;
 }
 
 .runmap-legend__head {
     margin-right: 14px;
     font-size: 11px;
     letter-spacing: 1.5px;
-    color: #261f17;
+    color: #a1a79d;
 }
 
 .runmap-legend__mark {
@@ -210,7 +212,7 @@
 .runmap-legend__text {
     margin-right: 14px;
     font-size: 11px;
-    color: #261f17;
+    color: #a1a79d;
 }
 
 /* ================================================================ the right: the squad folded, the stage's card */
@@ -383,6 +385,81 @@
     border-color: #3d4346;
 }
 
+/* The Trueque with its two sides (M10): as wide as the map, the sides side by side where they fit, else one under the other. */
+.runstop.runstop--trade {
+    left: 16px;
+    right: 16px;
+    top: 72px;
+    width: auto;
+}
+
+.runstop__sides {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.runstop__side {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 380px;
+    min-width: 340px;
+    margin-right: 12px;
+}
+
+/* (Its lines broken within the side, not run past it: Lore's «… si no caben, a la de otro de tus soldados.».) */
+.runstop__side .runstop__for {
+    white-space: normal;
+}
+
+.runstop__side-head {
+    font-size: 13px;
+    color: #a1a79d;
+    margin: 2px 0 6px 0;
+}
+
+/* What is offered: the soldier's whole kit and pack can be long; it scrolls past five rows. */
+.runstop__offers {
+    max-height: 272px;
+    margin-bottom: 6px;
+}
+
+/* Selling what is worn: its row asks first (Producto, 24/11), the question in amber under the name, «No» beside «Cambiar». */
+.runstop__ware--asking {
+    height: auto;
+    min-height: 50px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border-width: 1px;
+    border-color: rgb(242, 199, 115);
+}
+
+.runstop__ware-ask {
+    margin-top: 1px;
+    font-size: 12px;
+    white-space: normal;
+    color: rgb(242, 199, 115);
+}
+
+.runstop__buy.runstop__no {
+    margin-left: 6px;
+    color: #eef0ea;
+    background-color: #3d4346;
+}
+
+.runstop__buy.runstop__no:hover {
+    background-color: #4b5254;
+}
+
+.runstop__ware-note {
+    margin-top: 1px;
+    font-size: 12px;
+}
+
+/* What the trader pays, in the «se puede» green. */
+.runstop__price--gain .supplies-mark__value {
+    color: #8fd05a;
+}
+
 .runstop__kicker {
     font-size: 13px;
     color: #a1a79d;
@@ -460,6 +537,8 @@
 
 .runstop__ware-words {
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
     justify-content: center;
 }
 

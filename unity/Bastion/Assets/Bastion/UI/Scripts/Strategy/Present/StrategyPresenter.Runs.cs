@@ -119,12 +119,63 @@ namespace Bastion.UI.Strategy
             return v;
         }
 
-        /// <summary>A soldier's row in Salir: in it framed; the partner's off.</summary>
+        /// <summary>A soldier's row in Salir: in it framed; the partner's off. Its sheet in short under the pointer (M4).</summary>
         PickRowView RunRow(CampaignSoldier s) => new PickRowView
         {
             Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname), Accent = PlayerColor(s.Owner), Skills = SkillsOf(s),
             Rank = Bars.VeterancyRank(s.Board.Count), RankTip = RankTip(s), In = State.Squad.Contains(s.Id),
             Enabled = s.Owner == Slot, Tip = State.Squad.Contains(s.Id) ? StrategyText.Squad.InTip : null,
+            Peek = RunPeek(State, s),
         };
+
+        /// <summary>
+        /// A soldier's sheet in short in Salir (M4, Arturo 23/11: «al pasar el raton por encima de un soldado tiene que
+        /// aparecer la información de ese soldado y estadisticas»), the runs' own: the board's totals as Soldados sums them
+        /// (TotalsOf: health as the run has it, actions, movement, PUNT. and CaC, dodge and defence always, M6), the kit
+        /// worn, the pack, the experience, the points to spend, the abilities and the wounds. No figure of its own.
+        /// </summary>
+        SoldierPeekView RunPeek(CampaignState c, CampaignSoldier s)
+        {
+            var totals = TotalsOf(c, s).ToDictionary(t => t.key, t => t.value);
+            var kit = s.Kit;
+            var v = new SoldierPeekView
+            {
+                Name = Appearances.DisplayName(s.Name, s.Nickname),
+                Kicker = $"{Campaign.VeterancyName(s)} · {(s.Owner == Slot ? (Female(s) ? "tuya" : "tuyo") : $"de {PlayerName(s.Owner)}")}",
+            };
+            v.Stats.Add(new PeekStatView { Name = "Salud", Value = $"{Runs.HpOf(c, s)}/{Runs.MaxHp(s)}" });
+            v.Stats.Add(new PeekStatView { Name = "Acciones", Value = totals["ap"].ToString() });
+            v.Stats.Add(new PeekStatView { Name = "Mov.", Value = totals["moves"].ToString() });
+            v.Stats.Add(new PeekStatView { Name = "Voluntad", Value = totals["will"].ToString() });
+            v.Stats.Add(new PeekStatView { Name = "PUNT.", Value = totals["gunAim"].ToString() });
+            v.Stats.Add(new PeekStatView { Name = "CaC", Value = totals["meleeAim"].ToString() });
+            v.Stats.Add(new PeekStatView { Name = "Esquiva", Value = totals["dodge"].ToString() });
+            v.Stats.Add(new PeekStatView { Name = "Defensa", Value = totals["defense"].ToString() });
+            string Named(Engine.Gear g) => g == null ? null : Lore.GearName(g.Kind, g.Type, g.Count);
+            if (kit != null)
+            {
+                // Hands: the primary, the blade (the knife with none) and the pistol.
+                v.Weapon = string.Join(" · ", new[] { Named(kit.Primary), Named(kit.Melee) ?? Lore.GearName(GearKinds.Weapon, FoundWeaponIds.Knife, 1), Named(kit.Pistol) }.Where(n => n != null));
+                v.Vest = Named(kit.Vest);
+                var belt = kit.Belt.Where(g => g != null).Select(Named).ToList();
+                v.Belt = belt.Count > 0 ? string.Join(" · ", belt) : null;
+                var things = kit.Pack.Items.Count;
+                var full = Gears.FirstFit(kit.Pack, new Engine.Gear { Kind = GearKinds.Mags, Count = 1 }) == null;
+                v.Pack = things == 0 ? "Vacía" : $"{things} {(things == 1 ? "cosa" : "cosas")}{(full ? " · llena" : " · le queda sitio")}";
+            }
+            else v.Weapon = Campaign.WeaponLabel(c, s);
+            var lines = SkillIds.All.Select(id => (name: Bars.SkillDefs[id].Name, bars: Bars.BarsOf(s.Skills.TryGetValue(id, out var xp) ? xp : 0).Filled))
+                .Where(l => l.bars > 0).Select(l => $"{l.name} {l.bars}").ToList();
+            v.Experience = lines.Count > 0 ? string.Join(" · ", lines) : null;
+            var points = Bars.PointsLeft(s.Skills, s.Board);
+            v.Points = points > 0 ? $"{points} {(points == 1 ? "punto" : "puntos")} por gastar" : null;
+            foreach (var id in s.Board)
+                if (Board.BoardCells.TryGetValue(id, out var cell) && (cell.Kind == CellKinds.Passive || cell.Kind == CellKinds.Active)) v.Abilities.Add(cell.Name);
+            var (health, tone, _) = Health(c, s, false);
+            if (tone == "good") (health, tone) = ("Sin heridas", null);
+            v.Health = health;
+            v.HealthTone = tone;
+            return v;
+        }
     }
 }

@@ -129,6 +129,57 @@
     border-color: #ffffff;
 }
 
+/* M13: a weapon's mounted mods, their pictures small in the tile's bottom right corner. */
+.gear-item__mods {
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    flex-direction: row;
+}
+
+/* (On bone, not dark: the scope and the drum are near black and were lost on a dark disc.) */
+.gear-item__mod {
+    margin-left: 2px;
+    border-radius: 50%;
+    background-color: rgba(222, 216, 200, 0.92);
+    border-width: 1px;
+    border-color: rgba(8, 9, 10, 0.9);
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* M12: another soldier's bust while something is dragged: lit if it would go onto them, as the kit's places; over it,
+   green, or red with the reason beside the pointer. */
+/* (With the tab's own class: over Stash.uss's border, whichever sheet comes last.) */
+.stash-tab.gear-bust--takes {
+    border-width: 2px;
+    border-color: rgba(143, 208, 90, 0.55);
+}
+
+/* (Over it: its name on green or red, the bust being hidden by what is dragged; seen in the 0.14.3 photos.) */
+.stash-tab.gear-bust--ok {
+    border-width: 3px;
+    border-color: #8fd05a;
+    background-color: #8fd05a;
+}
+
+.stash-tab.gear-bust--no {
+    border-width: 3px;
+    border-color: #f0503c;
+    background-color: #f0503c;
+}
+
+.stash-tab.gear-bust--ok .stash-tab__label,
+.stash-tab.gear-bust--no .stash-tab__label {
+    color: #15181a;
+}
+
+/* M9: a weapon the mod being dragged goes on, the «se puede» green as the kit's places that take it; an outline, not the
+   foot's fill where it would lie. */
+.gear-item--takes {
+    border-width: 2px;
+    border-color: #8fd05a;
+}
+
 .gear-item--away {
     opacity: 0.25;
 }
@@ -172,6 +223,11 @@
 
 .gear-ghost--no {
     border-color: #f0503c;
+}
+
+/* Over a soldier's bust (M12): see-through, the bust and its green or red under it. */
+.gear-ghost--bust {
+    opacity: 0.35;
 }
 
 .gear-foot {

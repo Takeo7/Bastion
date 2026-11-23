@@ -326,6 +326,8 @@ namespace Bastion.UI.Strategy
         public string Unit;
         /// <summary>Shown with its sign, «+2» (StrategyText.Board.Signed).</summary>
         public bool Signed;
+        /// <summary>Under the pointer: what it does (M6: dodge and defence); null, nothing.</summary>
+        public string Tip;
     }
 
     /// <summary>One total a cell would change (N6): the cell, the total's key and words, from and to.</summary>

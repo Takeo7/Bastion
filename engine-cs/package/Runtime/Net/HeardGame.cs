@@ -20,6 +20,12 @@ namespace Bastion.Net
         /// <summary>The Trades this app's player has bought at (the run's seed and the node): one ware each (RunOrder).</summary>
         private readonly HashSet<string> bought = new HashSet<string>();
 
+        /// <summary>
+        /// The wares it bought, by their gear's id: never sold again (the 0.14.3's review, 7: it bought «the cheapest» and,
+        /// unused, sold it at half the order after).
+        /// </summary>
+        private readonly HashSet<string> boughtGear = new HashSet<string>();
+
         public HeardGame(IClock? clock = null)
         {
             this.clock = clock ?? new SystemClock();
@@ -131,7 +137,8 @@ namespace Bastion.Net
         /// (KitOrder); then, by where the run is. On the base, each puts its soldiers alive in the squad while there are seats,
         /// then the host proposes an upgrade it can pay (UpgradeOrder), else going out. On the map, a medicine to one
         /// wounded enough (MedicineOrder), then the host proposes the first node in sight. At a stop, the host answers yes
-        /// (a survivor with no bed for them, no); at a Trade each buys one ware (WareOrder); then each asks to go on, again
+        /// (a survivor with no bed for them, no); at a Trade each sells what its soldiers carry for no use (SellOrder) and buys
+        /// one ware (WareOrder); then each asks to go on, again
         /// if the partner has gone meanwhile (alone, it counts at once). Back to the base before the boss only when the squad
         /// is broken (Homeward), or as Care says; else the run comes back by itself after it, or when the squad falls. In a fight, nothing. Each order is one the engine would take now, by
         /// its own refusals on what was heard. Null: wait.
@@ -180,7 +187,7 @@ namespace Bastion.Net
                 var option = Runs.AnswerStopRefusal(c, 0) == null ? 0 : 1;
                 return Runs.AnswerStopRefusal(c, option) == null ? new AnswerStopCommand { Option = option } : null;
             }
-            var ware = WareOrder(c, slot, here);
+            var ware = SellOrder(c, slot, here) ?? WareOrder(c, slot, here);
             if (ware != null) return ware;
             var asked = stop.Leaving.Length > slot && stop.Leaving[slot];
             return asked && here.Any((p) => p != slot) ? null : new LeaveStopCommand { Ready = true };
@@ -303,9 +310,6 @@ namespace Bastion.Net
                     }
                 }
             if (!atBase || c.Stash == null) return null;
-            // The arrows as the magazines, for one with a bow or a crossbow in the hands only (cuadro 102, Gameplay 21/11).
-            bool Archer(CampaignSoldier s) => Gears.InSlot(s.Kit!, KitSlots.Primary) is Gear g && Content.GearWeapon(g) is FoundWeaponDef d && Content.Weapons[d.Weapon].Arrows;
-            bool Kept(CampaignSoldier s, Gear g) => g.Kind == GearKinds.Medicine || g.Kind == GearKinds.Mags || (g.Kind == GearKinds.Arrows && Archer(s));
             foreach (var s in mine)
                 foreach (var g in s.Kit!.Pack.Items.Select((p) => p.Gear).Where((g) => !Kept(s, g)).ToList())
                 {
@@ -321,6 +325,34 @@ namespace Bastion.Net
                     var spot = g != null ? Gears.FirstFit(s.Kit!.Pack, g) : null;
                     var order = spot != null ? Try(new MoveGearCommand { Gear = g!.Id, To = s.Id, Slot = KitSlots.Pack, X = spot.X, Y = spot.Y, Turned = spot.Turned }) : null;
                     if (order != null) return order;
+                }
+            return null;
+        }
+
+        /// <summary>A bow or a crossbow in `s`'s hands: its arrows are carried as the magazines are (cuadro 102, Gameplay 21/11).</summary>
+        private static bool Archer(CampaignSoldier s) => Gears.InSlot(s.Kit!, KitSlots.Primary) is Gear g && Content.GearWeapon(g) is FoundWeaponDef d && Content.Weapons[d.Weapon].Arrows;
+
+        /// <summary>
+        /// What a bot's soldier keeps in the pack for use: medicines, magazines, and an archer's arrows. The rest (weapons,
+        /// vests, belt things and mods it doesn't wear) goes to the stash on the base (KitOrder) and is sold at a Trade
+        /// (SellOrder).
+        /// </summary>
+        private static bool Kept(CampaignSoldier s, Gear g) => g.Kind == GearKinds.Medicine || g.Kind == GearKinds.Mags || (g.Kind == GearKinds.Arrows && Archer(s));
+
+        /// <summary>
+        /// At a Trade, what `slot`'s soldiers carry for no use (Kept), sold (M10, cuadro 141; Producto, 23/11: to measure the
+        /// runs' economy with sales and no cap): one thing a call, before the ware it buys (WareOrder), so it buys with what
+        /// it got. Never the supplies, nor what it bought (boughtGear); what the Trade won't take (the knife, a key, the
+        /// antiviral: Gears.SellRefusal) stays. Null if nothing is to sell.
+        /// </summary>
+        private CampaignCommand? SellOrder(CampaignState c, int slot, IReadOnlyList<int> here)
+        {
+            if (c.Run?.Stop?.Wares == null) return null;
+            foreach (var s in Mine(c, slot, here))
+                foreach (var g in s.Kit!.Pack.Items.Select((p) => p.Gear).Where((g) => g.Kind != GearKinds.Supplies && !Kept(s, g) && !boughtGear.Contains(g.Id)).ToList())
+                {
+                    var cmd = new SellGearCommand { Soldier = s.Id, Gear = g.Id };
+                    if (Gears.SellRefusal(c, slot, here, cmd) == null) return cmd;
                 }
             return null;
         }
@@ -360,6 +392,7 @@ namespace Bastion.Net
                     var cmd = new BuyWareCommand { Ware = w.Gear.Id, Soldier = s.Id };
                     if (Gears.BuyWareRefusal(c, slot, here, cmd) != null) continue;
                     bought.Add(key);
+                    boughtGear.Add(w.Gear.Id);
                     return cmd;
                 }
             return null;

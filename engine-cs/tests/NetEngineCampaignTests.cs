@@ -320,6 +320,31 @@ namespace Bastion.Engine.Tests
             Assert.Contains(host.Log, (l) => l.StartsWith("[campaña] Ana (puesto 1): «useGear» rechazada: ") && l.Contains($" · {(string)first["name"]!} ({soldier}), de 1, vivo,"));
         }
 
+        /// <summary>
+        /// M10 (cuadro 141): a sale at the Trade through the room, checked as a purchase. Without its soldier's or its gear's
+        /// id it is turned away («Mensaje no válido.», red.log once); well formed, the campaign's rules say why not away from
+        /// a Trade, and nothing is sold.
+        /// </summary>
+        [Fact]
+        public void ASaleIsCheckedAsAPurchaseIs()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            host.Say(ana, new { t = "newCampaign" });
+            var first = CampaignSent(ana)["soldiers"]![0]!;
+            var soldier = (string)first["id"]!;
+            var gear = (string)first["kit"]!["melee"]!["id"]!;
+            host.Say(ana, Ccmd(new { type = "sellGear", soldier = "", gear }));
+            Assert.Equal("Mensaje no válido.", (string?)ana.Take("error").Single()["message"]);
+            host.Say(ana, Ccmd(new { type = "sellGear", soldier, gear = new string('g', 40) }));
+            Assert.Equal("Mensaje no válido.", (string?)ana.Take("error").Single()["message"]);
+            Assert.Single(host.Log, "[sala] Ana: mensaje no válido (ccmd sellGear)");
+            host.Say(ana, Ccmd(new { type = "sellGear", soldier, gear }));
+            Assert.Equal(RunTexts.NotAtStop, (string?)ana.Take("rejected").Single()["message"]);
+            Assert.Empty(ana.Take("campaign"));
+            Assert.Equal(gear, host.Saved().Soldiers.Single((s) => s.Id == soldier).Kit!.Melee!.Id);
+        }
+
         [Fact]
         public void ACampaignOfBeforeTheRunsIsKeptAsideWhenTheHostOpens()
         {

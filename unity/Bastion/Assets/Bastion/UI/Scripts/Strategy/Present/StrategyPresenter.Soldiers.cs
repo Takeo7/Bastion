@@ -552,7 +552,7 @@ namespace Bastion.UI.Strategy
         {
             var now = TotalsOf(c, s);
             foreach (var (key, value, unit, shown) in now)
-                if (shown) v.Totals.Add(new BoardStatView { Key = key, Label = StrategyText.Board.Stats[key], Value = value, Unit = unit, Signed = StrategyText.Board.Signed.Contains(key) });
+                if (shown) v.Totals.Add(new BoardStatView { Key = key, Label = StrategyText.Board.Stats[key], Value = value, Unit = unit, Signed = StrategyText.Board.Signed.Contains(key), Tip = key == "hp" ? VestTip(c, s, value) : GuardTip(key, value) });
             foreach (var id in Board.BoardCells.Keys)
             {
                 if (Bars.CellState(s.Board, id) != "open") continue;
@@ -570,6 +570,19 @@ namespace Bastion.UI.Strategy
         /// name help): key, value, unit, and whether it shows on its own (health, actions, movement, both aims, dodge and will
         /// always; armour, crits, defence, sight more and healing more when it has some).
         /// </summary>
+        /// <summary>The health with a vest in a run, said whole: «Salud 7: 5 + 2 del chaleco»; null without one.</summary>
+        static string VestTip(CampaignState c, CampaignSoldier s, int hp)
+        {
+            var bare = Campaign.SquadMember(c, s).MaxHp;
+            return s.Kit?.Vest != null && hp > bare ? StrategyText.Board.HpWithVest(hp, bare, hp - bare, Lore.GearName(s.Kit.Vest.Kind, s.Kit.Vest.Type)) : null;
+        }
+
+        /// <summary>What a soldier's dodge or defence does, with its number (M6, Lore.GuardText); null for the other totals.</summary>
+        public static string GuardTip(string key, int value) =>
+            key == "dodge" ? Lore.GuardText.Dodge(value) + "\n" + Lore.GuardText.Against
+            : key == "defense" ? Lore.GuardText.Defense(value) + "\n" + Lore.GuardText.Against
+            : null;
+
         static List<(string key, int value, string unit, bool shown)> TotalsOf(CampaignState c, CampaignSoldier s)
         {
             var m = Campaign.SquadMember(c, s);
@@ -580,10 +593,14 @@ namespace Bastion.UI.Strategy
             var gunCrit = t.Crit + m.Mods.Crit + m.Mods.GunCrit;
             var meleeCrit = t.Crit + m.Mods.Crit + m.Mods.MeleeCrit;
             var defense = t.Defense + m.Mods.Defense;
+            // In a run its vest counts (Producto, 24/11: «7, no 5», as Salir and the battle show it): the health and the
+            // heavy vest's armour of its kit.
+            var hp = s.Kit != null ? Runs.MaxHp(s) : m.MaxHp;
+            var armor = s.Kit != null ? System.Math.Max(m.Armor, Runs.ArmorOf(s)) : m.Armor;
             return new List<(string, int, string, bool)>
             {
-                ("hp", m.MaxHp, "", true),
-                ("armor", m.Armor, "", m.Armor != 0),
+                ("hp", hp, "", true),
+                ("armor", armor, "", armor != 0),
                 ("ap", rank >= Content.ThirdActionRank ? Content.ApPerTurn + 1 : Content.ApPerTurn, "", true),
                 ("moves", moves, "", true),
                 ("gunAim", aim + m.Mods.Aim + m.Mods.GunAim, "", true),
@@ -591,7 +608,8 @@ namespace Bastion.UI.Strategy
                 ("gunCrit", gunCrit, " %", gunCrit != 0),
                 ("meleeCrit", meleeCrit, " %", meleeCrit != 0),
                 ("dodge", t.Dodge + m.Mods.Dodge, "", true),
-                ("defense", defense, "", defense != 0),
+                // (Shown always, as the dodge, M6: Arturo, 23/11, «no me queda claro que aporta la esquiva ni defensa».)
+                ("defense", defense, "", true),
                 ("will", m.Will, "", true),
                 ("sight", t.Sight + m.Mods.Sight, "", m.Mods.Sight != 0),
                 ("heal", m.Mods.Heal, "", m.Mods.Heal != 0),

@@ -657,6 +657,9 @@ namespace Bastion.Net
                     return c.Option == 0 || c.Option == 1;
                 case BuyWareCommand c:
                     return Id(c.Ware) && Id(c.Soldier);
+                // M10 (cuadro 141): a sale at the Trade, as a purchase: its soldier and its gear by their ids.
+                case SellGearCommand c:
+                    return Id(c.Soldier) && Id(c.Gear);
                 default:
                     // levelUp, cancelMission, recruit, advance, launch, vote, withdraw; startRun, endRun, leaveStop: nothing
                     // past their types.

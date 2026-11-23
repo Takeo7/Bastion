@@ -49,7 +49,8 @@ namespace Bastion.Engine.Tests
         public void TheTwoWeaponsTheirFindsAndTheirArrows()
         {
             var crossbow = Content.Weapons[WeaponIds.Crossbow];
-            Assert.Equal((5, 2, 1, RangeTableIds.Long, 2, true), (crossbow.Damage, crossbow.CritDamage, crossbow.Clip, crossbow.Range, crossbow.Noise, crossbow.Arrows));
+            // M8 (Arturo, 23/11): the same at any distance, no aim lost close (it had the precision rifle's table, Long).
+            Assert.Equal((5, 2, 1, RangeTableIds.Flat, 2, true), (crossbow.Damage, crossbow.CritDamage, crossbow.Clip, crossbow.Range, crossbow.Noise, crossbow.Arrows));
             var bow = Content.Weapons[WeaponIds.Bow];
             Assert.Equal((3, 1, 0, RangeTableIds.Medium, 1, true), (bow.Damage, bow.CritDamage, bow.Clip, bow.Range, bow.Noise, bow.Arrows));
             Assert.False(Content.Weapons[WeaponIds.Rifle].Arrows);

@@ -83,7 +83,8 @@ namespace Bastion.Engine.Tests
             Assert.Contains(Content.SoldierNames, (n) => n.Name == vip.Name);
             Assert.Null(vip.Arms!.Melee);
             Assert.False(Content.HasGun(vip));
-            Assert.Null(vip.Pack);
+            // A recruit's pack, empty, from the start (cuadro 140, M7: one of the squad from when they join).
+            Assert.Empty(vip.Pack!.Items);
             Assert.Equal(0, vip.Ap);
             // Among the dead, as on a Saqueo: no Cuervos.
             Assert.All(s.Units.Where((u) => u.Team == Teams.Alien), (u) => Assert.True(Content.Templates[u.Template].Undead, u.Template));

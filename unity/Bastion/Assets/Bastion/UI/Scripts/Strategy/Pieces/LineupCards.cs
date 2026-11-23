@@ -40,6 +40,10 @@ namespace Bastion.UI.Strategy
         /// <summary>Under the boots, how far a level card goes (Level): the maqueta's 45 px at 1440 high (Arte: PadWorld is where the boots stand).</summary>
         const float BelowBoots = 27;
 
+        /// <summary>The pointer onto a soldier's card (its id, the card) and off it: Salir's sheet in short over it (M4).</summary>
+        public Action<string, VisualElement> Over;
+        public Action<string> Out;
+
         /// <summary>The cards' layer, for a screen's own class.</summary>
         public VisualElement Layer => layer;
 
@@ -95,9 +99,16 @@ namespace Bastion.UI.Strategy
                 card.AddToClassList("lineup-card--bust");
                 var bust = Ui.El("lineup-card__bust", card);
                 if (!v.Fallen) bust.style.borderTopColor = bust.style.borderBottomColor = bust.style.borderLeftColor = bust.style.borderRightColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
-                var portrait = PortraitOf?.Invoke(v.Id);
+                // (No bust for a row with no soldier: the survivor fallen after joining, cuadro 140.)
+                var portrait = string.IsNullOrEmpty(v.Id) ? null : PortraitOf?.Invoke(v.Id);
                 if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
                 else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
+            }
+            if (!string.IsNullOrEmpty(v.Id))
+            {
+                var whose = v.Id;
+                card.RegisterCallback<PointerEnterEvent>(_ => Over?.Invoke(whose, card));
+                card.RegisterCallback<PointerLeaveEvent>(_ => Out?.Invoke(whose));
             }
             if (v.Removable)
             {
@@ -111,7 +122,7 @@ namespace Bastion.UI.Strategy
             // strategy.css .lineup-card.ready::after, its stamp, but «A PUNTO» as the player's state says everywhere since Lore's
             // pass (without gender: «LISTO» spoke of a soldier as a man); mixta-base.css .lineup-card.dead::after, a red «Caído» tag.
             if (v.Ready) Ui.Text("A PUNTO", "lineup-card__stamp font-title", card);
-            if (v.Fallen) Ui.Text("CAÍDO", "lineup-card__dead font-title", card);
+            if (v.Fallen) Ui.Text(v.Female ? "CAÍDA" : "CAÍDO", "lineup-card__dead font-title", card);
             for (var i = 0; i < v.Lines.Count; i++) Ui.Text(v.Lines[i], i == 0 ? "lineup-card__line lineup-card__line--first" : "lineup-card__line", card);
             foreach (var l in v.Learned)
             {

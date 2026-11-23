@@ -23,6 +23,15 @@ namespace Bastion.UI.Strategy
         readonly Func<string, Sprite> icon;
         readonly IStrategyHandlers handlers;
         string key;
+        StopView last;
+        /// <summary>The worn thing whose sale is being asked about in its row (M10, Producto 24/11); null, none.</summary>
+        string confirming;
+        /// <summary>
+        /// When the question opened (the real clock): its «Cambiar» heeds no press for AskGrace after it, so the second click
+        /// of a double click, landing on the plate drawn again, doesn't sell unasked (the 0.14.3's independent review, 4).
+        /// </summary>
+        float askedAt;
+        const float AskGrace = 0.5f;
 
         public StopPlate(VisualElement parent, TooltipLayer tips, Func<string, Sprite> icon, IStrategyHandlers handlers)
         {
@@ -36,7 +45,10 @@ namespace Bastion.UI.Strategy
         public void Set(StopView v)
         {
             Ui.Show(Root, v != null);
-            var k = Ui.Key(v);
+            last = v;
+            // (Gone, or the stop over: no question left open.)
+            if (confirming != null && (v?.Offers == null || !v.Offers.Exists(o => o.Gear.Id == confirming))) confirming = null;
+            var k = Ui.Key(v) + "|" + confirming;
             if (k == key) return;
             key = k;
             Root.Clear();
@@ -59,8 +71,29 @@ namespace Bastion.UI.Strategy
                 Ui.Text(StrategyText.Runs.PurseAfter, "runstop__purse-text font-title", line);
                 if (!string.IsNullOrEmpty(v.For)) Ui.Text(v.For, "runstop__for muted", purse);
                 if (!string.IsNullOrEmpty(v.PurseNote)) Ui.Text(v.PurseNote, "runstop__for muted", purse);
-                var list = Ui.El("runstop__wares", Root);
-                foreach (var w in v.Wares) Ware(list, w);
+                // The Trueque's two sides (M10): what the trader has, and what the chosen soldier has for him; side by side
+                // where they fit, the second under the first where not.
+                var sides = v.Offers != null ? Ui.El("runstop__sides", Root) : Root;
+                Root.EnableInClassList("runstop--trade", v.Offers != null);
+                var has = v.Offers != null ? Ui.El("runstop__side", sides) : Root;
+                if (v.Offers != null) Ui.Text(StrategyText.Runs.Wares.ToUpperInvariant(), "runstop__side-head font-title", has);
+                var list = Ui.El("runstop__wares", has);
+                foreach (var w in v.Wares) Ware(list, w, false);
+                if (v.Offers != null)
+                {
+                    var offer = Ui.El("runstop__side", sides);
+                    Ui.Text(StrategyText.Runs.Offers.ToUpperInvariant(), "runstop__side-head font-title", offer);
+                    if (!string.IsNullOrEmpty(v.OffersFrom)) Ui.Text(v.OffersFrom, "runstop__for muted", offer);
+                    if (!string.IsNullOrEmpty(v.OffersOther)) Ui.Text(v.OffersOther, "runstop__for muted", offer);
+                    var offered = new ScrollView(ScrollViewMode.Vertical);
+                    // The game's thin and faint bar (the sides' and the settlement's), not Unity's.
+                    offered.AddToClassList("runstop__offers");
+                    offered.AddToClassList("settle-scroll");
+                    // (Never sideways: a row asking, with «No» beside «Cambiar», is narrowed, not scrolled.)
+                    offered.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+                    offer.Add(offered);
+                    foreach (var w in v.Offers) Ware(offered.contentContainer, w, true);
+                }
             }
 
             if (v.Options.Count > 0)
@@ -117,8 +150,8 @@ namespace Bastion.UI.Strategy
             }
         }
 
-        /// <summary>A ware: its picture, name, what it costs and «Cambiar».</summary>
-        void Ware(VisualElement list, WareView w)
+        /// <summary>A ware: its picture, name, what it costs and «Cambiar»; offered (M10), what it pays and «Cambiar» to sell.</summary>
+        void Ware(VisualElement list, WareView w, bool offered)
         {
             var row = Ui.El("runstop__ware", list);
             var tile = Ui.El("runstop__tile gear-item--" + (w.Gear.Kind ?? "thing"), row);
@@ -136,12 +169,27 @@ namespace Bastion.UI.Strategy
             // The name, and under it why it can't be had now (B18: «Faltan 25 §.», «No cabe en la mochila de Anja.»), not only on
             // the greyed key's help.
             var words = Ui.El("runstop__ware-words", row);
+            var asking = offered && confirming == w.Gear.Id;
             var name = Ui.Text(w.Gear.Name, "runstop__ware-name", words);
             tips.Attach(name, w.Gear.Tip);
-            if (w.Why != null) Ui.Text(w.Why, "runstop__ware-why", words);
-            SuppliesMark.Make(row, w.Price, "supplies-mark--small runstop__price");
+            // What is worn goes for good: asked first, in its row (its name, the question under it, «Cambiar» and «No»).
+            if (asking) Ui.Text(StrategyText.Runs.SellWorn(w.Gear.Kind, w.Gear.Type, w.Gear.Count, w.Price), "runstop__ware-ask", words);
+            else if (w.Why != null) Ui.Text(w.Why, "runstop__ware-why", words);
+            else if (w.Note != null) Ui.Text(w.Note, "runstop__ware-note muted", words);
+            SuppliesMark.Make(row, w.Price, "supplies-mark--small runstop__price" + (offered ? " runstop__price--gain" : ""));
             var ware = w.Gear.Id;
-            var b = new Button(() => handlers.OnBuy(ware)) { text = StrategyText.Runs.Swap };
+            var worn = offered && w.Note != null;
+            var b = new Button(() =>
+            {
+                if (!offered) handlers.OnBuy(ware);
+                else if (worn && confirming != ware) Ask(ware);
+                else if (worn && Time.realtimeSinceStartup - askedAt < AskGrace) return;
+                else
+                {
+                    confirming = null;
+                    handlers.OnSell(ware);
+                }
+            }) { text = StrategyText.Runs.Swap };
             Ui.AddClasses(b, "runstop__buy font-title");
             row.Add(b);
             if (w.Why != null)
@@ -149,6 +197,21 @@ namespace Bastion.UI.Strategy
                 b.SetEnabled(false);
                 tips.Attach(b, w.Why);
             }
+            if (asking)
+            {
+                row.AddToClassList("runstop__ware--asking");
+                var no = new Button(() => Ask(null)) { text = StrategyText.Runs.SellNo };
+                Ui.AddClasses(no, "runstop__buy runstop__no font-title");
+                row.Add(no);
+            }
+        }
+
+        /// <summary>The question in a worn thing's row (`id`), or none: the plate drawn again as it is.</summary>
+        void Ask(string id)
+        {
+            confirming = id;
+            askedAt = Time.realtimeSinceStartup;
+            Set(last);
         }
     }
 }

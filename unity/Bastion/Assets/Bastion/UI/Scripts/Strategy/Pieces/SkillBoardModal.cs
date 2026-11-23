@@ -123,7 +123,11 @@ namespace Bastion.UI.Strategy
             {
                 var totals = Ui.El("board-card__totals", card);
                 Ui.Text(StrategyText.Board.Totals.ToUpperInvariant(), "board-card__title font-title", totals);
-                foreach (var t in last.Totals) Stat(totals, t.Label, t.Value, t.Unit, gains.FirstOrDefault(g => g.Key == t.Key)?.To, t.Signed);
+                foreach (var t in last.Totals)
+                {
+                    var row = Stat(totals, t.Label, t.Value, t.Unit, gains.FirstOrDefault(g => g.Key == t.Key)?.To, t.Signed);
+                    if (t.Tip != null) tips?.Attach(row, t.Tip);
+                }
             }
         }
 
@@ -131,13 +135,14 @@ namespace Bastion.UI.Strategy
         /// A total's row: its words, its value, and with `to` the value it would have, after an arrow and in the accent;
         /// `signed`, «+2» (StrategyText.Board.Signed).
         /// </summary>
-        static void Stat(VisualElement into, string label, int value, string unit, int? to, bool signed = false)
+        static VisualElement Stat(VisualElement into, string label, int value, string unit, int? to, bool signed = false)
         {
             string N(int n) => signed && n > 0 ? $"+{n}{unit}" : $"{n}{unit}";
             var row = Ui.El(to != null ? "board-stat board-stat--gain" : "board-stat", into);
             Ui.Text(label, "board-stat__label", row);
             Ui.Text(N(value), "board-stat__value", row);
             if (to != null) Ui.Text($"→ {N(to.Value)}", "board-stat__to", row);
+            return row;
         }
 
         /// <summary>For the labs («celda:steadyHand»): that cell picked and its card shown, as the pointer over it.</summary>

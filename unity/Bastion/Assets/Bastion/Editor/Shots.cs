@@ -117,7 +117,8 @@ namespace Bastion.EditorTools
 
         /// <summary>Frames waited in play mode before the first shot (the panels lay out and draw), and at most.</summary>
         const int PlaySettle = 10;
-        const int PlayLimit = 2000;
+        // (BASTION_SHOT_LIMITE: more of them, for a long watch with one shot at its end: SaltosLab over the bots' game.)
+        static readonly int PlayLimit = int.TryParse(Environment.GetEnvironmentVariable("BASTION_SHOT_LIMITE"), out int limit) && limit > 0 ? limit : 2000;
 
         /// <summary>
         /// The shots in play mode. The scene as the setup left it goes in as it is: no scene or domain reload (the

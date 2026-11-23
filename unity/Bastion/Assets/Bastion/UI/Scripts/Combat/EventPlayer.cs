@@ -564,8 +564,22 @@ namespace Bastion.UI.Combat
             // What a blast does to everyone in it plays at once (playtest 15/10 #16).
             if (item.e is ExplosiveEvent)
             {
+                // (BASTION_RITMO: what follows it as the engine gave it.)
+                if (Rhythm) Debug.Log($"[ritmo] tras el estallido: {string.Join(", ", queue.Take(24).Select(q => q.e.T + (UnitOf(q.e) is string who && who != "" ? " " + who : "")))}");
                 var blast = BlastResults(r);
                 if (blast.Count > 0) await PlayBlast(r, blast);
+                // The walls and floors it breaks: their dust at once, then settled together, as the doors on a walk are: the
+                // map rebuilt, the fog and the figures done once, not once a wall (Arte, 24/11: a grenade at a house's front,
+                // five SettleAll in one frame, the fog whole five times; RendimientoLab.Parones).
+                var broken = new List<(GameEvent e, int? by, int epoch)>();
+                while (queue.Count > 0 && (queue.Peek().e is TileChangedEvent || queue.Peek().e is FloorBrokenEvent)) broken.Add(Take(r));
+                if (broken.Count > 0)
+                {
+                    foreach (var q in broken) await PlaySafe(q);
+                    Fresh(r);
+                    foreach (var q in broken) NoteResult(q.e);
+                    await SettleAll(r, broken.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), false);
+                }
             }
         }
 
@@ -1097,6 +1111,9 @@ namespace Bastion.UI.Combat
             var broken = new HashSet<string>();
             var stopped = new HashSet<string>();
             var late = new HashSet<string>();
+            // Those raised or arrived in the turn so far: a walk that names one (a noise they hear) waits for them (B8, z67).
+            var born = new HashSet<string>();
+            var waiting = new HashSet<string>();
             // Where someone still stands when the walks play: one of ours felled after, one whose own walk comes after.
             var held = new HashSet<int>();
             var at = new Dictionary<string, Pos>();
@@ -1113,10 +1130,21 @@ namespace Bastion.UI.Combat
                     continue;
                 }
                 var e = all[i].e;
+                // One of the dead raised this turn (R22, B8: «Unknown unit z67»): late as the ones that come; and not on the view
+                // until its rising plays, so no walk played before it may name it.
+                if (e is ReanimatedEvent risen && !string.IsNullOrEmpty(risen.Zombie?.Id))
+                {
+                    late.Add(risen.Zombie.Id);
+                    born.Add(risen.Zombie.Id);
+                }
                 if (e is PatrolEvent || e is PodActivatedEvent || e is PodSplitEvent || e is SpawnedEvent)
                 {
                     if (e is PodActivatedEvent pa) late.UnionWith(Woken(all, i, pa.Pod));
-                    if (e is SpawnedEvent sp) late.UnionWith(sp.Units.Select(x => x.Id));
+                    if (e is SpawnedEvent sp)
+                    {
+                        late.UnionWith(sp.Units.Select(x => x.Id));
+                        born.UnionWith(sp.Units.Select(x => x.Id));
+                    }
                     actor = null;
                     chaining = false;
                     started = true;
@@ -1145,6 +1173,8 @@ namespace Bastion.UI.Combat
                     }
                     chain.Add(i);
                     if (moved != null && moved.Path.Any(p => held.Contains(Grid.NodeOf(v, p)))) broken.Add(actor);
+                    // (R22, B8: the reaction shot's noise on a32's way heard by z67, raised before it but played after the walks.)
+                    if (Mentions(e).Any(born.Contains)) waiting.Add(actor);
                 }
                 else
                 {
@@ -1158,10 +1188,11 @@ namespace Bastion.UI.Combat
                 }
                 if (moved != null && moved.Path.Count > 0) at[moved.Unit] = moved.Path[moved.Path.Count - 1];
             }
-            var walkers = order.Where(id => !broken.Contains(id) && chains[id].Any(i => all[i].e is MovedEvent)).ToList();
+            var walkers = order.Where(id => !broken.Contains(id) && !waiting.Contains(id) && chains[id].Any(i => all[i].e is MovedEvent)).ToList();
             var taken = new HashSet<int>(walkers.SelectMany(id => chains[id]));
             // Why each of the dead that walk in their order does, for the log (Arturo, 01/11 #5: «why didn't they all move at once?»).
-            string Why(string id) => late.Contains(id) ? "recién llegados o descubiertos" : broken.Contains(id) ? "su camino pasa por donde aún hay alguien"
+            string Why(string id) => late.Contains(id) ? "recién llegados o descubiertos" : waiting.Contains(id) ? "esperan a uno levantado o llegado antes"
+                : broken.Contains(id) ? "su camino pasa por donde aún hay alguien"
                 : Unit(id) is Unit u && AbilityTexts.ShootsFromRange(u) ? "disparan" : stopped.Contains(id) ? "andan después de atacar" : "otros";
             var apart = all.Take(end).Where((q, i) => !pre.Contains(i) && !taken.Contains(i) && q.e is MovedEvent m && Unit(m.Unit)?.Team == Teams.Alien)
                 .Select(q => ((MovedEvent)q.e).Unit).Distinct().GroupBy(Why).Select(g => $"{g.Count()} {g.Key}").ToList();
@@ -1201,6 +1232,8 @@ namespace Bastion.UI.Combat
             biters = 0;
             var seen = new HashSet<string>();
             var late = new HashSet<string>();
+            // Those raised or arrived in the turn so far: a bite that names one (a noise they hear) can't go before them (B8).
+            var born = new HashSet<string>();
             // Who the events jumped over touch, and those of them whose place matters: who walks, fires on overwatch or falls.
             var touched = new HashSet<string>();
             var fixedOnes = new HashSet<string>();
@@ -1209,7 +1242,17 @@ namespace Bastion.UI.Combat
             {
                 var e = all[i].e;
                 if (e is PodActivatedEvent pa) late.UnionWith(Woken(all, i, pa.Pod));
-                if (e is SpawnedEvent sp) late.UnionWith(sp.Units.Select(x => x.Id));
+                if (e is SpawnedEvent sp)
+                {
+                    late.UnionWith(sp.Units.Select(x => x.Id));
+                    born.UnionWith(sp.Units.Select(x => x.Id));
+                }
+                // (One raised this turn: late too, as above.)
+                if (e is ReanimatedEvent risen && !string.IsNullOrEmpty(risen.Zombie?.Id))
+                {
+                    late.Add(risen.Zombie.Id);
+                    born.Add(risen.Zombie.Id);
+                }
                 var who = Starter(e);
                 if (who != null && seen.Add(who) && !(e is MovedEvent) && Unit(who) is Unit u && u.Alive && !AbilityTexts.ShootsFromRange(u))
                 {
@@ -1222,7 +1265,7 @@ namespace Bastion.UI.Combat
                         var fell = new HashSet<string>(block.OfType<DiedEvent>().Select(d => d.Unit));
                         var clash = block.SelectMany(Touches).Where(touched.Contains).Distinct().ToList();
                         var fells = clash.Any(fell.Contains);
-                        if (!late.Contains(who) && !fells && !clash.Any(fixedOnes.Contains))
+                        if (!late.Contains(who) && !fells && !clash.Any(fixedOnes.Contains) && !block.SelectMany(Mentions).Any(born.Contains))
                         {
                             for (var k = i; k < j; k++) front.Add(k);
                             biters++;
@@ -1248,6 +1291,15 @@ namespace Bastion.UI.Combat
             if (e is HuntingEvent || e is ForgotEvent || e is TurnedEvent || e is NoiseEvent) yield break;
             if (UnitOf(e) is string id && id != "") yield return id;
             if (e is ShotEvent s && !string.IsNullOrEmpty(s.Target)) yield return s.Target;
+        }
+
+        /// <summary>Every unit `e` names, a noise's hearers too: those the view must already have to take it (B8).</summary>
+        static IEnumerable<string> Mentions(GameEvent e)
+        {
+            if (UnitOf(e) is string id && id != "") yield return id;
+            if (e is ShotEvent s && !string.IsNullOrEmpty(s.Target)) yield return s.Target;
+            if (e is NoiseEvent n && n.Heard != null)
+                foreach (var heard in n.Heard) yield return heard;
         }
 
         /// <summary>
@@ -3803,6 +3855,10 @@ namespace Bastion.UI.Combat
             var killed = s.Units.Count(u => u.Team == Teams.Alien && !u.Alive);
             var vip = s.Mission.Kind == MissionKinds.Rescue && s.Mission.ObjectiveUnit != null ? s.Units.FirstOrDefault(u => u.Id == s.Mission.ObjectiveUnit)?.Name : null;
             var haul = Looting.BroughtBack(s);
+            // Whether a run's survivor got out will stay (a bed for them: the engine's rule, Runs.SurvivorStays; the 0.14.3's
+            // independent review, 6): «se une» only then, and only then what they carry counted as brought home.
+            var campaign = control.Campaign?.Invoke();
+            var stays = s.Run == null || campaign == null || Runs.SurvivorStays(campaign, s);
             var loot = Lore.LootSummary(haul.Supplies, haul.Items, haul.Medicines, haul.Food, haul.Parts, haul.Weapons, haul.Mods);
             string success;
             switch (s.Mission.Kind)
@@ -3812,10 +3868,10 @@ namespace Bastion.UI.Combat
                 case MissionKinds.Hack: success = "Equipo en marcha"; break;
                 // An expedition's Rescate is a Saqueo too (N2, 17/11): what was found; and first, if the survivor got out in La
                 // Lata, that they join (Lore's line). Left without a seat, or dead, the log has said so.
-                case MissionKinds.Rescue when s.Run != null: success = RunJoined(s) + RunHaul(s); break;
+                case MissionKinds.Rescue when s.Run != null: success = RunJoined(s, stays) + RunHaul(s, stays); break;
                 case MissionKinds.Rescue: success = vip != null ? $"{vip}, a salvo" : "La persona retenida, a salvo"; break;
                 // (On an expedition, every stage that is a Saqueo underneath: normal, Asedio, Travesía, Guarida, the boss's.)
-                case MissionKinds.Scavenge: success = s.Run != null ? RunJoined(s) + RunHaul(s) : loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
+                case MissionKinds.Scavenge: success = s.Run != null ? RunJoined(s, stays) + RunHaul(s, stays) : loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
                 default: success = "No queda ninguno en pie"; break;
             }
             string why;
@@ -3892,10 +3948,12 @@ namespace Bastion.UI.Combat
         /// how many more. Not Looting.BroughtBack, the missions' of before (their backpacks, empty here: R4 said «Volvéis con
         /// las mochilas vacías» with 13 § aboard).
         /// </summary>
-        static string RunHaul(GameState s)
+        static string RunHaul(GameState s, bool stays)
         {
             var found = new List<Bastion.Engine.Gear>();
-            foreach (var u in s.Units.Where(u => u.Team == Teams.Xcom && u.CampaignId != null && !Fell(u)))
+            // The one who joined too (a recruit coming home): what they carry comes home in the report (RunFights), so here
+            // (the 0.14.3's independent review, 6: «nada encontrado» on the card with the haul in their pack).
+            foreach (var u in s.Units.Where(u => u.Team == Teams.Xcom && (u.CampaignId != null || stays && Recruit(s, u)) && !Fell(u)))
             {
                 if (u.Pack != null) found.AddRange(u.Pack.Items.Select(p => p.Gear));
                 if (u.Kit != null)
@@ -3920,11 +3978,13 @@ namespace Bastion.UI.Combat
         /// A run's survivor brought out in La Lata (N2): Lore's line that they join, before what was found, as the card's
         /// lines go (a headline, no stop, parts by « · »: Lore, 17/11); else nothing.
         /// </summary>
-        static string RunJoined(GameState s)
+        static string RunJoined(GameState s, bool stays)
         {
             var id = SurvivorOf(s);
             var joined = id != null ? s.Units.FirstOrDefault(u => u.Id == id && u.Evacuated) : null;
-            return joined != null ? Lore.TalkText.Joined(joined.Name).TrimEnd('.') + " · " : "";
+            if (joined == null) return "";
+            // No bed for them: they don't stay, as the log and the report say (what they carried, in the report: NoBed).
+            return (stays ? Lore.TalkText.Joined(joined.Name) : RunTexts.SurvivorNoRoom(joined.Name)).TrimEnd('.') + " · ";
         }
 
         /// <summary>Fallen out there, or left behind (RunFights.ApplyFight's Fell).</summary>

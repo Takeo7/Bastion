@@ -10,9 +10,9 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Strategy
 {
     /// <summary>
-    /// The map of an expedition (H1; .dev-snapshots/gameplay/runs/PLAN-RUNS.md §3.1) as a map drawn on paper (cuadros 126,
-    /// 129, 131 and 132, Arturo 23/11: «que parezca un mapa dibujado y los iconos y las líneas también, en un papel»; P1, the
-    /// light paper, Arte's valley under it). The sheet fills the map's side, the rows from the base at the bottom to the boss
+    /// The map of an expedition (H1; .dev-snapshots/gameplay/runs/PLAN-RUNS.md §3.1), in the dark (cuadro 143, Arturo 23/11:
+    /// the paper of the cuadros 126–135 out, «el nuevo, en oscuro»: no paper, no valley drawn, no symbols by hand; the
+    /// words below that say ink and paper are its light ink and its dark ground). The sheet fills the map's side, the rows from the base at the bottom to the boss
     /// at the top in straight columns over the whole width (the C3), and the stages and ways are part of the drawing: each
     /// stage its place's symbol in ink ringed by hand, its kind small at its left, its name and notes at its right on a halo
     /// of paper (no line of the valley under a word); the way taken gone over twice in ink, the ones to take now in the red
@@ -26,18 +26,16 @@ namespace Bastion.UI.Strategy
     {
         /// <summary>The marks' radius (the ways stop at their rim), the base's.</summary>
         const float NodeR = 22, BossR = 30, StartR = 19;
-        /// <summary>How strong the valley's drawing is in the ink (Arturo, cuadro 135: 85 %).</summary>
-        const float ValleyInk = 0.85f;
         /// <summary>The kind's small mark at a stage's left (points; Producto, cuadro 135: 17 read barely, on the Duo 12 px).</summary>
         const float KindSide = 20;
 
-        // The paper and its inks (P1): the paper's colour under the words, the ink, the far stages' grey, the red marker, the
-        // blue of the notes, the boss's dark red. Every word on its halo at least as readable as the map of before's far names
-        // (#a1a79d on #111416, 7.5:1; Producto, cuadro 132, 3): the far 8.2, the notes 8.6, the boss 7.4, the ink 11.
-        static readonly Color Paper = new Color(0.88f, 0.84f, 0.74f), Edge = new Color(0.5f, 0.4f, 0.26f);
-        static readonly Color Ink = new Color(0.15f, 0.12f, 0.09f), Far = new Color(0.235f, 0.212f, 0.184f);
-        static readonly Color Pencil = new Color(0.38f, 0.33f, 0.27f, 0.62f), Marker = new Color(0.76f, 0.14f, 0.09f), Note = new Color(0.10f, 0.19f, 0.42f);
-        static readonly Color BossInk = new Color(0.48f, 0.08f, 0.05f);
+        // In the dark since the cuadro 143 (Arturo, 23/11: «el nuevo, en oscuro»; the C3 of the cuadro 129 with all added
+        // since): the map's ground under the words (Paper, the name kept), the light ink, the far stages at half light, the
+        // ways to come faint, the red of the ways open now, the notes' blue, the boss's red; the game's colours (Mixta).
+        static readonly Color Paper = new Color(0.067f, 0.078f, 0.086f), Edge = new Color(0.149f, 0.165f, 0.176f);
+        static readonly Color Ink = new Color(0.933f, 0.941f, 0.918f), Far = new Color(0.631f, 0.655f, 0.616f);
+        static readonly Color Pencil = new Color(1f, 1f, 1f, 0.26f), Marker = new Color(0.94f, 0.31f, 0.24f), Note = new Color(0.616f, 0.706f, 0.761f);
+        static readonly Color BossInk = new Color(1f, 0.416f, 0.333f);
 
         readonly VisualElement backdrop;
         readonly VisualElement field;
@@ -172,77 +170,10 @@ namespace Bastion.UI.Strategy
 
         // ------------------------------------------------------------ the sheet
 
-        /// <summary>
-        /// The paper and the valley drawn on it: Arte's (Resources/Strategy/mapa-papel-claro, mapa-dibujo-claro or mapa-dibujo,
-        /// filling the sheet, cropped), the valley in the ink; till they are in, a paper of our own (its colour, a grain,
-        /// darker towards the edges). The labs try others by their path (BASTION_MAPA_PAPEL, BASTION_MAPA_DIBUJO).
-        /// </summary>
+        /// <summary>The map's ground: plain dark (cuadro 143: no paper, no valley drawn).</summary>
         void Sheet()
         {
-            var paper = Art("BASTION_MAPA_PAPEL", "Strategy/mapa-papel-claro");
-            if (paper != null)
-            {
-                sheet.style.backgroundImage = paper;
-#pragma warning disable CS0618
-                sheet.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-#pragma warning restore CS0618
-            }
-            else
-            {
-                sheet.style.backgroundColor = Paper;
-                sheet.generateVisualContent += OwnPaper;
-            }
-            var drawing = Art("BASTION_MAPA_DIBUJO", "Strategy/mapa-dibujo-claro") ?? Resources.Load<Texture2D>("Strategy/mapa-dibujo");
-            if (drawing == null) return;
-            var valley = Ui.El("runmap-valley", sheet);
-            valley.pickingMode = PickingMode.Ignore;
-            valley.style.backgroundImage = drawing;
-#pragma warning disable CS0618
-            valley.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-#pragma warning restore CS0618
-            // (The labs try it stronger: BASTION_MAPA_DIBUJO_TINTA, 0–1; Producto, cuadro 132: the 85 % beside the 55 %.)
-            var strength = float.TryParse(Environment.GetEnvironmentVariable("BASTION_MAPA_DIBUJO_TINTA"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var k) ? Mathf.Clamp01(k) : ValleyInk;
-            valley.style.unityBackgroundImageTintColor = new Color(Ink.r, Ink.g, Ink.b, strength);
-        }
-
-        static Texture2D Art(string env, string resource)
-        {
-            var path = Environment.GetEnvironmentVariable(env);
-            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
-            {
-                var t = new Texture2D(2, 2);
-                if (t.LoadImage(System.IO.File.ReadAllBytes(path))) return t;
-            }
-            return Resources.Load<Texture2D>(resource);
-        }
-
-        static void OwnPaper(MeshGenerationContext ctx)
-        {
-            var r = ctx.visualElement.contentRect;
-            float w = r.width, h = r.height;
-            if (w <= 0 || h <= 0) return;
-            var g = ctx.painter2D;
-            var rnd = new System.Random(7);
-            for (var i = 0; i < 1100; i++)
-            {
-                g.fillColor = new Color(Edge.r, Edge.g, Edge.b, 0.05f + (float)rnd.NextDouble() * 0.08f);
-                g.BeginPath();
-                g.Arc(new Vector2((float)rnd.NextDouble() * w, (float)rnd.NextDouble() * h), 0.4f + (float)rnd.NextDouble() * 0.9f, 0, 360);
-                g.Fill();
-            }
-            for (var i = 0; i < 16; i++)
-            {
-                var inset = i * 3f + 1.5f;
-                g.strokeColor = new Color(Edge.r, Edge.g, Edge.b, 0.11f * (1 - i / 16f));
-                g.lineWidth = 3;
-                g.BeginPath();
-                g.MoveTo(new Vector2(inset, inset));
-                g.LineTo(new Vector2(w - inset, inset));
-                g.LineTo(new Vector2(w - inset, h - inset));
-                g.LineTo(new Vector2(inset, h - inset));
-                g.ClosePath();
-                g.Stroke();
-            }
+            sheet.style.backgroundColor = Paper;
         }
 
         // ------------------------------------------------------------ where each goes
@@ -317,9 +248,8 @@ namespace Bastion.UI.Strategy
                 Rise(hit, n.Row);
                 if (n.Hidden)
                 {
-                    // Arte's «?» if drawn («unknown»), else ours in pencil.
-                    if (Drawn("unknown") != null) Symbol(p, "unknown", r * 1.1f, Far, hit);
-                    else Ui.Text("?", "rnode__q font-title", hit).pickingMode = PickingMode.Ignore;
+                    // A «?» at half light.
+                    Ui.Text("?", "rnode__q font-title", hit).pickingMode = PickingMode.Ignore;
                     continue;
                 }
                 var far = !n.Open && !n.At && !n.Done && !n.Boss;
@@ -371,40 +301,12 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>
-        /// An id's picture in `e`, tinted by `e`'s tint: Arte's hand-drawn symbol for the paper if there is one (cuadro 132:
-        /// white on transparent, Resources/Strategy/simbolos/<id with «:» as «-»>.png; the labs, BASTION_MAPA_SIMBOLOS's folder),
-        /// else our line drawing, else the HUD's icon.
+        /// An id's picture in `e`, tinted by `e`'s tint: our line drawing, else the HUD's icon (cuadro 143: no symbols by hand).
         /// </summary>
         void Paint(VisualElement e, string id)
         {
-            if (Drawn(id) is Texture2D drawn)
-            {
-                e.style.backgroundImage = drawn;
-#pragma warning disable CS0618
-                e.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
-#pragma warning restore CS0618
-            }
-            else if (LineIcon.Has(id)) e.Add(new LineIcon(id) { pickingMode = PickingMode.Ignore });
+            if (LineIcon.Has(id)) e.Add(new LineIcon(id) { pickingMode = PickingMode.Ignore });
             else if (icon?.Invoke(id) is Sprite sprite) e.style.backgroundImage = new StyleBackground(sprite);
-        }
-
-        static readonly Dictionary<string, Texture2D> drawnCache = new Dictionary<string, Texture2D>();
-
-        static Texture2D Drawn(string id)
-        {
-            if (string.IsNullOrEmpty(id)) return null;
-            if (drawnCache.TryGetValue(id, out var t)) return t;
-            var file = id.Replace(':', '-');
-            var folder = Environment.GetEnvironmentVariable("BASTION_MAPA_SIMBOLOS");
-            var path = string.IsNullOrEmpty(folder) ? null : System.IO.Path.Combine(folder, file + ".png");
-            if (path != null && System.IO.File.Exists(path))
-            {
-                t = new Texture2D(2, 2);
-                if (!t.LoadImage(System.IO.File.ReadAllBytes(path))) t = null;
-            }
-            t ??= Resources.Load<Texture2D>("Strategy/simbolos/" + file);
-            drawnCache[id] = t;
-            return t;
         }
 
         /// <summary>A stage's words at `p`: its name on a halo of paper (no line of the valley under it), its notes under it.</summary>
@@ -610,7 +512,7 @@ namespace Bastion.UI.Strategy
                 if (n.Hidden)
                 {
                     var dashed = Ring(p, r - 3, seed);
-                    for (var i = 0; i + 1 < dashed.Count; i += 3) Hand(g, new List<Vector2> { dashed[i], dashed[i + 1] }, Pencil, 1.2f, seed, 0.2f);
+                    for (var i = 0; i + 1 < dashed.Count; i += 3) Hand(g, new List<Vector2> { dashed[i], dashed[i + 1] }, Pencil, 1.2f, seed, 0);
                     continue;
                 }
                 var open = n.Open && n.Why == null;
@@ -622,10 +524,10 @@ namespace Bastion.UI.Strategy
                 g.BeginPath();
                 g.Arc(p, r, 0, 360);
                 g.Fill();
-                Hand(g, Ring(p, r, seed), colour, width, seed, 0.35f);
+                Hand(g, Ring(p, r, seed), colour, width, seed, 0);
                 var lit = n.Id == picked || n.Id == hovered;
-                if (n.Boss || n.At || lit) Hand(g, Ring(p, r + 3.5f, seed + 7), lit && open ? Marker : colour, width * 0.75f, seed + 3, 0.35f);
-                if (n.Id == view.Proposed) Hand(g, Ring(p, r + 6.5f, seed + 11), Ui.Hex(view.ProposedColor, Marker), 2.2f, seed + 5, 0.3f);
+                if (n.Boss || n.At || lit) Hand(g, Ring(p, r + 3.5f, seed + 7), lit && open ? Marker : colour, width * 0.75f, seed + 3, 0);
+                if (n.Id == view.Proposed) Hand(g, Ring(p, r + 6.5f, seed + 11), Ui.Hex(view.ProposedColor, Marker), 2.2f, seed + 5, 0);
             }
             // The base: a double ring in ink.
             var home = at["start"];
@@ -633,8 +535,8 @@ namespace Bastion.UI.Strategy
             g.BeginPath();
             g.Arc(home, StartR, 0, 360);
             g.Fill();
-            Hand(g, Ring(home, StartR, 3), Ink, 2.2f, 3, 0.35f);
-            Hand(g, Ring(home, StartR + 3.5f, 9), Ink, 1.4f, 9, 0.35f);
+            Hand(g, Ring(home, StartR, 3), Ink, 2.2f, 3, 0);
+            Hand(g, Ring(home, StartR + 3.5f, 9), Ink, 1.4f, 9, 0);
             // «AQUÍ»: a pin stuck at the ring's top right, its shadow on the paper.
             var here = view.AtStart ? home + new Vector2(13, -13) : view.Nodes.FirstOrDefault(n => n.At) is RunNodeView now && at.TryGetValue(now.Id, out var np) ? np + new Vector2(RadiusOf(now) * 0.7f, -RadiusOf(now) * 0.7f) : (Vector2?)null;
             if (here is Vector2 pin && (buildAt < 0 || t > RowAt(0)))
@@ -665,20 +567,16 @@ namespace Bastion.UI.Strategy
             switch (kind)
             {
                 case 3:
-                    // Ink, gone over twice: the second a little beside the first, lighter, not the same all along.
-                    Hand(g, line, Ink, 2.5f, seed, 0.45f);
-                    var again = Wobble(a, b, seed + 5, 2.2f);
-                    if (f < 1) again = again.Take(line.Count).ToList();
-                    Hand(g, again, new Color(Ink.r, Ink.g, Ink.b, 0.7f), 1.5f, seed + 5, 0.5f);
+                    // The way taken: the light ink, once (cuadro 143: no hand gone over twice).
+                    Hand(g, line, Ink, 2.5f, seed, 0);
                     break;
                 case 2:
-                    // The marker: wider, its pressure changing, a blot where it was set down.
-                    Hand(g, line, Marker, 3.4f, seed, 0.35f);
-                    Dot(g, line[0], 2.4f, Marker);
+                    // The ways open now, in the red, a little wider.
+                    Hand(g, line, Marker, 3f, seed, 0);
                     break;
                 default:
-                    // Pencil: thin and grainy, fainter still where nothing is seen yet.
-                    Hand(g, line, new Color(Pencil.r, Pencil.g, Pencil.b, Pencil.a * (kind == 0 ? 0.55f : 0.9f)), 1.35f, seed, 0.4f, true);
+                    // The far ones fine and faint, fainter still where nothing is seen yet (the C3's).
+                    Hand(g, line, new Color(Pencil.r, Pencil.g, Pencil.b, Pencil.a * (kind == 0 ? 0.55f : 0.9f)), 1.35f, seed, 0);
                     break;
             }
         }
@@ -694,7 +592,8 @@ namespace Bastion.UI.Strategy
             {
                 var t = i / (float)(pts.Count - 1);
                 var pressure = 1 + (Mathf.PerlinNoise(t * 6.5f, seed * 1.7f) - 0.5f) * 2 * pulse;
-                var taper = Mathf.Lerp(0.7f, 1, Mathf.Sin(Mathf.Clamp01(t) * Mathf.PI) * 1.4f);
+                // (No hand since the cuadro 143: `pulse` 0 everywhere, the same width all along.)
+                var taper = pulse > 0 ? Mathf.Lerp(0.7f, 1, Mathf.Sin(Mathf.Clamp01(t) * Mathf.PI) * 1.4f) : 1;
                 var c = colour;
                 if (grain) c.a *= 0.65f + 0.35f * Mathf.PerlinNoise(i * 0.9f, seed);
                 g.strokeColor = c;
@@ -741,23 +640,22 @@ namespace Bastion.UI.Strategy
                 var t = i / (float)steps;
                 var d = Bez(a, b, Mathf.Min(1, t + 0.01f)) - Bez(a, b, Mathf.Max(0, t - 0.01f));
                 var normal = new Vector2(-d.y, d.x).normalized;
-                var w = (Mathf.PerlinNoise(t * len / 40f, seed) - 0.5f) * 2 * amp * Mathf.Sin(t * Mathf.PI);
+                // (Steady since the cuadro 143: the C3's curve as it is.)
+                var w = 0f;
                 pts.Add(Bez(a, b, t) + normal * w);
             }
             return pts;
         }
 
-        /// <summary>A ring by hand: not quite round, a little past where it began.</summary>
+        /// <summary>A stage's ring: round and closed (cuadro 143: no ring by hand).</summary>
         static List<Vector2> Ring(Vector2 c, float r, float seed)
         {
             var pts = new List<Vector2>();
-            var from = Mathf.PerlinNoise(seed, 0.3f) * Mathf.PI * 2;
-            const int n = 44;
+            const int n = 48;
             for (var i = 0; i <= n; i++)
             {
-                var a = from + (Mathf.PI * 2 + 0.5f) * i / n;
-                var k = 1 + (Mathf.PerlinNoise(i * 0.3f, seed) - 0.5f) * 0.12f + 0.05f * i / n;
-                pts.Add(c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r * k);
+                var a = Mathf.PI * 2 * i / n;
+                pts.Add(c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r);
             }
             return pts;
         }

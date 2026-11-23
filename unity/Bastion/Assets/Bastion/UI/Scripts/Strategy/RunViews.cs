@@ -34,7 +34,13 @@ namespace Bastion.UI.Strategy
         public string Id;
         public string Name;
         public bool On;
+        /// <summary>This player may handle it (Runs.Controls: the partner's too while they are away).</summary>
         public bool Mine;
+        /// <summary>
+        /// The other seat's, whoever handles it now: its bust's light and studio, as Soldados' (a partner away left them lit
+        /// as one's own here and as theirs there, and each screen's light drew the bust again: every frame).
+        /// </summary>
+        public bool Theirs;
         /// <summary>The partner's colour on theirs («#rrggbb»); null on one's own.</summary>
         public string Color;
         public string Tip;
@@ -197,6 +203,14 @@ namespace Bastion.UI.Strategy
         public string For;
         /// <summary>That only what the soldiers carry counts on an expedition, not the stash (B18).</summary>
         public string PurseNote;
+        /// <summary>
+        /// The Trueque's other side (M10, cuadro 141): what the chosen soldier wears and carries that the trader takes, each at
+        /// what it pays (Price, «+45»), why not now; whose it is (OffersFrom); null, no such side (not a Trueque).
+        /// </summary>
+        public List<WareView> Offers;
+        public string OffersFrom;
+        /// <summary>With more than one of this player's soldiers: how to offer another's (OffersOther); null, one only.</summary>
+        public string OffersOther;
         /// <summary>«Seguir»; on, this player has asked; why not yet (answer first); the partner awaited.</summary>
         public string Leave;
         public bool LeaveOn;
@@ -227,6 +241,8 @@ namespace Bastion.UI.Strategy
         public GearItemView Gear;
         public string Price;
         public string Why;
+        /// <summary>On the side offered (M10): that it is worn, not in the pack («Lo lleva puesto»); null, in the pack.</summary>
+        public string Note;
     }
 
     /// <summary>Mejoras (H2): the base's six, each with its level, what the next costs and «Mejorar» (a vote with two).</summary>

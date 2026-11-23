@@ -84,6 +84,14 @@ namespace Bastion.UI.Strategy
         public string Weapon;
         /// <summary>«Botiquín · Granada de humo»; null, nothing.</summary>
         public string Belt;
+        /// <summary>The runs' kit (M4, Arturo 23/11): the vest worn; null, none.</summary>
+        public string Vest;
+        /// <summary>The runs' pack: «3 cosas · le queda sitio», «Llena», «Vacía»; null, not shown.</summary>
+        public string Pack;
+        /// <summary>The experience's lines with bars filled («Disparo 2 · Forma física 1»); null, none yet.</summary>
+        public string Experience;
+        /// <summary>«2 puntos por gastar»; null, none.</summary>
+        public string Points;
         /// <summary>The board's abilities by name; empty, none yet.</summary>
         public List<string> Abilities = new List<string>();
         /// <summary>«Sin heridas», «Heridas · 2 misiones», «Mordisco · se convierte en 3 días».</summary>
@@ -125,6 +133,8 @@ namespace Bastion.UI.Strategy
         public List<string> Lines = new List<string>();
         /// <summary>«CAÍDO»: the card in red.</summary>
         public bool Fallen;
+        /// <summary>A woman's: «CAÍDA» on it (Lore, 23/11); unknown (the survivor fallen after joining, with no soldier), «CAÍDO».</summary>
+        public bool Female;
         public bool Removable;
         public bool Ready;
         /// <summary>What the mission taught (learnedTags): «+4 Disparo», «▲ DISPARO +8 %», «+1 Habilidad».</summary>

@@ -123,6 +123,8 @@ namespace Bastion.UI.Hud
         public string Color;
         public bool Selected;
         public bool Dead;
+        /// <summary>A woman's (Appearance.Sex «f»): «CAÍDA» on the bust, not «CAÍDO» (Lore, 23/11).</summary>
+        public bool Female;
         public bool Evacuated;
         public bool InPlay;
         /// <summary>A soldier, with a bust by the name (a siege's turret has none).</summary>
@@ -246,6 +248,8 @@ namespace Bastion.UI.Hud
         public string Name;
         /// <summary>«Salud 3/3 · Puntería 50».</summary>
         public string Stats;
+        /// <summary>Under the pointer on them: what its defence and dodge do (M6); null, it has none.</summary>
+        public string StatsTip;
         public string What;
         public string Does;
         public string Tip;

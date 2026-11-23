@@ -470,7 +470,8 @@ namespace Bastion.Engine
                 case UpgradeIds.Sight:
                     return "Se ve una etapa más del camino.";
                 case UpgradeIds.Haggle:
-                    return $"En el Trueque, todo cuesta un {Content.HaggleDiscount} % menos.";
+                    // M10 (cuadro 141): what is offered pays more too (Content.SellPrice).
+                    return $"En el Trueque, todo cuesta un {Content.HaggleDiscount} % menos, y lo que ofrecéis se paga un {Content.HaggleSale} % más.";
                 default:
                     throw new ArgumentException($"Unknown upgrade: {id}");
             }

@@ -60,7 +60,7 @@ namespace Bastion.UI.Combat
                 v.Whose = owner.Name;
                 v.WhoseColor = PlayerColor(owner.Slot);
             }
-            void Stat(string key, string value) => v.Stats.Add(new SheetRowView { Key = key, Value = value });
+            void Stat(string key, string value, string tip = null) => v.Stats.Add(new SheetRowView { Key = key, Value = value, Tip = tip });
             Stat("Salud", $"{u.Hp} de {u.MaxHp}");
             Stat("Acciones", $"{u.Ap} de {Content.ApPerTurnOf(u)}");
             if (Paths.FullMoves(Shown, u) > 0) Stat(HudText.Moves.Stat, $"{HudText.Moves.Tiles(Paths.MoveBudget(Shown, u))} de {HudText.Moves.Tiles(Paths.FullMoves(Shown, u))} puntos");
@@ -68,7 +68,11 @@ namespace Bastion.UI.Combat
             Stat("Puntería cuerpo a cuerpo", (t.Aim + u.Mods.Aim + u.Mods.MeleeAim).ToString());
             Stat("Voluntad", u.Will.ToString());
             // What Forma física's bars grow (Arturo, 6/11), as the shot counts it (Aim.PreviewShot), without hunkering.
-            Stat("Esquiva", (t.Dodge + u.Mods.Dodge).ToString());
+            // With what each does under the pointer, and the defence beside it (M6, Lore.GuardText): it wasn't shown.
+            var dodge = t.Dodge + u.Mods.Dodge;
+            var defense = t.Defense + u.Mods.Defense;
+            Stat("Esquiva", dodge.ToString(), Lore.GuardText.Dodge(dodge) + "\n" + Lore.GuardText.Against);
+            Stat("Defensa", defense.ToString(), Lore.GuardText.Defense(defense) + "\n" + Lore.GuardText.Against);
             if (u.Armor > 0) Stat("Blindaje", u.Armor.ToString());
             void Carry(string key, string value) => v.Carries.Add(new SheetRowView { Key = key, Value = value });
             var (weapon, extras) = ArmsOf(u);
@@ -106,9 +110,17 @@ namespace Bastion.UI.Combat
         {
             if (Hud == null || !Lore.EnemyFiles.TryGetValue(u.Template, out var file)) return;
             var t = Content.Templates[u.Template];
-            var stats = new[] { $"Salud {u.Hp}/{u.MaxHp}", u.Armor > 0 ? $"Blindaje {u.Armor}" : "", $"Puntería {t.Aim}", t.Defense > 0 ? $"Defensa {t.Defense}" : t.Defense < 0 ? $"Defensa −{-t.Defense}" : "" };
+            // Its dodge too when it has some (M6); what either does under the pointer, never their zero's lines, which are a
+            // soldier's (Lore, 23/11).
+            var dodge = t.Dodge + u.Mods.Dodge;
+            var stats = new[] { $"Salud {u.Hp}/{u.MaxHp}", u.Armor > 0 ? $"Blindaje {u.Armor}" : "", $"Puntería {t.Aim}", t.Defense > 0 ? $"Defensa {t.Defense}" : t.Defense < 0 ? $"Defensa −{-t.Defense}" : "", dodge != 0 ? $"Esquiva {dodge}" : "" };
+            var guard = new[] { t.Defense != 0 ? Lore.GuardText.Defense(t.Defense) : null, dodge != 0 ? Lore.GuardText.Dodge(dodge) : null }.Where(x => x != null).ToList();
             // Its own name: one of ours, risen, keeps it («Zombi · Clara Bosch»).
-            Hud.ShowEnemyFile(new EnemyFileView { Name = u.Name, Stats = string.Join(" · ", stats.Where(s => s != "")), What = file.What, Does = file.Does, Tip = file.Tip });
+            Hud.ShowEnemyFile(new EnemyFileView
+            {
+                Name = u.Name, Stats = string.Join(" · ", stats.Where(s => s != "")), What = file.What, Does = file.Does, Tip = file.Tip,
+                StatsTip = guard.Count > 0 ? string.Join("\n", guard) + "\n" + Lore.GuardText.Against : null,
+            });
         }
     }
 }

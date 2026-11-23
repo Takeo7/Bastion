@@ -297,6 +297,9 @@ namespace Bastion.UI.Strategy
                 };
             // A new game from the base of one lost (N8): its level first, the last one marked.
             if (choosingLevel && c.Outcome != null) return p.LevelChoice(levelPick);
+            // (Come: the new game, its card gone.)
+            choosingLevel = false;
+            startingSince = 0;
             // The game lost (N8) after the squad's report, once it is read (R19 of Red, 23/11: the two at once, one over the other).
             return (view != BaseViews.Debrief ? p.End() : null) ?? p.Event(view) ?? (alerts.Count > 0 && view != BaseViews.Debrief ? alerts[0] : null);
         }
@@ -405,6 +408,7 @@ namespace Bastion.UI.Strategy
 
         /// <summary>The Trueque: the ware into the pack of the soldier chosen on the right (or the first of one's own).</summary>
         public void OnBuy(string ware) => Order(new BuyWareCommand { Ware = ware, Soldier = p.Expedition(soldiers.Soldier)?.Kit?.Soldier ?? soldiers.Soldier });
+        public void OnSell(string gear) => Order(new SellGearCommand { Gear = gear, Soldier = p.Expedition(soldiers.Soldier)?.Kit?.Soldier ?? soldiers.Soldier });
 
         /// <summary>«Seguir» from a stop; pressed again with two, taken back.</summary>
         public void OnLeaveStop() => Order(new LeaveStopCommand { Ready = !(p.State?.Run?.Stop?.Leaving is bool[] l && p.Slot >= 0 && p.Slot < l.Length && l[p.Slot]) });
@@ -478,9 +482,16 @@ namespace Bastion.UI.Strategy
                     else Leave();
                     break;
                 case "level":
-                    // «Empezar»: another game here at the level picked (the room takes it from the base of a game lost).
-                    if (index == 0) send(new NewCampaignMessage { Level = levelPick });
-                    choosingLevel = false;
+                    // «Empezar»: another game here at the level picked (the room takes it from the base of a game lost). Its
+                    // card stays up till the new game comes (Red's R22b: the lost game's card showed under it a moment), a
+                    // second press let go; 10 s with no answer, it can be pressed again.
+                    if (startingSince > 0 && Time.realtimeSinceStartup - startingSince < StartingSeconds) return;
+                    if (index == 0)
+                    {
+                        send(new NewCampaignMessage { Level = levelPick });
+                        startingSince = Time.realtimeSinceStartup;
+                    }
+                    else choosingLevel = false;
                     break;
                 case "endrun":
                     endingRun = false;
@@ -517,6 +528,9 @@ namespace Bastion.UI.Strategy
         /// <summary>The level's cards open from a game lost (N8), and the one picked there.</summary>
         bool choosingLevel;
         string levelPick;
+        /// <summary>When «Empezar» went (0: it didn't), and how long its card waits for the new game before it can go again.</summary>
+        float startingSince;
+        const float StartingSeconds = 10;
 
         /// <summary>«Ver» (proposalDetail's see): to the screen of what is proposed.</summary>
         public void OnSeeProposal()

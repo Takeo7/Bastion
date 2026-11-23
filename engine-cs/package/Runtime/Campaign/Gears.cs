@@ -609,6 +609,66 @@ namespace Bastion.Engine
             return new[] { buyer.Kit!.Pack }.Concat(others).ToList();
         }
 
+        /// <summary>
+        /// M10 (cuadro 141): where a sale's § go, with `sold` gone from the pack it was in: the seller's pack, else the rest of
+        /// the squad's soldiers its player controls (Purse's). Null if none has room.
+        /// </summary>
+        private static GearGrid? Till(CampaignState c, int slot, IReadOnlyList<int> connected, CampaignSoldier seller, Gear sold, int price)
+        {
+            return Purse(c, slot, connected, seller).FirstOrDefault((grid) => TakesSupplies(grid, sold, price));
+        }
+
+        /// <summary>
+        /// A sum of § as the piles a pack holds them in (Content.PileOf, 100), as a reward's: 108, a 100 and an 8 (Producto's
+        /// review of 24/11: a pile past 100 the room won't split).
+        /// </summary>
+        private static List<int> SupplyPiles(int amount)
+        {
+            var most = Content.PileOf(GearKinds.Supplies, null);
+            return Enumerable.Range(0, (amount + most - 1) / most).Select((i) => Math.Min(most, amount - i * most)).ToList();
+        }
+
+        /// <summary>Whether Stow would put all of `amount` § in the grid (SupplyPiles), with `sold` gone from it.</summary>
+        private static bool TakesSupplies(GearGrid grid, Gear sold, int amount)
+        {
+            var copy = CloneGrid(grid);
+            var at = grid.Items.FindIndex((p) => p.Gear == sold);
+            if (at >= 0) copy.Items.RemoveAt(at);
+            return SupplyPiles(amount).All((n) => Stow(copy, new Gear { Kind = GearKinds.Supplies, Count = n }) == 0);
+        }
+
+        /// <summary>Why `slot` can't sell that gear of that soldier at the Trade (SellGearCommand), or null.</summary>
+        public static string? SellRefusal(CampaignState c, int slot, IReadOnlyList<int> connected, SellGearCommand cmd)
+        {
+            var run = c.Run;
+            if (run == null || run.Phase != RunPhases.Stop || run.Stop == null) return RunTexts.NotAtStop;
+            if (run.Stop.Wares == null) return RunTexts.NotTrade;
+            var seller = c.Soldiers.FirstOrDefault((x) => x.Id == cmd.Soldier && x.Alive);
+            var error = seller == null ? RunTexts.NoSoldier : Reach(c, slot, connected, seller);
+            if (error != null) return error;
+            var spot = OfKit(seller!).FirstOrDefault((x) => x.Gear.Id == cmd.Gear);
+            if (spot == null) return RunTexts.NoGear;
+            var price = Content.SellPrice(spot.Gear, Runs.Level(c, UpgradeIds.Haggle) > 0);
+            if (price <= 0) return RunTexts.NotForSale;
+            return Till(c, slot, connected, seller!, spot.Gear, price) == null ? RunTexts.SuppliesNoRoom(seller!.Name) : null;
+        }
+
+        /// <summary>
+        /// SellGearCommand, once SellRefusal has let it (cuadro 141): the gear gone (worn or in the pack; a vest's health with it,
+        /// KeepDamage), its § into the seller's pack (or one of its player's), the log saying so. What is sold isn't on sale
+        /// after: it is gone.
+        /// </summary>
+        public static void Sell(CampaignState c, int slot, IReadOnlyList<int> connected, SellGearCommand cmd)
+        {
+            var seller = c.Soldiers.First((x) => x.Id == cmd.Soldier);
+            var spot = OfKit(seller).First((x) => x.Gear.Id == cmd.Gear);
+            var price = Content.SellPrice(spot.Gear, Runs.Level(c, UpgradeIds.Haggle) > 0);
+            var till = Till(c, slot, connected, seller, spot.Gear, price)!;
+            KeepDamage(c, new[] { seller }, () => Lift(spot));
+            foreach (var n in SupplyPiles(price)) Stow(till, NewGear(c, GearKinds.Supplies, null, n));
+            Campaign.RunsLog(c, RunTexts.Sold(seller.Name, Lore.GearA(spot.Gear.Kind, spot.Gear.Type, spot.Gear.Count), price), LogTones.Good);
+        }
+
         /// <summary>Why `slot` can't buy that ware for that soldier (BuyWareCommand), or null.</summary>
         public static string? BuyWareRefusal(CampaignState c, int slot, IReadOnlyList<int> connected, BuyWareCommand cmd)
         {

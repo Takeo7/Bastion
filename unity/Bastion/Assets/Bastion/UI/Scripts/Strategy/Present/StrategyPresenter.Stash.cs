@@ -34,7 +34,7 @@ namespace Bastion.UI.Strategy
                 var own = mine.Contains(s);
                 v.Soldiers.Add(new KitTabView
                 {
-                    Id = s.Id, Name = FirstName(s), On = s == pick, Mine = own,
+                    Id = s.Id, Name = FirstName(s), On = s == pick, Mine = own, Theirs = s.Owner != Slot,
                     Color = own ? null : PlayerColor(s.Owner), Tip = own ? null : StrategyText.Stash.Whose(PlayerName(s.Owner)),
                 });
             }
@@ -99,6 +99,7 @@ namespace Bastion.UI.Strategy
             {
                 Id = g.Id, Kind = g.Kind, Type = g.Type, Name = GearName(g), The = Lore.GearThe(g.Kind, g.Type, g.Count), Icon = GearIcon(g),
                 W = w, H = h, Count = g.Count, Pile = Content.PileOf(g.Kind, g.Type), Tip = GearTip(g, against),
+                Mods = g.Mods != null && g.Mods.Count > 0 ? g.Mods.ToList() : null,
             };
         }
 
@@ -265,11 +266,41 @@ namespace Bastion.UI.Strategy
         {
             if (m.Throw) return new DropGearCommand { Gear = m.Gear };
             if (m.Onto != null) return new MountCommand { Mod = m.Gear, Weapon = m.Onto };
-            var slot = m.Slot ?? KitSlots.Pack;
             var spot = Gears.Find(State, m.Gear);
+            if (m.Slot == GearMove.Anywhere) m = Onto(m, spot);
+            var slot = m.Slot ?? KitSlots.Pack;
             if (m.Count > 0 && spot != null && m.Count < spot.Gear.Count)
                 return new SplitGearCommand { Gear = m.Gear, Count = m.Count, To = m.To, Slot = slot, X = m.X, Y = m.Y, Turned = m.Turned };
             return new MoveGearCommand { Gear = m.Gear, To = m.To, Slot = slot, X = m.X, Y = m.Y, Turned = m.Turned };
+        }
+
+        /// <summary>
+        /// A thing let go on a soldier's bust (M12): where it goes on them, as Mayús + clic would (M3): its own place if
+        /// empty, else a pile of the same in their pack with room for all of it, else where it first fits (Gears.FirstFit).
+        /// Nowhere: their pack's corner, which the engine turns down with its reason.
+        /// </summary>
+        GearMove Onto(GearMove m, GearSpot spot)
+        {
+            var to = State.Soldiers.FirstOrDefault(s => s.Id == m.To && s.Alive);
+            var placed = new GearMove { Gear = m.Gear, Count = m.Count, To = m.To, Slot = KitSlots.Pack };
+            if (spot == null || to?.Kit == null) return placed;
+            var g = spot.Gear;
+            var count = m.Count > 0 ? m.Count : g.Count;
+            foreach (var slot in new[] { KitSlots.Primary, KitSlots.Melee, KitSlots.Pistol, KitSlots.Vest, KitSlots.Belt0, KitSlots.Belt1 })
+                if (Content.SlotTakes(slot, g) && Gears.InSlot(to.Kit, slot) == null)
+                {
+                    placed.Slot = slot;
+                    return placed;
+                }
+            var pile = to.Kit.Pack.Items.FirstOrDefault(p => Gears.SamePile(p.Gear, g) && Gears.Room(p.Gear) >= count);
+            var at = pile ?? Gears.FirstFit(to.Kit.Pack, g);
+            if (at != null)
+            {
+                placed.X = at.X;
+                placed.Y = at.Y;
+                placed.Turned = at.Turned;
+            }
+            return placed;
         }
 
         /// <summary>Why that move can't be: the engine's own words, as the server would answer; null, it can.</summary>

@@ -316,6 +316,11 @@ namespace Bastion.Engine
         /// <summary>A survivor brought out on La Lata (H4, N2: a Rescate's or one loose): the soldier they are now (CampaignSoldier.id).</summary>
         public string? Joined { get; set; }
         /// <summary>
+        /// A survivor brought out with no bed for them (every player at the soldiers' cap; cuadro 140, Producto's review of
+        /// 24/11): they don't stay, and what they carried goes into the squad's packs. Null: none.
+        /// </summary>
+        public RunNoBed? NoBed { get; set; }
+        /// <summary>
         /// The run ended with the fight and gave recruits for nothing (Runs.NobodyLeft, a player left with nobody; since N8,
         /// only on a bench): their ids. For the line of whoever comes into the room after it (Red, N9). Null: none.
         /// </summary>
@@ -333,6 +338,18 @@ namespace Bastion.Engine
         /// Null in the reports from before it.
         /// </summary>
         public int? Stage { get; set; }
+    }
+
+    /// <summary>
+    /// RunReport.noBed: a survivor who doesn't stay, with no bed for them. What they left in the squad's packs (all but their
+    /// knife; what the fight found of it is in Found too), and what found no room there, lost: both empty, they carried
+    /// nothing (Lore's line, StrategyText.Runs.NoBedLine).
+    /// </summary>
+    public sealed class RunNoBed
+    {
+        public string Name { get; set; } = "";
+        public List<Gear> Gave { get; set; } = new List<Gear>();
+        public List<Gear> Lost { get; set; } = new List<Gear>();
     }
 
     /// <summary>RunReport.fallen: a soldier who fell, and the gear lost with them.</summary>

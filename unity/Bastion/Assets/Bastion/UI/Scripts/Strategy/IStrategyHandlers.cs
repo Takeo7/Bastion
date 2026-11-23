@@ -70,6 +70,8 @@ namespace Bastion.UI.Strategy
         void OnEndRun();
         /// <summary>The Trueque: a ware, into the chosen soldier's pack; «Seguir» from a stop (with two, once both ask).</summary>
         void OnBuy(string ware);
+        /// <summary>The Trueque's other side (M10, cuadro 141): that thing of the chosen soldier's, worn or in the pack, for §.</summary>
+        void OnSell(string gear);
         void OnLeaveStop();
         /// <summary>Mejoras: the next level of one (a vote with two).</summary>
         void OnUpgrade(string id);
@@ -83,6 +85,7 @@ namespace Bastion.UI.Strategy
         public void OnNode(string id) { }
         public void OnEndRun() { }
         public void OnBuy(string ware) { }
+        public void OnSell(string gear) { }
         public void OnLeaveStop() { }
         public void OnUpgrade(string id) { }
         public void OnMenu() { }
@@ -121,6 +124,7 @@ namespace Bastion.UI.Strategy
         public void OnNode(string id) => Target.OnNode(id);
         public void OnEndRun() => Target.OnEndRun();
         public void OnBuy(string ware) => Target.OnBuy(ware);
+        public void OnSell(string gear) => Target.OnSell(gear);
         public void OnLeaveStop() => Target.OnLeaveStop();
         public void OnUpgrade(string id) => Target.OnUpgrade(id);
         public void OnMenu() => Target.OnMenu();

@@ -782,6 +782,7 @@ namespace Bastion.UI.Combat
                     // soon as their health is gone, with the bar, not once their death has played (R19 of Red, 23/11: a jump that
                     // kills, «CAÍDO» 2.6 s after the bar emptied); only mid-playback is anyone alive at 0.
                     Dead = (!u.Alive || u.Hp <= 0) && !u.Evacuated && u.CarriedBy == null,
+                    Female = u.Appearance?.Sex == "f",
                     // Inside La Lata (T24) it plays on (Bajar, Evacuar): not greyed as one already gone.
                     Evacuated = u.Evacuated && u.Aboard != true,
                     InPlay = u.Id == inPlay,

@@ -401,15 +401,16 @@ namespace Bastion.UI.Strategy
         /// </summary>
         LineupCardView ReportCard(CampaignState c, MissionReport report, ReportSoldier e)
         {
-            var s = c.Soldiers.FirstOrDefault(x => x.Id == e.Id);
-            var female = s != null && Female(s);
+            var s = c.Soldiers.FirstOrDefault(x => x.Id == e.Id && e.Id != "");
+            // (A survivor who never became a soldier, Id «»: by their name, the engine's own, Campaign.SexOfPerson.)
+            var female = s != null ? Female(s) : Campaign.SexOfPerson(e.Name) == "f";
             var status = e.Status == "dead" ? (female ? "CAÍDA EN COMBATE" : "CAÍDO EN COMBATE")
                 : e.Status == "lost" ? "SE QUEDÓ FUERA"
                 : e.Status == "wounded" ? $"HERIDAS · {MissionsText(MissionsFor(e.WoundedDays)).ToUpperInvariant()}"
                 : female ? "ILESA" : "ILESO";
             var v = new LineupCardView
             {
-                Id = e.Id, Name = Appearances.DisplayName(e.Name, s?.Nickname), Accent = PlayerColor(e.Owner), Fallen = e.Status == "dead",
+                Id = e.Id, Name = Appearances.DisplayName(e.Name, s?.Nickname), Accent = PlayerColor(e.Owner), Fallen = e.Status == "dead", Female = female,
                 Lines = { status, $"{e.Kills} baja{(e.Kills == 1 ? "" : "s")}" },
             };
             if (e.Status == "dead" || e.Status == "lost") return v;

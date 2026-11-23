@@ -102,6 +102,10 @@ namespace Bastion.UI.Hud
             floors = new FloorPicker(root, relay, tips);
             // The keys' row in the screen's middle, but clear of the squad's plate when it grows (eight cards).
             actions = root.Q("actions");
+            // Its left edge set here, not its middle with the sheet's translate −50 %: Unity took that half from the row's
+            // first width (a few keys) and kept it as the row grew, and with one soldier nothing moved the row again, so it
+            // started at the screen's middle and «→|» went under the eye (0.14.2, Red's photos; with two players since before).
+            actions.style.translate = new Translate(0, 0);
             squadPlate.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
             actions.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
             root.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
@@ -123,6 +127,7 @@ namespace Bastion.UI.Hud
             miniMap = new MiniMap(root.Q("mini-map"));
             banner = new Banner(root.Q("banner"), relay, s => Sound?.Invoke(s));
             notesHost = root.Q("notes");
+            notesHost.style.translate = new Translate(0, 0);
             notes = new Notes(notesHost);
             // A menu open on the bar (the guns, Lanzar…): the notes go up over it, not on its keys (Ana, Arturo 31/10 #2).
             bar.MenuShown += open => root.Q("notes").EnableInClassList("notes--over-menu", open);
@@ -194,18 +199,25 @@ namespace Bastion.UI.Hud
             if (float.IsNaN(width) || float.IsNaN(row)) return;
             // The plate's frame stands 8 px out of it (PlateFrame). With the finger the plate is up on the left, out of the keys' way.
             var plate = squadPlate.resolvedStyle.display == DisplayStyle.None || Bastion.Client.GameInput.Touch ? 0 : squadPlate.layout.xMax + 8 + 12;
-            var left = Mathf.Round(Mathf.Max(width / 2, plate + row / 2));
+            var middle = Mathf.Max(width / 2, plate + row / 2);
+            var left = Mathf.Round(middle - row / 2);
             // The row's width changes by a pixel with where it stands (its keys snapped to whole pixels): moved for that,
             // it was laid out again and again in the same frame, the left and the width taking turns («Layout update is
             // struggling», thousands a minute in every battle with the row pushed right, since before the 0.12.2; some
-            // 0.4 ms a frame). Less than two pixels, it stays.
-            if (!float.IsNaN(actionsLeft) && Mathf.Abs(left - actionsLeft) < 2) return;
+            // 0.4 ms a frame). Less than two pixels, it stays. (Its left edge now: a row grown is moved.)
+            // (And its middle: pushed by the plate, the row grown keeps its left edge, and the notes over it must follow its
+            // middle; the 0.14.3's independent review, 5.)
+            if (!float.IsNaN(actionsLeft) && Mathf.Abs(left - actionsLeft) < 2 && Mathf.Abs(middle - actionsMiddle) < 2) return;
             actionsLeft = left;
+            actionsMiddle = middle;
             actions.style.left = left;
+            // (Each move said: the screen, the row, how far the squad's plate reaches, and where the row starts.)
+            Debug.Log(FormattableString.Invariant($"[barra] ancho {width:0}, fila {row:0}, bustos hasta {plate:0} → la fila de {left:0} a {left + row:0}"));
             // The notes over the keys' row, and no wider than the room either side of its middle (U27, Producto: the
             // evacuation's long warning ran the whole width over the busts): broken into lines on their plate.
-            notesHost.style.left = left;
-            notesHost.style.width = Mathf.Max(240, Mathf.Min(NotesMax, 2 * Mathf.Min(left - plate, width - left - 24)));
+            var notesWidth = Mathf.Max(240, Mathf.Min(NotesMax, 2 * Mathf.Min(middle - plate, width - middle - 24)));
+            notesHost.style.left = Mathf.Round(middle - notesWidth / 2);
+            notesHost.style.width = notesWidth;
         }
 
         /// <summary>The notes' widest (U27): a long warning in three or four lines, not one across the screen.</summary>
@@ -215,6 +227,7 @@ namespace Bastion.UI.Hud
 
         /// <summary>Where PlaceActions last put the keys' row (panel pixels); NaN, not yet.</summary>
         float actionsLeft = float.NaN;
+        float actionsMiddle = float.NaN;
 
         /// <summary>
         /// Where the map's north is on the screen, clockwise from up, as seen (game.ts frame: the ground in perspective;

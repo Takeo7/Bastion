@@ -36,13 +36,18 @@ namespace Bastion.UI.Strategy
             foreach (var f in run.Fallen)
             {
                 var lost = f.Lost.Select(g => Lore.GearThe(g.Kind, g.Type, g.Count)).ToList();
-                // One left outside La Lata hasn't fallen (Red's pass, 18/11): their report says so (ReportStatuses.Lost).
-                var left = report.Squad.Any(e => e.Id == f.Id && e.Status == ReportStatuses.Lost);
-                var female = c.Soldiers.FirstOrDefault(x => x.Id == f.Id) is CampaignSoldier fs && Female(fs);
+                // One left outside La Lata hasn't fallen (Red's pass, 18/11): their report says so (ReportStatuses.Lost). A
+                // survivor found who never became a soldier (Id «»: Gameplay, 24/11) told apart by their name too.
+                var left = report.Squad.Any(e => e.Id == f.Id && (f.Id != "" || e.Name == f.Name) && e.Status == ReportStatuses.Lost);
+                var female = c.Soldiers.FirstOrDefault(x => x.Id == f.Id && f.Id != "") is CampaignSoldier fs ? Female(fs) : Campaign.SexOfPerson(f.Name) == "f";
                 v.Lines.Add(new DebriefLineView { Text = left ? StrategyText.Runs.LeftLine(f.Name, female, lost) : StrategyText.Runs.FallenLine(f.Name, lost), Bad = true });
             }
             if (run.Joined != null && c.Soldiers.FirstOrDefault(x => x.Id == run.Joined) is CampaignSoldier rescued)
                 v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.JoinedLine(rescued.Name) });
+            // Got out with no bed for them (Gameplay's NoBed, 24/11): they don't stay; what they carried went into the packs,
+            // and what didn't fit is lost.
+            if (run.NoBed != null)
+                v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.NoBedLine(run.NoBed.Name, run.NoBed.Gave.Count > 0, run.NoBed.Lost.Select(g => Lore.GearThe(g.Kind, g.Type, g.Count)).ToList()), Bad = run.NoBed.Lost.Count > 0 });
             // (One a line: whoever came in late has them all from the report, ReportRecruits.)
             if (Joined != null) foreach (var line in Joined.Split('\n')) v.Lines.Add(new DebriefLineView { Text = line });
             foreach (var e in ReportOrder(c, report))

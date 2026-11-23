@@ -17,7 +17,7 @@ namespace Bastion.Engine.Tests
         /// <summary>The runs' commands (Types/CampaignCommand.cs), by `type`.</summary>
         public static readonly IReadOnlyList<string> CommandTags = new[]
         {
-            "moveGear", "splitGear", "dropGear", "mount", "unmount", "useGear", "upgrade", "startRun", "chooseNode", "endRun", "answerStop", "buyWare", "leaveStop",
+            "moveGear", "splitGear", "dropGear", "mount", "unmount", "useGear", "upgrade", "startRun", "chooseNode", "endRun", "answerStop", "buyWare", "sellGear", "leaveStop",
         };
 
         /// <summary>The runs' votes (Types/Runs.cs RunAction), by `type`.</summary>
@@ -40,6 +40,8 @@ namespace Bastion.Engine.Tests
                 new EndRunCommand(),
                 new AnswerStopCommand { Option = 1 },
                 new BuyWareCommand { Ware = "g9", Soldier = "c3" },
+                // M10 (cuadro 141): a sale at the Trade.
+                new SellGearCommand { Soldier = "c3", Gear = "g10" },
                 new LeaveStopCommand { Ready = false },
             };
             Assert.Equal(CommandTags, commands.Select((x) => x.Type));

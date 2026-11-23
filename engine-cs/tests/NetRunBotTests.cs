@@ -301,6 +301,73 @@ namespace Bastion.Engine.Tests
             Assert.IsType<LeaveStopCommand>(next);
         }
 
+        /// <summary>
+        /// M10 (Producto, 23/11: the economy with sales): at a Trade the bot first sells what its soldier carries for no use,
+        /// as it takes it to the stash on the base (a spare shotgun), its § into the pack; it keeps the magazines, the medicine
+        /// and the supplies; then it buys its ware.
+        /// </summary>
+        [Fact]
+        public void AtATradeItSellsWhatItCarriesForNoUseThenBuys()
+        {
+            var c = Solo();
+            var s = Soldier(c);
+            InSlot(c, s, KitSlots.Primary, GearKinds.Weapon, FoundWeaponIds.AssaultRifle);
+            InSlot(c, s, KitSlots.Pistol, GearKinds.Weapon, FoundWeaponIds.Pistol);
+            InSlot(c, s, KitSlots.Vest, GearKinds.Vest, VestIds.Vest);
+            Gear Put(string kind, string? type, int count = 1)
+            {
+                var g = Gears.NewGear(c, kind, type, count);
+                var spot = Gears.FirstFit(s.Kit!.Pack, g);
+                Assert.NotNull(spot);
+                Assert.NotNull(Gears.Place(s.Kit.Pack, g, spot!.X, spot.Y, spot.Turned));
+                return g;
+            }
+            var spare = Put(GearKinds.Weapon, FoundWeaponIds.PumpShotgun);
+            var mags = Put(GearKinds.Mags, null, 3);
+            var medicine = Put(GearKinds.Medicine, null);
+            Put(GearKinds.Supplies, null, 100);
+            GoTo(c, NodeKinds.Trade);
+            var heard = Heard(c, 0);
+            var price = Content.SellPrice(spare, false);
+            Assert.True(price > 0);
+            var sale = Assert.IsType<SellGearCommand>(Done(heard, c, 0, Zero));
+            Assert.Equal((s.Id, spare.Id), (sale.Soldier, sale.Gear));
+            Assert.Equal(100 + price, Gears.Supplies(s.Kit!.Pack));
+            Assert.IsType<BuyWareCommand>(Done(heard, c, 0, Zero));
+            Assert.Contains(s.Kit.Pack.Items, (p) => p.Gear.Id == mags.Id);
+            Assert.Contains(s.Kit.Pack.Items, (p) => p.Gear.Id == medicine.Id);
+            Assert.True(Gears.Supplies(s.Kit.Pack) > 0);
+        }
+
+        /// <summary>
+        /// The 0.14.3's review (7): what it buys at a Trade it doesn't sell back. A pistol bought with both its hands' places
+        /// taken stays in the pack, of no use; it bought «the cheapest» and sold it at half the order after.
+        /// </summary>
+        [Fact]
+        public void WhatItBuysAtATradeItDoesntSellBack()
+        {
+            var c = Solo();
+            var s = Soldier(c);
+            InSlot(c, s, KitSlots.Primary, GearKinds.Weapon, FoundWeaponIds.AssaultRifle);
+            InSlot(c, s, KitSlots.Pistol, GearKinds.Weapon, FoundWeaponIds.Pistol);
+            InSlot(c, s, KitSlots.Vest, GearKinds.Vest, VestIds.Vest);
+            InPack(c, s, GearKinds.Supplies, null, 0, 0, 100);
+            GoTo(c, NodeKinds.Trade);
+            var pistol = Gears.NewGear(c, GearKinds.Weapon, FoundWeaponIds.Pistol, 1);
+            c.Run!.Stop!.Wares = new List<Ware> { new Ware { Gear = pistol, Price = 40 } };
+            var heard = Heard(c, 0);
+            var buy = Assert.IsType<BuyWareCommand>(Done(heard, c, 0, Zero));
+            Assert.Equal(pistol.Id, buy.Ware);
+            var next = heard.BaseOrder(0, true);
+            while (next is MoveGearCommand)
+            {
+                Ok(c, next, 0, Zero);
+                next = heard.BaseOrder(0, true);
+            }
+            Assert.IsType<LeaveStopCommand>(next);
+            Assert.Equal(s.Id, Gears.Find(c, pistol.Id)!.Soldier!.Id);
+        }
+
         [Fact]
         public void InAFightItWaits()
         {

@@ -259,6 +259,9 @@ namespace Bastion.Engine
             if (node.Kind == NodeKinds.Raiders) Setup.PlaceCamp(state, difficulty, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xca4e))));
             // One in RunMap.LooseOdds of the other fights, a survivor loose on the map, unmarked (N2, Arturo 17/11).
             if (RunMap.LooseSurvivor(node)) PlaceLoose(state, SurvivorOf(c, node), new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x10057))));
+            // The survivor's knife numbered from the campaign's, as a recruit's, before the fight's own numbering starts: not
+            // one of its finds (Red, 23/11: one with no id fell on the floor and couldn't be taken up through the room).
+            if (!string.IsNullOrEmpty(state.Mission.Survivor) && Grid.GetUnit(state, state.Mission.Survivor!)?.Kit?.Melee is Gear knife && string.IsNullOrEmpty(knife.Id)) knife.Id = $"g{++c.NextId}";
             state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId, Loot = level.Loot != 1 ? level.Loot : (double?)null };
             // N9: the game's level's horde.
             if (level.Horde != 1) state.Mission.HordeScale = level.Horde;
@@ -294,15 +297,15 @@ namespace Bastion.Engine
         /// <summary>
         /// A Rescate's survivor (N2) as they wait on the map: a recruit with a knife and nothing else, a soldier's name
         /// (Lore, N8: not a VIP's), drawn from the node's seed so the fight and its end agree; nobody's yet, and not among
-        /// the campaign's soldiers (nothing of `c` changes).
+        /// the campaign's soldiers (nothing of `c` changes). One of the squad from when they join (Arturo, cuadro 140, M7):
+        /// a recruit's pack, empty, at the size the upgrades give (NewKit), and the knife; captive till found, unused.
         /// </summary>
         public static SquadMember SurvivorOf(CampaignState c, RunNode node)
         {
             var s = Campaign.RunsSurvivor(c, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x5a17))), SurvivorLines(node));
             var member = SquadMemberOf(c, s);
             member.CampaignId = "";
-            member.Pack = null;
-            member.Kit = null;
+            member.Pack = new GearGrid { W = PackW, H = PackRows(c) };
             member.Mags = 0;
             return member;
         }
@@ -516,10 +519,15 @@ namespace Bastion.Engine
         /// </summary>
         private static CampaignSoldier? Rescued(CampaignState c, RunNode node, Unit vip, Rng rng, RunReport report)
         {
-            bool Bed(int p) => c.Soldiers.Count((s) => s.Owner == p && s.Alive) < Campaign.SoldierCap(c);
+            bool Bed(int p) => HasBed(c, p, null);
             var talker = vip.Owner ?? Campaign.RunsNeediest(c);
             int? owner = Bed(talker) ? talker : c.Players.Where((p) => p != talker && Bed(p)).Select((p) => (int?)p).FirstOrDefault();
-            if (owner == null) return null;
+            // Every player at the cap: they don't stay, and the log says so (cuadro 140, M7; Lore's line).
+            if (owner == null)
+            {
+                Campaign.RunsLog(c, RunTexts.SurvivorNoRoom(vip.Name), LogTones.Bad);
+                return null;
+            }
             var s = NewSoldier(c, owner.Value, rng);
             s.Name = vip.Name;
             var lines = SurvivorLines(node);
@@ -537,6 +545,97 @@ namespace Bastion.Engine
             report.InSquad = inSquad;
             Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name, inSquad), LogTones.Good);
             return s;
+        }
+
+        /// <summary>Whether `player` has a bed for one more soldier: under the soldiers' cap, without those in `gone`.</summary>
+        private static bool HasBed(CampaignState c, int player, ICollection<string>? gone)
+        {
+            return c.Soldiers.Count((s) => s.Owner == player && s.Alive && (gone == null || !gone.Contains(s.Id))) < Campaign.SoldierCap(c);
+        }
+
+        /// <summary>
+        /// Whether the survivor of a run's fight, brought out on La Lata, stays (Rescued's rule, cuadro 140): a bed with
+        /// whoever talked to them, else with the partner. The beds as ApplyFight will count them, without the squad's soldiers
+        /// fallen or left behind in `mission`. For the card at the fight's end, before the room applies it (UI, 24/11).
+        /// </summary>
+        public static bool SurvivorStays(CampaignState c, GameState mission)
+        {
+            var gone = new HashSet<string>(mission.Units.Where((u) => !string.IsNullOrEmpty(u.CampaignId) && FellInFight(u)).Select((u) => u.CampaignId!));
+            var vip = string.IsNullOrEmpty(mission.Mission.Survivor) ? null : mission.Units.FirstOrDefault((u) => u.Id == mission.Mission.Survivor);
+            var talker = vip?.Owner ?? Campaign.RunsNeediest(c);
+            return HasBed(c, talker, gone) || c.Players.Any((p) => HasBed(c, p, gone));
+        }
+
+        /// <summary>One of a run's fight who fell in it, or was left behind when La Lata went (LeftBehindEvent).</summary>
+        private static bool FellInFight(Unit u) => (!u.Alive && !u.Evacuated && u.Hp <= 0) || u.Lost == true;
+
+        /// <summary>
+        /// What a unit of a run's fight lost there (ApplyFight): left behind, all it had on it; fallen, what it dropped
+        /// (RunPack.Fallen) that nobody took up.
+        /// </summary>
+        private static List<Gear> LostWith(Unit u, GameState mission)
+        {
+            var lost = u.Lost == true ? (u.Kit != null ? new[] { u.Kit.Primary, u.Kit.Melee, u.Kit.Pistol, u.Kit.Vest }.Concat(u.Kit.Belt).Where((g) => g != null).Select((g) => g!).Concat(u.Pack?.Items.Select((p) => p.Gear) ?? new Gear[0]).ToList() : new List<Gear>())
+                : (mission.FloorGear ?? new List<DroppedGear>()).Where((d) => d.From == u.Id).Select((d) => d.Gear).ToList();
+            return lost.Select(Gears.CloneGear).ToList();
+        }
+
+        /// <summary>
+        /// A survivor brought out with no bed for them (Rescued null; Producto's review of 24/11): before they go, what they
+        /// carry (all but their own knife) into the squad's packs, the first with room, piles onto piles; the fight's finds of
+        /// it in the stage's (Found), and what they left and what found no room, lost, in the debrief (RunReport.NoBed).
+        /// </summary>
+        private static void HandOver(Unit vip, List<CampaignSoldier> home, RunReport report, RunFight fight)
+        {
+            var kit = KitBack(vip, null);
+            if (kit.Melee?.Type == FoundWeaponIds.Knife) kit.Melee = null;
+            var noBed = new RunNoBed { Name = vip.Name };
+            foreach (var g in AllOf(kit).ToList())
+            {
+                var whole = g.Count;
+                var into = home.FirstOrDefault((s) => Gears.CanStow(s.Kit!.Pack, g));
+                if (into != null) Gears.Stow(into.Kit!.Pack, g);
+                else foreach (var p in home.SelectMany((s) => s.Kit!.Pack.Items).ToList()) if (Gears.SamePile(p.Gear, g)) Gears.Merge(p.Gear, g);
+                var came = into != null ? whole : whole - g.Count;
+                if (came > 0)
+                {
+                    var gave = Gears.CloneGear(g);
+                    gave.Count = came;
+                    noBed.Gave.Add(gave);
+                    if (GearNumber(g.Id) > fight.FirstGear) report.Found.Add(Gears.CloneGear(gave));
+                }
+                if (into == null && g.Count > 0) noBed.Lost.Add(Gears.CloneGear(g));
+            }
+            report.NoBed = noBed;
+        }
+
+        /// <summary>
+        /// A survivor who joined (cuadro 140, M7), in the debrief as one of the squad: their row, the kills and the bars of what
+        /// they did since they joined (Unit.deeds), the stage counted; home with what they carry (KitBack: the pack they had
+        /// from when they joined), the knife numbered as a recruit's (NewKit), what they found in the stage's finds.
+        /// </summary>
+        private static void JoinedReport(CampaignState c, Unit vip, CampaignSoldier s, MissionReport report, RunFight fight, Rng rng)
+        {
+            var kit = KitBack(vip, s);
+            // (A knife is never one of the finds: theirs, numbered before the fight or as one of a save of before.)
+            report.Run!.Found.AddRange(AllOf(kit).Where((g) => GearNumber(g.Id) > fight.FirstGear && g.Type != FoundWeaponIds.Knife).Select(Gears.CloneGear));
+            if (kit.Melee == null || string.IsNullOrEmpty(kit.Melee.Id)) kit.Melee = s.Kit?.Melee;
+            s.Kit = kit;
+            // The health it came out with, against its kit as it is now (a vest put on in the stage).
+            if (c.Run != null && c.Run.Hp.ContainsKey(s.Id)) c.Run.Hp[s.Id] = Math.Max(1, Math.Min(MaxHp(s), vip.Hp));
+            s.Missions++;
+            s.Kills += vip.Kills;
+            var entry = new ReportSoldier { Id = s.Id, Name = s.Name, Owner = s.Owner, Status = vip.Hp < MaxHp(s) ? ReportStatuses.Wounded : ReportStatuses.Ok, WoundedDays = 0, Kills = vip.Kills };
+            var taught = Bars.Learn(s.Skills, s.Growth, vip.Deeds, rng, 0, vip.Lines);
+            foreach (var bar in taught.Bars) Campaign.RunsLog(c, Lore.BarLine(s.Name, bar.Skill, bar.Growth, bar.From ?? 0), LogTones.Good);
+            entry.Learned = taught.Gained;
+            var deeds = new Deeds();
+            foreach (var d in vip.Deeds ?? new Deeds()) deeds[d.Key] = d.Value;
+            entry.Deeds = deeds;
+            entry.Bars = taught.Bars;
+            s.Skills = taught.Skills;
+            s.Growth = taught.Growth;
+            report.Squad.Add(entry);
         }
 
         /// <summary>
@@ -565,7 +664,7 @@ namespace Bastion.Engine
         }
 
         /// <summary>What a soldier brings home from the unit it was: its kit's places, the belt with what is left of it, its pack.</summary>
-        private static Kit KitBack(Unit u, CampaignSoldier s)
+        private static Kit KitBack(Unit u, CampaignSoldier? s)
         {
             // Copies: the mission's state stays the room's.
             var places = Gears.ClonePlaces(u.Kit ?? new KitPlaces());
@@ -577,7 +676,7 @@ namespace Bastion.Engine
                 Pistol = places.Pistol,
                 Vest = places.Vest,
                 Belt = belt,
-                Pack = WithoutKey(Gears.CloneGrid(u.Pack ?? s.Kit?.Pack ?? new GearGrid { W = PackW, H = PackH })),
+                Pack = WithoutKey(Gears.CloneGrid(u.Pack ?? s?.Kit?.Pack ?? new GearGrid { W = PackW, H = PackH })),
             };
         }
 
@@ -637,7 +736,6 @@ namespace Bastion.Engine
             if (run == null || node == null || fight == null || run.Phase != RunPhases.Fight) return report;
             // The gear counter goes on from where the fight left it.
             c.NextId = Math.Max(c.NextId, fight.NextGear);
-            bool Fell(Unit u) => (!u.Alive && !u.Evacuated && u.Hp <= 0) || u.Lost == true;
             var fought = 0;
             var standing = 0;
             foreach (var u in mission.Units)
@@ -649,16 +747,14 @@ namespace Bastion.Engine
                 s.Kills += u.Kills;
                 var entry = new ReportSoldier { Id = s.Id, Name = s.Name, Owner = s.Owner, Status = ReportStatuses.Ok, WoundedDays = 0, Kills = u.Kills };
                 report.Squad.Add(entry);
-                if (Fell(u))
+                if (FellInFight(u))
                 {
                     s.Alive = false;
                     s.FellDay = c.Day;
                     entry.Status = u.Lost == true ? ReportStatuses.Lost : ReportStatuses.Dead;
                     if (u.Lost == true) s.FellCause = FellCauses.Lost;
                     // What it carried: left on the floor where it fell (nobody took it up), or with it, left behind.
-                    var lost = u.Lost == true ? (u.Kit != null ? new[] { u.Kit.Primary, u.Kit.Melee, u.Kit.Pistol, u.Kit.Vest }.Concat(u.Kit.Belt).Where((g) => g != null).Select((g) => g!).Concat(u.Pack?.Items.Select((p) => p.Gear) ?? new Gear[0]).ToList() : new List<Gear>())
-                        : (mission.FloorGear ?? new List<DroppedGear>()).Where((d) => d.From == u.Id).Select((d) => d.Gear).ToList();
-                    report.Run.Fallen.Add(new RunFallen { Id = s.Id, Name = s.Name, Lost = lost.Select(Gears.CloneGear).ToList() });
+                    report.Run.Fallen.Add(new RunFallen { Id = s.Id, Name = s.Name, Lost = LostWith(u, mission) });
                     s.Kit = null;
                     run.Hp.Remove(s.Id);
                     run.Hands?.Remove(s.Id);
@@ -692,7 +788,24 @@ namespace Bastion.Engine
             if (!string.IsNullOrEmpty(mission.Mission.Survivor))
             {
                 var vip = mission.Units.FirstOrDefault((u) => u.Id == mission.Mission.Survivor);
-                if (vip != null && vip.Evacuated) report.Run.Joined = Rescued(c, node, vip, rng, report.Run)?.Id;
+                if (vip != null && vip.Evacuated)
+                {
+                    var joined = Rescued(c, node, vip, rng, report.Run);
+                    report.Run.Joined = joined?.Id;
+                    // In the debrief as one of the squad (cuadro 140, M7): what they did since they joined, and what they found.
+                    if (joined != null) JoinedReport(c, vip, joined, report, fight, rng);
+                    // No bed for them: what they carry to the squad's packs, and what finds no room said (Producto's review, 24/11).
+                    else HandOver(vip, home, report.Run, fight);
+                }
+                // Found and then fallen, or left behind when La Lata went (cuadro 140; Producto's review, 24/11): in the debrief
+                // as a soldier would be, with what was lost with them; no soldier made.
+                else if (vip != null && !vip.Captive && vip.Owner != null && FellInFight(vip))
+                {
+                    var left = vip.Lost == true;
+                    report.Squad.Add(new ReportSoldier { Id = "", Name = vip.Name, Owner = vip.Owner.Value, Status = left ? ReportStatuses.Lost : ReportStatuses.Dead, WoundedDays = 0, Kills = vip.Kills });
+                    report.Run.Fallen.Add(new RunFallen { Id = "", Name = vip.Name, Lost = LostWith(vip, mission) });
+                    Campaign.RunsLog(c, left ? $"{vip.Name} se quedó fuera cuando salió {Lore.Bus.Name}." : $"{vip.Name} ha caído en combate.", LogTones.Bad);
+                }
                 if (report.Run.Joined != null && report.Run.InSquad == true) standing++;
             }
             // The squad fell: the run is over, and what they carried with it.

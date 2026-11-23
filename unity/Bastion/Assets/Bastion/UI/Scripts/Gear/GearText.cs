@@ -39,7 +39,9 @@ namespace Bastion.UI.Gear
         public static string SplitCount(int n, int of) => $"{n} de {of}";
         public const string NoRoomToSplit = "No hay sitio para partirlo";
 
-        /// <summary>Under the stash: how things are handled.</summary>
-        public const string Hint = "Arrastra para mover. Mientras arrastras, R o clic derecho gira. Con Mayús, se mueve la mitad de la pila.";
+        /// <summary>Under the stash: how things are handled (Mayús + clic, M3: Lore, 23/11; held while dragging, half the pile).</summary>
+        public const string Hint = "Arrastra para mover. Mientras arrastras, R o clic derecho gira. Arrastrar con Mayús mueve la mitad de la pila. Mayús + clic lo pasa entero al otro lado.";
+        /// <summary>Mayús + clic with nowhere shown to send it to.</summary>
+        public const string NowhereToSend = "No hay adónde pasarlo";
     }
 }

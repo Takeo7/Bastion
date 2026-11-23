@@ -106,7 +106,8 @@ namespace Bastion.UI.Hud
             var card = Begin("battle-window__card battle-window__card--file");
             Ui.Text(HudText.Window.FileKicker, "battle-window__kicker battle-window__kicker--file font-title", card);
             Ui.Text(v.Name, "battle-window__title font-title", card);
-            Ui.Text(v.Stats, "battle-file__stats", card);
+            var stats = Ui.Text(v.Stats, "battle-file__stats", card);
+            if (!string.IsNullOrEmpty(v.StatsTip)) tips.Attach(stats, v.StatsTip);
             Ui.Text(v.What, "battle-file__text", card);
             Ui.Text(v.Does, "battle-file__text", card);
             Ui.Text(v.Tip, "battle-file__tip", card);

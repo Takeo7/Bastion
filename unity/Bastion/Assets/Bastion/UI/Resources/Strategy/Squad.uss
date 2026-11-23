@@ -146,17 +146,19 @@
     color: #ffffff;
 }
 
+/* (Four a row: the runs' eight, M4, read in two; the old three in one.) */
 .squad-peek__stats {
     flex-direction: row;
-    margin-bottom: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 3px;
 }
 
 .squad-peek__stat {
     flex-grow: 1;
-    flex-basis: 0;
+    flex-basis: 22%;
     align-items: center;
     padding: 3px 0;
-    margin-right: 3px;
+    margin: 0 3px 3px 0;
     background-color: rgba(255, 255, 255, 0.05);
 }
 
@@ -189,6 +191,13 @@
     margin-top: 2px;
     font-size: 12px;
     color: #7ec24f;
+}
+
+/* «2 puntos por gastar» (M4): the board's call, as its foot says it in Soldados. */
+.squad-peek__points {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #8fd05a;
 }
 
 .squad-peek__health--warn {

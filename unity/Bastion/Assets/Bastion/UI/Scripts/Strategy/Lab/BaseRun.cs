@@ -186,7 +186,8 @@ namespace Bastion.UI.Strategy
             switch (part[0])
             {
                 case "tab": control.OnTab(S(1)); return false;
-                case "soldier": control.OnSoldier(mine.ElementAtOrDefault(N(1))?.Id); return false;
+                // («soldier:c9»: by its id.)
+                case "soldier": control.OnSoldier(char.IsDigit((S(1) ?? "0")[0]) ? mine.ElementAtOrDefault(N(1))?.Id : S(1)); return false;
                 case "recruit": control.OnRecruit(); return true;
                 case "launch": control.OnLaunch(); return true;
                 case "wait": control.OnWait(); return true;
@@ -200,7 +201,13 @@ namespace Bastion.UI.Strategy
                 case "ayuda":
                 {
                     var strategy = FindFirstObjectByType<StrategyRoot>();
-                    var found = strategy?.GetComponent<UIDocument>()?.rootVisualElement?.Q(S(1));
+                    // (A path as «pasa» takes it: «board-stat#7».)
+                    VisualElement found = strategy?.GetComponent<UIDocument>()?.rootVisualElement;
+                    foreach (var piece in S(1).Split('/'))
+                    {
+                        var nth = piece.Split('#');
+                        found = nth.Length > 1 ? found?.Query(className: nth[0]).AtIndex(int.Parse(nth[1])) : found?.Q(piece) ?? found?.Q(className: piece);
+                    }
                     if (found != null) strategy.PinTip(found);
                     Debug.Log($"[base-run] ayuda de {S(1)}: {(found != null ? "abierta" : "no está")}");
                     return false;
@@ -213,8 +220,12 @@ namespace Bastion.UI.Strategy
                 {
                     var strategy = FindFirstObjectByType<StrategyRoot>();
                     VisualElement found = strategy?.GetComponent<UIDocument>()?.rootVisualElement;
+                    // («squad-row#3»: the fourth of them.)
                     foreach (var piece in S(1).Split('/'))
-                        found = found?.Q(piece) ?? found?.Q(className: piece);
+                    {
+                        var nth = piece.Split('#');
+                        found = nth.Length > 1 ? found?.Query(className: nth[0]).AtIndex(int.Parse(nth[1])) : found?.Q(piece) ?? found?.Q(className: piece);
+                    }
                     if (found != null && part[0] == "pasa")
                         using (var e = PointerEnterEvent.GetPooled())
                         {
@@ -229,6 +240,33 @@ namespace Bastion.UI.Strategy
                         }
                     Debug.Log($"[base-run] {part[0]} {S(1)}: {(found != null ? "hecho" : "no está")}");
                     return false;
+                }
+                // The grids (M3, M9, M12, M13): «equipo», every place drawn and what lies in it, in the log; «mayus:g44», Mayús and a
+                // click on it; «arrastra:g44>s2@0;1» dragged over a place (owner/slot: stash, s1/pack, s1/primary…, s2 for a
+                // bust) and held there (a «!» at the end: let go; «~»: turned).
+                case "equipo":
+                    Debug.Log($"[base-run] equipo (retratos {StrategyRoot.PictureStamp}, cuadro {Time.frameCount}): {FindFirstObjectByType<StrategyRoot>()?.Gear?.TestList()}");
+                    return false;
+                case "mayus":
+                {
+                    var done = FindFirstObjectByType<StrategyRoot>()?.Gear?.TestSend(S(1)) == true;
+                    Debug.Log($"[base-run] mayus {S(1)}: {(done ? "va" : "no va (o no está)")}");
+                    return done;
+                }
+                case "arrastra":
+                {
+                    var board = FindFirstObjectByType<StrategyRoot>()?.Gear;
+                    var parts = S(1).Split('>');
+                    var done = false;
+                    if (board != null && parts.Length == 2)
+                    {
+                        var spot = parts[1].TrimEnd('!', '~').Split('@');
+                        var place = spot[0].Split('/');
+                        var xy = spot.Length > 1 ? spot[1].Split(';') : new[] { "0", "0" };
+                        done = board.TestDragTo(parts[0], place[0], place.Length > 1 ? place[1] : null, int.Parse(xy[0]), int.Parse(xy[1]), parts[1].Contains("~"), parts[1].EndsWith("!"));
+                    }
+                    Debug.Log($"[base-run] arrastra {S(1)}: {(done ? "hecho" : "no está")}");
+                    return done && parts[1].EndsWith("!");
                 }
                 // «estado»: what is open now, in the log (U10's test with two).
                 case "estado": Debug.Log($"[base-run] estado: {control.OpenNow()}"); return false;
@@ -251,6 +289,8 @@ namespace Bastion.UI.Strategy
                 case "endrun": control.OnEndRun(); return true;
                 case "upgrade": control.OnUpgrade(S(1)); return true;
                 case "buy": control.OnBuy(S(1)); return true;
+                // «ofrece:g36»: that thing of the chosen soldier's offered at the Trueque (M10).
+                case "ofrece": control.OnSell(S(1)); return true;
                 case "leave": control.OnLeaveStop(); return true;
                 case "choice":
                     control.OpenChoice(S(1));

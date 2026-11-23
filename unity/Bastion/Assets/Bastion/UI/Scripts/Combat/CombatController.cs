@@ -116,6 +116,8 @@ namespace Bastion.UI.Combat
             {
                 Hud.Bind(this);
                 Hud.BindGear(this);
+                // Mayús + clic in the pack with nothing at its feet: onto the floor (M3).
+                if (Hud.Gear != null) Hud.Gear.Ground = Floor;
                 Hud.Look += at => LookAt(at - Vector3.up * Board.Tile);
                 Hud.SightToggled += ToggleSight;
                 Hud.TargetPicked += PickTarget;

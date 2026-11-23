@@ -141,8 +141,12 @@ namespace Bastion.UI.Strategy
             var h = atlas.height / (float)BoardIconIndex.Rows;
             var col = i % BoardIconIndex.Cols;
             var row = i / BoardIconIndex.Cols;
-            // Texture rows go up from the bottom.
-            s = Sprite.Create(atlas, new Rect(col * w, atlas.height - (row + 1) * h, w, h), Vector2.one * 0.5f);
+            // Texture rows go up from the bottom. Kept inside the atlas: at 2048 px a cell is 157.538…, and the last column
+            // ran past its edge by a float's hair (2048.0002): Sprite.Create threw, those 13 cells had no icon, and the
+            // throw cut the drawing of the cells after them short (M5, Arturo 23/11: «hay casillas vacías»).
+            var x = Mathf.Max(0, col * w);
+            var y = Mathf.Max(0, atlas.height - (row + 1) * h);
+            s = Sprite.Create(atlas, new Rect(x, y, Mathf.Min(w, atlas.width - x), Mathf.Min(h, atlas.height - y)), Vector2.one * 0.5f);
             return table[id] = s;
         }
 

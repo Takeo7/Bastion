@@ -351,6 +351,17 @@ namespace Bastion.Engine
         public int Option { get; set; }
     }
 
+    /// <summary>
+    /// M10 (Arturo, cuadro 141 of 23/11): at a Trade, `soldier`'s gear (in its pack or worn) sold for § into its pack
+    /// (Gears.SellRefusal, Gears.Sell).
+    /// </summary>
+    public sealed class SellGearCommand : CampaignCommand
+    {
+        public override string Type => "sellGear";
+        public string Soldier { get; set; } = "";
+        public string Gear { get; set; } = "";
+    }
+
     /// <summary>A ware of the Trade, paid with the supplies in the packs of the buyer's soldiers, into `soldier`'s pack.</summary>
     public sealed class BuyWareCommand : CampaignCommand
     {

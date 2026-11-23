@@ -485,6 +485,7 @@ namespace Bastion.UI.Hud
             public const string InPlay = "EN JUEGO";
             /// <summary>Over a fallen one's bust (cuadro 124): dimmed for that alone, and said.</summary>
             public const string Fallen = "CAÍDO";
+            public const string FallenFemale = "CAÍDA";
             public const string InPlayTip = "En juego: termina sus acciones antes que otro";
 
             /// <summary>«DE ANA»; a partner not in the room, «DEL OTRO JUGADOR».</summary>

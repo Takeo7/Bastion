@@ -159,7 +159,7 @@ namespace Bastion.UI.Strategy
                 var max = Runs.MaxHp(s);
                 v.Squad.Add(new KitTabView
                 {
-                    Id = s.Id, Name = FirstName(s), On = s == pick, Mine = own,
+                    Id = s.Id, Name = FirstName(s), On = s == pick, Mine = own, Theirs = s.Owner != Slot,
                     Color = own ? null : PlayerColor(s.Owner),
                     Hp = run.Hp.TryGetValue(s.Id, out var hp) ? hp : max, HpMax = max,
                     Tip = StrategyText.Stash.Health(run.Hp.TryGetValue(s.Id, out var left) ? left : max, max) + (own ? "" : " · " + StrategyText.Stash.Whose(PlayerName(s.Owner))),
@@ -257,6 +257,28 @@ namespace Bastion.UI.Strategy
                             Price = w.Price.ToString(),
                             Why = Gears.BuyWareRefusal(c, Slot, Connected, new BuyWareCommand { Ware = w.Gear.Id, Soldier = buyer?.Id ?? "" }),
                         });
+                    // The other side (M10, cuadro 141): what the same soldier wears and carries, at what the trader pays (the
+                    // engine's price, «Buen trato» in it) and why not; never what has no price (the knife, §, the key).
+                    if (buyer?.Kit != null)
+                    {
+                        var haggle = Runs.Level(c, UpgradeIds.Haggle) > 0;
+                        v.Offers = new List<WareView>();
+                        v.OffersFrom = StrategyText.Runs.OffersFrom(FirstName(buyer));
+                        foreach (var spot in Gears.OfKit(buyer))
+                        {
+                            var price = Content.SellPrice(spot.Gear, haggle);
+                            if (price <= 0) continue;
+                            v.Offers.Add(new WareView
+                            {
+                                Gear = Ware(spot.Gear, buyer),
+                                Price = "+" + price,
+                                Why = Gears.SellRefusal(c, Slot, Connected, new SellGearCommand { Soldier = buyer.Id, Gear = spot.Gear.Id }),
+                                Note = spot.Slot != KitSlots.Pack ? StrategyText.Runs.WornOf(spot.Gear.Kind, spot.Gear.Type, spot.Gear.Count) : null,
+                            });
+                        }
+                        if (v.Offers.Count == 0) v.OffersFrom = StrategyText.Runs.NothingToOffer(FirstName(buyer));
+                        if (mine.Count > 1) v.OffersOther = StrategyText.Runs.OffersOther;
+                    }
                     break;
                 case NodeKinds.Event:
                     var id = stop.Event ?? "";

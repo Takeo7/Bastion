@@ -106,12 +106,26 @@ probar() {
   ls -la unity/Bastion/Builds/Bastion-Mac.zip unity/Bastion/Builds/Bastion-Windows.zip || exit 1
 
   # The Mac app by itself, hosting on this machine with its own data: 90 s of combat in a city, 120 s in the base.
+  # Run as a copy with an identifier of its own: Unity keeps an app's PlayerPrefs by its CFBundleIdentifier, and the real
+  # one, run here, wrote its sessions into the preferences of Arturo's game (Red, R22b of 23/11: session_count and the
+  # session ids). The same executable, signed ad hoc; what is zipped and published is the real one, untouched. A tester
+  # (BASTION_ANFITRION, BASTION_MEDIR) keeps its room on 127.0.0.1, so macOS asks nothing of the copy.
+  trial=$out/prueba/Bastion.app
+  rm -rf "${out:?}/prueba"; mkdir -p "$out/prueba"
+  ditto "$app" "$trial"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.takeo7.bastion.unity.prueba" "$trial/Contents/Info.plist"
+  codesign --force --deep --sign - "$trial" > /dev/null 2>&1 && codesign -v --deep --strict "$trial" \
+    || { echo "No he podido firmar la copia de prueba de la app."; exit 1; }
+  # Arturo's preferences (the real identifier's), the same after the runs as before: date, size and content.
+  prefs=~/Library/Preferences/com.takeo7.bastion.unity.plist
+  prefsMark() { [ -f "$prefs" ] && echo "$(stat -f '%Sm %z' "$prefs") $(shasum -a 256 "$prefs" | cut -d' ' -f1)" || echo "sin archivo"; }
+  prefsBefore=$(prefsMark)
   appFaults=0
   for mode in ciudad base; do
     data=$out/app-$mode
     rm -rf "$data"; mkdir -p "$data"
     BASTION_DATOS=$data BASTION_ANFITRION=Medida BASTION_SEMILLA=7 BASTION_MEDIR=$mode \
-      "$app/Contents/MacOS/Bastion" -logFile "$data/Player.log"
+      "$trial/Contents/MacOS/Bastion" -logFile "$data/Player.log"
     code=$?
     faults=$(grep -c "Exception" "$data/Player.log")
     layout=$(grep -c "Layout update is struggling" "$data/Player.log")
@@ -125,6 +139,10 @@ probar() {
     grep -h "\[rend Medida\] combate" "$data/red.log" | grep -oE "[0-9]+ tir(ón|ones)" | awk '{s+=$1} END {print "tirones en combate: " s+0}'
     if [ $code != 0 ] || [ "$faults" != 0 ] || [ "$layout" != 0 ] || [ "${done_:-0}" = 0 ] || [ "${refused:-0}" != 0 ]; then appFaults=1; fi
   done
+
+  prefsAfter=$(prefsMark)
+  if [ "$prefsAfter" = "$prefsBefore" ]; then echo "preferencias de Arturo iguales: $prefsAfter"
+  else echo "PREFERENCIAS DE ARTURO CAMBIADAS: $prefsBefore → $prefsAfter"; appFaults=1; fi
 
   if [ "$closeFaults" != 0 ] || [ $appFaults != 0 ]; then
     echo "NO está para publicar: mirar arriba las excepciones, los avisos y los rechazos de la sala."

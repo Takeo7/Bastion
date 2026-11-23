@@ -3,6 +3,7 @@
 // piles, which kit place takes what, the vests and the knife, the upgrades' prices, the Trade's price list and the
 // events' rules. First numbers, to be tuned with the bots (H8). Names here are placeholders for Lore (RunTexts has the
 // rest). The partial files' statics start in no set order: nothing here reads another part's in its initializer.
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -265,6 +266,53 @@ namespace Bastion.Engine
         public const int TradeCount = 5;
         /// <summary>What the «haggle» upgrade takes off the Trade's prices, in percent.</summary>
         public const int HaggleDiscount = 20;
+
+        /// <summary>
+        /// M10 (cuadro 141): a list price for what the Trade never sells, as the G19 probe priced it (RunBench.Worth). A weapon
+        /// that comes with an accessory mounted (FoundWeaponDef.Mod), without it: each accessory mounted sells on its own.
+        /// </summary>
+        public static readonly IReadOnlyDictionary<string, int> ListPrices = new Dictionary<string, int>
+        {
+            [FoundWeaponIds.HuntingRifle] = 50,
+            [FoundWeaponIds.SawnOff] = 30,
+            [FoundWeaponIds.ScopedRifle] = 90,
+            [FoundWeaponIds.MachineGun] = 120,
+            [FoundWeaponIds.LightMachineGun] = 80,
+            [FoundWeaponIds.Chainsaw] = 45,
+            [ItemIds.SmokeGrenade] = 15,
+            [ItemIds.Flashbang] = 20,
+            [VestIds.HeavyVest] = 100,
+            [GearKinds.Mod] = 30,
+        };
+
+        /// <summary>
+        /// One of a gear's list price: the Trade's (an arrow, the bundle's share), else ListPrices'. 0 for what has none: §, the
+        /// knife, what a mission gives.
+        /// </summary>
+        public static double ListPrice(string kind, string? type)
+        {
+            if (kind == GearKinds.Weapon && type == FoundWeaponIds.Knife) return 0;
+            var ware = TradeWares.FirstOrDefault((w) => w.Kind == kind && w.Type == type);
+            if (ware != null) return ware.Price / (double)Math.Max(1, ware.Count);
+            if (kind == GearKinds.Mod) return ListPrices[GearKinds.Mod];
+            return type != null && ListPrices.TryGetValue(type, out var p) ? p : 0;
+        }
+
+        /// <summary>What the «haggle» upgrade adds to what the Trade pays (cuadro 141), in percent.</summary>
+        public const int HaggleSale = 20;
+
+        /// <summary>
+        /// What the Trade pays for a gear (M10, Arturo, cuadro 141: «a la mitad, y un 20 % más con Regateo»): half its list
+        /// price, all of the pile, down to a 5; a weapon's accessories mounted on top, each as one; with the upgrade, 20 %
+        /// more, rounded. 0: it isn't sold (§, the knife, what a mission gives, a pile worth less than 5).
+        /// </summary>
+        public static int SellPrice(Gear g, bool haggle)
+        {
+            var half = ListPrice(g.Kind, g.Type) * g.Count / 2;
+            var price = (int)Math.Floor(half / 5) * 5;
+            if (g.Kind == GearKinds.Weapon && price > 0) price += (g.Mods?.Count ?? 0) * (int)Math.Floor(ListPrices[GearKinds.Mod] / 2.0 / 5) * 5;
+            return haggle ? (int)Js.Round(price * (100 + HaggleSale) / 100.0) : price;
+        }
 
         /// <summary>A price of the list as the Trade asks it: HaggleDiscount off, rounded, with the upgrade.</summary>
         public static int Haggled(int price, bool haggle)

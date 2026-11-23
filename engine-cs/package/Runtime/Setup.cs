@@ -366,6 +366,10 @@ namespace Bastion.Engine
             // A fight saved half played before M1 (0.14.1's and older): its buildings open to the outside found, as one set out
             // now (Buildings.FindOpen; Producto, cuadro 134: «sin excepción»).
             if (s.Mission != null && s.Outcome == null) Buildings.FindOpen(s);
+            // A run's survivor saved half played before cuadro 140 (0.14.2's and older), with no pack: a recruit's, empty.
+            if (s.Run != null && s.Mission != null && s.Outcome == null) SurvivorPack(s);
+            // Gear with no id (Red, 23/11: a survivor's knife), numbered.
+            if (s.Run != null && s.Mission != null && s.Outcome == null) NumberGear(s);
         }
 
         /// <summary>

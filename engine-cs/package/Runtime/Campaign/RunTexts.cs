@@ -58,6 +58,15 @@ namespace Bastion.Engine
         public const string StaleAnswer = "Esa parada ya quedó atrás.";
         public const string NotTrade = "Aquí no hay Trueque.";
         public const string NoWare = "Eso ya no está en el Trueque.";
+        /// <summary>
+        /// M10 (cuadro 141): what the Trueque won't take (§, the knife, what a mission gives, a pile worth less than 5 §). The
+        /// Trueque's verb both ways is «cambiar», never «comprar» nor «vender» (Lore), as its button and NoWare.
+        /// </summary>
+        public const string NotForSale = "Eso no se puede cambiar.";
+        /// <summary>M10: what a soldier gave the Trueque, for the log: «Anja cambia un fusil de asalto por 45 §.» (Lore.GearA).</summary>
+        public static string Sold(string name, string what, int supplies) => $"{name} cambia {what} por {supplies} §.";
+        /// <summary>M10: the § of what is offered fit in no pack of that player's (Gears.Till): said of the §, not of the thing (PackFull).</summary>
+        public static string SuppliesNoRoom(string name) => $"Los § no caben en la mochila de {name} ni en las de tus otros soldados.";
         public const string NoBeds = "No caben más soldados en el Bastión.";
         public const string Pending = "Ya hay una propuesta pendiente.";
 
@@ -87,6 +96,11 @@ namespace Bastion.Engine
         public static string ChapterDone(int chapter) => $"Capítulo {chapter} superado. La escuadra vuelve a la base.";
         /// <summary>Someone joins (a Rescate, a Suceso): with the squad, or at the base when it goes full (`inSquad` false).</summary>
         public static string SurvivorJoins(string name, bool inSquad = true) => inSquad ? $"{name} se une a la escuadra." : $"{name} se une al Bastión y espera en la base: la escuadra va completa.";
+        /// <summary>
+        /// A survivor brought out with every player at the soldiers' cap (cuadro 140, M7): they don't stay. Lore's words (23/11),
+        /// as NoBeds and SurvivorJoins say the Bastión and its soldiers.
+        /// </summary>
+        public static string SurvivorNoRoom(string name) => $"{name} no se queda: en el Bastión ya no caben más soldados.";
         public static string Recruit(string name) => $"{name} se une al Bastión como recluta: no quedaban soldados vivos.";
         public const string Wiped = "Cae toda la escuadra. Lo que llevaban se pierde.";
         /// <summary>N8 (cuadro 118): nobody left alive in the game, the base too, and it is lost.</summary>

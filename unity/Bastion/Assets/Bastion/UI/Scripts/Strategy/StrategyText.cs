@@ -41,6 +41,8 @@ namespace Bastion.UI.Strategy
         /// <summary>The skill board: its points' help.</summary>
         public static class Board
         {
+            /// <summary>The health in a run with its vest (Producto, 24/11), over the totals' line (Lore's yes, 24/11).</summary>
+            public static string HpWithVest(int hp, int bare, int vest, string vestName) => $"Salud {hp}: {bare} + {vest} del {vestName.ToLowerInvariant()}";
             public const string PointsTip = "Un punto de habilidad cada vez que se llena una barra";
             /// <summary>N6 (22/11; till Lore's words): over what a cell changes, and over the soldier's totals.</summary>
             public const string Gains = "Si la coges";
@@ -126,6 +128,43 @@ namespace Bastion.UI.Strategy
             public const string PurseAfter = ".";
 
             public static string For(string name) => $"Lo que cambies va a la mochila de {name}.";
+            // M10 (cuadro 141), the Trueque's two sides (UI's, Lore's yes, 23/11). The § go where Gears.Sell puts them.
+            public const string Wares = "Lo que te ofrece";
+            public const string Offers = "Lo que le ofreces";
+            public static string OffersFrom(string name) => $"Lo que lleva {name}, puesto y en la mochila. Los § van a su mochila; si no caben, a la de otro de tus soldados.";
+            public const string Worn = "Lo lleva puesto";
+            /// <summary>
+            /// Worn, agreeing with the thing (Lore, 24/11: «2 botiquines · Lo lleva puesto» didn't): «Lo lleva puesto», «La lleva
+            /// puesta», «Los lleva puestos», «Las lleva puestas».
+            /// </summary>
+            public static string WornOf(string kind, string type, int count)
+            {
+                var (female, many) = Agreement(kind, type, count);
+                return $"{(female ? "La" : "Lo")}{(many ? "s" : "")} lleva puest{(female ? "a" : "o")}{(many ? "s" : "")}";
+            }
+            /// <summary>Whether a thing is said in the feminine and in the plural, by its article in Lore.GearThe.</summary>
+            static (bool female, bool many) Agreement(string kind, string type, int count)
+            {
+                var one = Lore.GearThe(kind, type, 1);
+                return (one.StartsWith("la ") || one.StartsWith("las "), count > 1 || one.StartsWith("los ") || one.StartsWith("las "));
+            }
+            public static string NothingToOffer(string name) => $"{name} no lleva nada que se pueda cambiar.";
+            /// <summary>Under it with more than one soldier (Producto, 24/11): the busts on the right choose whose (Lore's yes, 24/11).</summary>
+            public const string OffersOther = "Para ofrecer lo de otro soldado, elige su busto a la derecha.";
+            /// <summary>
+            /// The question before selling what is worn (Producto, 24/11: it goes for good, at one click), in the row itself:
+            /// «¿Cambiar el fusil de cerrojo que lleva puesto por 55 §?», «puesta» for «la pistola» (Lore's yes, 24/11).
+            /// </summary>
+            public static string SellWorn(string kind, string type, int count, string price)
+            {
+                var one = Lore.GearThe(kind, type, 1);
+                var (female, many) = Agreement(kind, type, count);
+                // More than one comes without its article («2 granadas»): «las 2 granadas que lleva puestas» (Lore, 24/11).
+                var the = count > 1 ? $"{(female ? "las" : "los")} {Lore.GearThe(kind, type, count)}" : one;
+                return $"¿Cambiar {the} que lleva puest{(female ? "a" : "o")}{(many ? "s" : "")} por {price.TrimStart('+')} §?";
+            }
+            /// <summary>Leaves the question: «Cancelar», as Partir and Tirar (Lore, 16/11 and 24/11).</summary>
+            public const string SellNo = "Cancelar";
             public static string Waiting(string partner) => $"Esperando a {partner}.";
             public static string TheyWait(string partner) => $"{partner} quiere seguir.";
 
@@ -178,6 +217,15 @@ namespace Bastion.UI.Strategy
             /// <summary>A Rescate won (H4): who was held out joins (Lore to confirm).</summary>
             public static string JoinedLine(string name) => $"<b>{name}</b> se une a la escuadra.";
 
+            /// <summary>
+            /// A survivor with no bed in the Bastión (RunReport.NoBed; Producto's review of 24/11): they don't stay; what they carried
+            /// (all but their knife) goes to the squad's packs, and what didn't fit stays there. `gave`: anything went to the packs.
+            /// </summary>
+            public static string NoBedLine(string name, bool gave, IList<string> lost) =>
+                $"<b>{name}</b> no se queda: en el Bastión ya no caben más soldados."
+                + (lost.Count == 0 ? (gave ? " Deja a la escuadra lo que llevaba." : "")
+                    : gave ? $" Deja a la escuadra lo que cabía en las mochilas; lo demás se queda allí: {Ui.List(lost)}."
+                    : $" Lo que llevaba no cabía en las mochilas y se queda allí: {Ui.List(lost)}.");
             public static string FallenLine(string name, IList<string> lost) => lost.Count == 0
                 ? $"<b>{name}</b> ha caído."
                 : $"<b>{name}</b> ha caído. Se pierde lo que llevaba: {Ui.List(lost)}.";

@@ -42,8 +42,8 @@ namespace Bastion.Engine
         /// Each reach, its name and what the weapon is good at, as its range table
         /// says (content.ts RANGE_TABLES): the shotgun adds most close and takes away
         /// from twelve tiles on, the rifles add close and never take away, the
-        /// precision rifle takes away close and nothing from eleven on. By RangeTable:
-        /// "short", "medium", "long", "none".
+        /// precision rifle takes away close and nothing from eleven on, the crossbow neither adds nor takes away (M8, 23/11).
+        /// By RangeTable: "short", "medium", "long", "flat", "none".
         /// </summary>
         public static readonly IReadOnlyDictionary<string, Reach> Reaches = new Dictionary<string, Reach>
         {
@@ -51,6 +51,8 @@ namespace Bastion.Engine
             ["medium"] = new Reach("Medio", "Vale para todo: suma de cerca y no resta de lejos."),
             ["long"] = new Reach("Largo", "De lejos. De cerca resta mucha puntería; desde once casillas, ya no."),
             ["none"] = new Reach("Cuerpo a cuerpo", "Contra quien está al lado. Casi no se oye."),
+            // M8 (23/11, the crossbow's flat table): Gameplay's name and line, Lore's yes.
+            ["flat"] = new Reach("Parejo", "Igual de cerca que de lejos: ni suma ni resta puntería."),
         };
 
         /// <summary>
@@ -116,7 +118,7 @@ namespace Bastion.Engine
                     return "El que menos daño hace, pero casi nunca falla.";
                 // Arco y ballesta (cuadros 102 and 103): arrows from the pack, and the kill unseen keeps the squad hidden.
                 case WeaponIds.Crossbow:
-                    return "Mucho daño, y mejor de lejos. Tras cada tiro se recarga, con una acción y una flecha. Se oye poco. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.";
+                    return "Mucho daño, y acierta igual a cualquier distancia. Tras cada tiro se recarga, con una acción y una flecha. Se oye poco. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.";
                 case WeaponIds.Bow:
                     return "Poco daño, pero no se recarga: cada tiro gasta una flecha. Casi no se oye. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.";
                 default:

@@ -30,6 +30,8 @@ namespace Bastion.UI.Combat
             // Shift held, everything to search (U11; Lore's words, 18/11).
             ("Mantener Mayús", "Resaltar lo que queda por registrar; en claro, lo que el soldado elegido alcanza desde donde está"),
             ("H · clic en su nombre", "Hoja del soldado: tablero, estadísticas y lo que lleva"),
+            // M3 (Arturo, 23/11; Lore's words): in the pack's panel.
+            ("Mayús + clic en un objeto", "Con la mochila abierta: dejarlo en el suelo o cogerlo del suelo"),
             ("Q / E", "Girar la cámara"),
             ("Rueda", "Acercar o alejar"),
             // The Mac's keyboard has none of RePág and AvPág: Fn and the arrows there (Lore, 23/11).

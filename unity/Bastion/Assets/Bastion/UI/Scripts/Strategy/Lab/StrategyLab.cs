@@ -245,8 +245,8 @@ namespace Bastion.UI.Strategy
             var stash = Stash();
             v.Squad.Add(new KitTabView { Id = "s6", Name = "Rafael", On = true, Mine = true, Hp = 9, HpMax = 12 });
             v.Squad.Add(new KitTabView { Id = "s2", Name = "Inés", Mine = true, Hp = 3, HpMax = 10 });
-            v.Squad.Add(new KitTabView { Id = "s4", Name = "Marta", Mine = false, Color = "#c58cff", Hp = 10, HpMax = 10 });
-            v.Squad.Add(new KitTabView { Id = "s5", Name = "Teo", Mine = false, Color = "#c58cff", Hp = 7, HpMax = 10 });
+            v.Squad.Add(new KitTabView { Id = "s4", Name = "Marta", Mine = false, Theirs = true, Color = "#c58cff", Hp = 10, HpMax = 10 });
+            v.Squad.Add(new KitTabView { Id = "s5", Name = "Teo", Mine = false, Theirs = true, Color = "#c58cff", Hp = 7, HpMax = 10 });
             v.Kit = stash.Kit;
             v.Stop = Stop(which);
             return v;
@@ -338,8 +338,8 @@ namespace Bastion.UI.Strategy
                 {
                     new KitTabView { Id = "s6", Name = "Rafael", On = true, Mine = true },
                     new KitTabView { Id = "s2", Name = "Inés", Mine = true },
-                    new KitTabView { Id = "s4", Name = "Marta", Mine = false, Color = "#c58cff", Tip = "De Ana" },
-                    new KitTabView { Id = "s5", Name = "Teo", Mine = false, Color = "#c58cff", Tip = "De Ana" },
+                    new KitTabView { Id = "s4", Name = "Marta", Mine = false, Theirs = true, Color = "#c58cff", Tip = "De Ana" },
+                    new KitTabView { Id = "s5", Name = "Teo", Mine = false, Theirs = true, Color = "#c58cff", Tip = "De Ana" },
                 },
                 Kit = new KitView
                 {
@@ -1129,6 +1129,7 @@ namespace Bastion.UI.Strategy
         public void OnNode(string id) => Debug.Log("[estrategia] etapa " + id);
         public void OnEndRun() => Debug.Log("[estrategia] volver a la base");
         public void OnBuy(string ware) => Debug.Log("[estrategia] cambiar " + ware);
+        public void OnSell(string gear) => Debug.Log("[estrategia] ofrecer " + gear);
         public void OnLeaveStop() => Debug.Log("[estrategia] seguir");
         public void OnUpgrade(string id) => Debug.Log("[estrategia] mejorar " + id);
     }

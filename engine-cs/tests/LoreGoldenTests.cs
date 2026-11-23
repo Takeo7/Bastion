@@ -79,7 +79,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Mejor arma y más aguante que un Saqueador. Usa la vigilancia.", Lore.EnemyFiles["officer"].Does);
             Assert.Equal("Es el más peligroso del grupo: dispárale primero. El golpe silencioso no sirve contra él.", Lore.EnemyFiles["officer"].Tip);
             Assert.Equal("Cuervo con ballesta.", Lore.EnemyFiles["lancer"].What);
-            Assert.Equal("Dispara de lejos, con mucho daño, y recarga tras cada tiro.", Lore.EnemyFiles["lancer"].Does);
+            Assert.Equal("Dispara con mucho daño, igual de cerca que de lejos, y recarga tras cada tiro.", Lore.EnemyFiles["lancer"].Does);
             Assert.Equal("Si aún no está alerta, el golpe silencioso lo mata. Al registrar su cuerpo, os quedáis su ballesta y 5 flechas.", Lore.EnemyFiles["lancer"].Tip);
             Assert.Equal("La alarma: un coche patrulla, una ambulancia o la de una nave.", Lore.EnemyFiles["relay"].What);
             Assert.Equal("No dispara. Tiene salud y blindaje 1. Mientras suena, la zona se llena de zombis.", Lore.EnemyFiles["relay"].Does);
@@ -1855,6 +1855,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("De lejos. De cerca resta mucha puntería; desde once casillas, ya no.", Lore.Reaches["long"].Line);
             Assert.Equal("Cuerpo a cuerpo", Lore.Reaches["none"].Name);
             Assert.Equal("Contra quien está al lado. Casi no se oye.", Lore.Reaches["none"].Line);
+            Assert.Equal("Parejo", Lore.Reaches["flat"].Name);
+            Assert.Equal("Igual de cerca que de lejos: ni suma ni resta puntería.", Lore.Reaches["flat"].Line);
             Assert.Equal("No gasta", Lore.WeaponFigure("clip", 0, false));
             Assert.Equal("No gasta", Lore.WeaponFigure("clip", 0, true));
             Assert.Equal("1 disparo", Lore.WeaponFigure("clip", 1, false));
@@ -3174,7 +3176,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("2 arcos", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.Bow, 2));
             Assert.Equal("Para el arco y la ballesta. Cada tiro gasta una. La que acierta se recupera al registrar el cuerpo; la que falla se pierde.", Lore.ArrowsText.Help);
             Assert.Equal("Carga la ballesta: gasta una flecha de la mochila.", Lore.ArrowsText.Reload);
-            Assert.Equal("Mucho daño, y mejor de lejos. Tras cada tiro se recarga, con una acción y una flecha. Se oye poco. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.", Lore.WeaponLine(WeaponIds.Crossbow));
+            Assert.Equal("Mucho daño, y acierta igual a cualquier distancia. Tras cada tiro se recarga, con una acción y una flecha. Se oye poco. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.", Lore.WeaponLine(WeaponIds.Crossbow));
             Assert.Equal("Poco daño, pero no se recarga: cada tiro gasta una flecha. Casi no se oye. Si el tiro mata y no os ve ningún otro enemigo, no rompe la ocultación.", Lore.WeaponLine(WeaponIds.Bow));
             Assert.Equal("Una flecha por tiro", Lore.WeaponFigure("clip", 0, arrows: true));
             Assert.Equal("1 disparo", Lore.WeaponFigure("clip", 1, arrows: true));
@@ -3213,7 +3215,18 @@ namespace Bastion.Engine.Tests
             Assert.Equal("No te quedan soldados. Al partir, mandas en la mitad de la escuadra de Ana.", Lore.LostText.NoneOfYourOwn("Ana", true));
             Assert.Equal("No te quedan soldados. Puedes sacar a los de Ana y mandarlos mientras no esté.", Lore.LostText.NoneOfYourOwn("Ana", false));
             Assert.Equal("Herido: sale con 5 de 8 de salud. Se cura en un Refugio o con medicinas.", Lore.WoundsText.Hurt(5, 8));
-            Assert.Equal(45, Lore.Glossary.Count);
+            Assert.Equal(48, Lore.Glossary.Count);
+            // M7 (cuadro 140) and M6 (23/11).
+            Assert.Equal("Iker no se queda: en el Bastión ya no caben más soldados.", RunTexts.SurvivorNoRoom("Iker"));
+            Assert.Equal("Defensa 10: quien le ataca acierta 10 puntos menos.", Lore.GuardText.Defense(10));
+            Assert.Equal("Defensa 1: quien le ataca acierta 1 punto menos.", Lore.GuardText.Defense(1));
+            Assert.Equal("Defensa 0: sin defensa propia. Cuentan la cobertura y cubrirse.", Lore.GuardText.Defense(0));
+            Assert.Equal("Esquiva 15: de lo que le acierten, el 15 % se queda en rozadura, con la mitad de daño.", Lore.GuardText.Dodge(15));
+            Assert.Equal("Esquiva 0: sin esquiva. Se gana con las barras de Forma física y en el tablero.", Lore.GuardText.Dodge(0));
+            Assert.Equal("Vale contra disparos, golpes y mordiscos. No contra explosiones, fuego ni caídas.", Lore.GuardText.Against);
+            Assert.Equal("Quita puntos al acierto de quien ataca: con defensa 10, un 60 % pasa a 50 %. Se suma a la cobertura (la baja quita 20 y la alta, 40), que solo vale contra disparos. Cubrirse da 30 más. Vale contra todo lo que tira dado: disparos, golpes y mordiscos. No vale contra explosiones, fuego ni caídas.", Lore.Glossary["Defensa"]);
+            Assert.Equal("Convierte en rozadura una parte de lo que acierta: con esquiva 15, el 15 % de los aciertos contra ese soldado se queda en rozadura. Un crítico nunca se queda en rozadura. Se gana con las barras de Forma física y en el tablero; cubrirse da 50 más. Vale contra disparos, golpes y mordiscos, no contra explosiones, fuego ni caídas.", Lore.Glossary["Esquiva"]);
+            Assert.Equal("Un ataque que acierta, pero solo roza: hace la mitad de daño, como mínimo 1. Con más esquiva, salen más.", Lore.Glossary["Rozadura"]);
             Assert.Equal("Un muerto del tamaño de dos.", Lore.EnemyFiles[TemplateIds.Brute].What);
             Assert.All(TemplateIds.All, (t) => Assert.True(!Content.Templates[t].Undead || Lore.EnemyFiles.ContainsKey(t), t));
             Assert.Equal("EL TORO", Lore.BossText.RoarBanner(Lore.BossName(1)));
@@ -3432,7 +3445,11 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Hiro y Ana no han subido: se quedarían fuera, y se perderían.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new[] { "Hiro", "Ana" }, new string[0], 2), null).Text);
             Assert.Equal("No caben todos: Marta Gil se queda fuera.", Lore.EvacNoSeatLine(new[] { "Marta Gil" }));
             Assert.Equal("Solo sale un soldado por jugador.", RunTexts.PerPlayer(1));
-            Assert.Equal("En el Trueque, todo cuesta un 20 % menos.", Lore.UpgradeLine(UpgradeIds.Haggle));
+            Assert.Equal("En el Trueque, todo cuesta un 20 % menos, y lo que ofrecéis se paga un 20 % más.", Lore.UpgradeLine(UpgradeIds.Haggle));
+            // M10 (cuadro 141).
+            Assert.Equal("Eso no se puede cambiar.", RunTexts.NotForSale);
+            Assert.Equal("Los § no caben en la mochila de Anja ni en las de tus otros soldados.", RunTexts.SuppliesNoRoom("Anja"));
+            Assert.Equal("Anja cambia un fusil de asalto por 45 §.", RunTexts.Sold("Anja", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.AssaultRifle), 45));
             Assert.All(UpgradeIds.All, (id) => Assert.True(Lore.UpgradeNames.ContainsKey(id)));
             // The gear's names (UI: the grid's sheets, the Trueque, throwing away).
             Assert.Equal("Granada", Lore.GearName(GearKinds.Item, ItemIds.FragGrenade));

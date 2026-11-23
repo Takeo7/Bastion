@@ -226,6 +226,9 @@ namespace Bastion.Client.Units
             public bool risen;
             public bool feeding;
             public bool walking;
+            /// <summary>Where its root was as the last frame was stepped, and the last frame a walk had moved it by (Step; Sync leaves it on its way: OnItsWay).</summary>
+            public Vector3 rootWas;
+            public int movedIn = -9;
             public bool striking;
             /// <summary>The yaw it turns to (degrees; null, none: where it is) and how fast (unitViews.ts pose.yawTarget, turn).</summary>
             public float? yawTo;
@@ -517,6 +520,17 @@ namespace Bastion.Client.Units
         static readonly bool ThinLog = Environment.GetEnvironmentVariable("BASTION_ALTERNAN") == "1";
         int thinLogged;
 
+        /// <summary>Whether a walk moved it this frame or the last (Step's own look at its root): a walk cut short stops, and is no longer.</summary>
+        static bool OnItsWay(View v) => !WayOff && Application.isPlaying && v.walking && v.movedIn >= Time.frameCount - 1;
+        /// <summary>
+        /// Whether it is in a blow that takes it off its tile's middle and back (a strike's lunge, the bar's, the brute's, a
+        /// takedown: each puts it where it goes every frame and home as it ends, whatever ends it): the same frame on its
+        /// tile's middle and back out, 0.35 to 0.45 m, as a Sync fell in it (M11: one of the dead's blow as another's step settled).
+        /// </summary>
+        static bool Lunging(View v) => !WayOff && Application.isPlaying && v.striking;
+        /// <summary>BASTION_SIN_CAMINO=1: put on its tile at every Sync as it walks, for the labs' «before» (M11).</summary>
+        public static bool WayOff = Environment.GetEnvironmentVariable("BASTION_SIN_CAMINO") == "1";
+
         void Step(float dt)
         {
             clock += dt;
@@ -532,6 +546,11 @@ namespace Bastion.Client.Units
             foreach (var v in views.Values)
             {
                 dt = step;
+                if (v.root != null)
+                {
+                    if (v.walking && v.root.position != v.rootWas) v.movedIn = Time.frameCount;
+                    v.rootWas = v.root.position;
+                }
                 if (v.hearClock >= 0) StepHear(v, dt);
                 if (v.yawTo is float yawTo && v.root != null)
                 {
@@ -1367,7 +1386,11 @@ namespace Bastion.Client.Units
                 // (One caged by its bars too: it keeps pressed to them by itself, KeepToBars.)
                 // (Nor one coming down out of La Lata: on its way to its tile, UnitViews.Ride. Nor the wounded carried: it
                 // stays on its carrier's shoulders, StepCarried; put on its tile here it was drawn there for a frame.)
-                if (v.alight < 0 && u.CarriedBy == null && !(still && (v.feeding || v.reachFor != null || v.dead || v.cage != null))) v.root.position = StandOf(v, v.place, MapSpace.StandAt(view, v.place));
+                // (Nor one a walk is moving: every tile it gets to is an event of its own, settled with a Sync, and a walk made
+                // straight (Straighten) or round a corner is off the tiles' middles: put on its tile's it was there for a frame
+                // and back on its way the next, up to a tile off, four times in a dash of four tiles askew. Arturo's M11 of
+                // 23/11, SaltosLab. Its walk leaves it on its tile as it ends; one cut short, still again, is put on it here.)
+                if (v.alight < 0 && u.CarriedBy == null && !OnItsWay(v) && !Lunging(v) && !(still && (v.feeding || v.reachFor != null || v.dead || v.cage != null))) v.root.position = StandOf(v, v.place, MapSpace.StandAt(view, v.place));
                 // (Turned as the state has it, by its bars: the caged one's TurnedEvent, which UI's event player leaves to the view.)
                 if (v.cage != null && u.Alive && u.Facing is double facing && !v.walking && !v.barsLunge && !v.barsHeld && v.yawTo == null
                     && Mathf.Abs(Mathf.DeltaAngle(v.root.eulerAngles.y, YawOf(facing))) > 2) TurnTo(v, YawOf(facing));

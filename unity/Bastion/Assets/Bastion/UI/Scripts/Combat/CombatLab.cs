@@ -201,7 +201,9 @@ namespace Bastion.UI.Combat
             if (shot != null && System.Environment.GetEnvironmentVariable("BASTION_LAB_ESTORBO") == "1") InTheWay(host, shot);
             var mine = Events.CloneState(host);
             InScene &= Bastion.Client.Battlefield.Current != null;
-            if (InScene) Bastion.Client.Battlefield.Current.Show(mine);
+            // A copy for the map, as CombatSession gives it: it keeps what it drew to tell the next change, and the lab's state
+            // changes in place (with this very state a grenade's walls were already in it and the front drew whole, 24/11).
+            if (InScene) Bastion.Client.Battlefield.Current.Show(Events.CloneState(mine));
             else
             {
                 LayOut(mine);

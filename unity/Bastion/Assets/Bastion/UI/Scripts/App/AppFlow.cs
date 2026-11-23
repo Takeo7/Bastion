@@ -125,6 +125,8 @@ namespace Bastion.UI.App
 
         void OnEnable()
         {
+            // (The start scene's own copy, loaded again with this one alive: going, Awake.)
+            if (instance != this) return;
             var doc = GetComponent<UIDocument>();
             // Over everything the scenes put up.
             doc.sortingOrder = 100;
@@ -431,6 +433,7 @@ namespace Bastion.UI.App
         {
             veilRaised++;
             loadSince = Time.realtimeSinceStartup;
+            Perf.Covered();
             if (loadVeil != null)
             {
                 // Up still (going, or the one before's): held, with this change's words if it has its own.

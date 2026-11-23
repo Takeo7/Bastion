@@ -98,6 +98,8 @@ Versión 0.14.2 (commit [commit]). Las notas de Arturo del 23/11: los edificios 
 - **Los guardias sentados de la hoguera,** con la cámara normal, parecen de pie.
 - **La bienvenida de la base** tapa a los soldados.
 - **La dificultad** se ajusta jugando: apuntad lo que notéis en cada nivel.
+- **Al estallar una granada que abre una casa,** la imagen se para unas cuatro décimas de segundo.
+- **A veces no se ve el turno de los muertos,** cuando uno levanta a otro y este se mueve en ese mismo turno. El juego sigue solo.
 - **La sincronía vertical con la pantalla dormida,** o apagada al momento con una esquina activa, está sin probar.
 - **Windows:** construida desde el Mac; aún no se ha probado en un PC.
 

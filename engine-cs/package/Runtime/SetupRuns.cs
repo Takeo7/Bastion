@@ -433,6 +433,39 @@ namespace Bastion.Engine
         /// G23.5 Saqueadores (SAQUEADORES.md; how many waits for Arturo's cuadro): the living keeping the camp by the stage's
         /// difficulty, the Cabecilla first, then who sits by the fire; the first Saqueador walks the round.
         /// </summary>
+        /// <summary>
+        /// A run's survivor (MissionState.Survivor) with no pack, as one saved before cuadro 140 (M7): a recruit's, empty, as
+        /// wide as the runs' and as tall as the squad's least (the upgrades'), and the knife. Nothing if they have one.
+        /// </summary>
+        public static void SurvivorPack(GameState s)
+        {
+            var vip = !string.IsNullOrEmpty(s.Mission.Survivor) ? Grid.GetUnit(s, s.Mission.Survivor!) : null;
+            if (vip == null || vip.Pack != null || !(vip.Alive || vip.Aboard == true)) return;
+            var rows = s.Units.Where((u) => u.CampaignId != null && u.Pack != null).Select((u) => u.Pack!.H).DefaultIfEmpty(Runs.PackH).Min();
+            vip.Pack = new GearGrid { W = Runs.PackW, H = rows };
+            vip.Kit ??= Gears.ClonePlaces(new Kit { Melee = new Gear { Kind = GearKinds.Weapon, Type = FoundWeaponIds.Knife } });
+        }
+
+        /// <summary>
+        /// A run's fight with gear that has no id (a survivor's knife of a save of the 0.14.3's first days: Red, 23/11, it fell on
+        /// the floor and couldn't be taken up through the room): each numbered from the fight's own (RunFight.NextGear), on the
+        /// units' places and packs and on the floor.
+        /// </summary>
+        public static void NumberGear(GameState s)
+        {
+            if (s.Run == null) return;
+            void Number(Gear? g)
+            {
+                if (g != null && string.IsNullOrEmpty(g.Id)) g.Id = $"g{++s.Run.NextGear}";
+            }
+            foreach (var u in s.Units)
+            {
+                if (u.Kit != null) foreach (var g in new[] { u.Kit.Primary, u.Kit.Melee, u.Kit.Pistol, u.Kit.Vest }.Concat(u.Kit.Belt)) Number(g);
+                if (u.Pack != null) foreach (var p in u.Pack.Items) Number(p.Gear);
+            }
+            foreach (var d in s.FloorGear ?? new List<DroppedGear>()) Number(d.Gear);
+        }
+
         public static List<string> RaidersBand(int difficulty) => difficulty >= 3
             ? new List<string> { TemplateIds.Officer, TemplateIds.Trooper, TemplateIds.Lancer, TemplateIds.Trooper, TemplateIds.Trooper }
             : new List<string> { TemplateIds.Officer, TemplateIds.Trooper, TemplateIds.Lancer, TemplateIds.Trooper };

@@ -52,8 +52,9 @@ namespace Bastion.UI.App
     /// </summary>
     public sealed class LoadWindow
     {
-        static readonly Color Paper = new Color(0.88f, 0.84f, 0.74f), Ink = new Color(0.15f, 0.12f, 0.09f), Far = new Color(0.235f, 0.212f, 0.184f);
-        static readonly Color Marker = new Color(0.76f, 0.14f, 0.09f), Note = new Color(0.10f, 0.19f, 0.42f);
+        // Black since the cuadro 143 (Arturo, 23/11: «el papel fuera»; «negra, con los datos nuevos»): the game's ground, its
+        // words light, the notes in the map's blue, the red bright; the ring and the place's mark in the light ink.
+        static readonly Color Marker = new Color(0.94f, 0.31f, 0.24f), Note = new Color(0.62f, 0.71f, 0.76f);
         static readonly Color Dark = new Color(0.047f, 0.055f, 0.06f), Light = new Color(0.93f, 0.93f, 0.9f), Muted = new Color(0.63f, 0.65f, 0.62f);
 
         public readonly VisualElement Root;
@@ -69,38 +70,25 @@ namespace Bastion.UI.App
             s.backgroundColor = Dark;
             s.alignItems = Align.Center;
             s.justifyContent = Justify.Center;
-            if (v.Paper)
+            // A wait's sheet (Paper: the name kept from when it was paper): on black, the place drawn big, ringed in the light
+            // ink and, as far as the load has come, in red; only with a mark of the game's for it (none for La Lata's way back).
+            if (v.Paper && LineIcon.Has(v.Symbol ?? "map:lata"))
             {
-                // The sheet over the whole screen, as the map's paper (Arte's, else its colour).
-                var sheet = new VisualElement { pickingMode = PickingMode.Ignore };
-                sheet.style.position = Position.Absolute;
-                sheet.style.left = sheet.style.top = sheet.style.right = sheet.style.bottom = 0;
-                sheet.style.backgroundColor = Paper;
-                if (Resources.Load<Texture2D>("Strategy/mapa-papel-claro") is Texture2D paper)
-                {
-                    sheet.style.backgroundImage = paper;
-#pragma warning disable CS0618
-                    sheet.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-#pragma warning restore CS0618
-                }
-                Root.Add(sheet);
-                // The place drawn big, ringed by hand in ink and, as far as the load has come, in the red marker.
                 ring = new VisualElement { pickingMode = PickingMode.Ignore };
                 ring.style.width = ring.style.height = 210;
                 ring.style.alignItems = Align.Center;
                 ring.style.justifyContent = Justify.Center;
                 ring.generateVisualContent += DrawRing;
                 Root.Add(ring);
-                // (The way back on paper has no stage's place: La Lata, the base's own mark on the map.)
-                Symbol(ring, v.Symbol ?? "map:lata", 120, Ink);
+                Symbol(ring, v.Symbol ?? "map:lata", 120, Light);
             }
             var words = new VisualElement { pickingMode = PickingMode.Ignore };
             words.style.alignItems = Align.Center;
             words.style.maxWidth = 640;
             words.style.marginTop = v.Paper ? 10 : 0;
             Root.Add(words);
-            var ink = v.Paper ? Ink : Light;
-            var soft = v.Paper ? Far : Muted;
+            var ink = Light;
+            var soft = Muted;
             if (!string.IsNullOrEmpty(v.Kicker)) Text(words, v.Kicker.ToUpperInvariant(), 13, soft, true).style.letterSpacing = 2;
             if (!string.IsNullOrEmpty(v.Title)) Text(words, v.Title.ToUpperInvariant(), 44, ink, true).style.letterSpacing = 1.5f;
             var facts = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -111,13 +99,13 @@ namespace Bastion.UI.App
             if (!string.IsNullOrEmpty(v.Place)) Text(facts, v.Place, 18, ink, true).style.marginRight = 10;
             if (!string.IsNullOrEmpty(v.Danger))
             {
-                var d = Text(facts, v.Danger, 18, v.Paper ? Marker : new Color(0.95f, 0.6f, 0.45f), true);
+                var d = Text(facts, v.Danger, 18, Marker, true);
                 d.style.borderBottomWidth = 2;
                 d.style.borderBottomColor = d.style.color.value;
             }
             foreach (var (text, red) in v.Notes)
             {
-                var n = Text(words, text, 16, red ? (v.Paper ? Marker : new Color(0.95f, 0.6f, 0.45f)) : (v.Paper ? Note : Muted), false);
+                var n = Text(words, text, 16, red ? Marker : Note, false);
                 n.style.marginTop = 2;
             }
             if (!string.IsNullOrEmpty(v.Line))
@@ -140,7 +128,6 @@ namespace Bastion.UI.App
                 {
                     var (name, colour) = v.Who[i];
                     var c = string.IsNullOrEmpty(colour) ? ink : Ui.Hex(colour, ink);
-                    if (v.Paper && !string.IsNullOrEmpty(colour)) c = Color.Lerp(c, Ink, 0.45f);
                     var t = Text(who, name + (i + 1 < v.Who.Count ? "," : "."), 15, c, true);
                     t.style.marginRight = 5;
                 }
@@ -163,7 +150,7 @@ namespace Bastion.UI.App
             var c = new Vector2(105, 105);
             g.lineCap = LineCap.Round;
             // The ink ring by hand: not quite round, a little past where it began.
-            g.strokeColor = Ink;
+            g.strokeColor = new Color(Light.r, Light.g, Light.b, 0.55f);
             g.lineWidth = 3;
             g.BeginPath();
             for (var i = 0; i <= 60; i++)
@@ -198,12 +185,13 @@ namespace Bastion.UI.App
             var e = new VisualElement { pickingMode = PickingMode.Ignore };
             e.style.width = e.style.height = size;
             e.style.unityBackgroundImageTintColor = colour;
+            e.style.color = colour;
 #pragma warning disable CS0618
             e.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
 #pragma warning restore CS0618
             into.Add(e);
-            if (Resources.Load<Texture2D>("Strategy/simbolos/" + id.Replace(':', '-')) is Texture2D drawn) e.style.backgroundImage = drawn;
-            else if (LineIcon.Has(id)) e.Add(new LineIcon(id) { pickingMode = PickingMode.Ignore });
+            // The game's own mark (cuadro 143: no symbols by hand).
+            if (LineIcon.Has(id)) e.Add(new LineIcon(id) { pickingMode = PickingMode.Ignore });
         }
 
         static Label Text(VisualElement into, string text, float size, Color color, bool title)

@@ -143,6 +143,10 @@ namespace Bastion.UI.App
         string changing;
         float changeFrom, changeLongest;
         int changeFrames;
+        // Before its window is up (Covered): what is still seen, La Lata going (the 0.14.3's measure of the preload's share).
+        float coveredAt, openLongest;
+        int openFrames, openSlow;
+        bool covered;
 
         void Awake() => instance = this;
 
@@ -160,6 +164,18 @@ namespace Bastion.UI.App
             instance.changeFrom = Time.realtimeSinceStartup;
             instance.changeLongest = 0;
             instance.changeFrames = 0;
+            instance.covered = false;
+            instance.openLongest = 0;
+            instance.openFrames = instance.openSlow = 0;
+        }
+
+        /// <summary>The change's window is going up (AppFlow.RaiseVeil): what came before it is said apart.</summary>
+        public static void Covered()
+        {
+            var p = instance;
+            if (p == null || p.changing == null || p.covered) return;
+            p.covered = true;
+            p.coveredAt = Time.realtimeSinceStartup;
         }
 
         /// <summary>The change is over (the new screen drawn, its window going): its line.</summary>
@@ -168,7 +184,10 @@ namespace Bastion.UI.App
             var p = instance;
             if (p == null || p.changing == null) return;
             var took = Time.realtimeSinceStartup - p.changeFrom;
-            Send(FormattableString.Invariant($"cambio {p.changing}: {took:0.00} s, fotograma más largo {p.changeLongest * 1000:0} ms, {p.changeFrames} fotogramas"));
+            var open = p.covered && p.openFrames > 0
+                ? FormattableString.Invariant($"; antes de la hoja {p.coveredAt - p.changeFrom:0.00} s, {p.openFrames} fotogramas, el más largo {p.openLongest * 1000:0} ms, {p.openSlow} de 40 ms o más")
+                : "";
+            Send(FormattableString.Invariant($"cambio {p.changing}: {took:0.00} s, fotograma más largo {p.changeLongest * 1000:0} ms, {p.changeFrames} fotogramas{open}"));
             p.changing = null;
         }
 
@@ -191,6 +210,12 @@ namespace Bastion.UI.App
             {
                 changeFrames++;
                 changeLongest = Mathf.Max(changeLongest, dt);
+                if (!covered)
+                {
+                    openFrames++;
+                    openLongest = Mathf.Max(openLongest, dt);
+                    if (dt >= 0.04f) openSlow++;
+                }
             }
             FrameTimingManager.CaptureFrameTimings();
             Count(now);

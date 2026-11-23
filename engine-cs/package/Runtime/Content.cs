@@ -15,8 +15,10 @@ namespace Bastion.Engine
         public const string Medium = "medium";
         public const string Long = "long";
         public const string None = "none";
+        /// <summary>The same at any distance (M8, Arturo 23/11: only the precision rifle loses aim close): the crossbow's.</summary>
+        public const string Flat = "flat";
 
-        public static readonly IReadOnlyList<string> All = new[] { Short, Medium, Long, None };
+        public static readonly IReadOnlyList<string> All = new[] { Short, Medium, Long, None, Flat };
     }
 
     /// <summary>content.ts WeaponId.</summary>
@@ -480,6 +482,7 @@ namespace Bastion.Engine
             [RangeTableIds.Medium] = new[] { 0, 20, 19, 17, 16, 13, 11, 9, 7, 5, 4, 3, 2, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
             [RangeTableIds.Long] = new[] { 0, -30, -27, -24, -21, -18, -15, -12, -9, -6, -3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
             [RangeTableIds.None] = new[] { 0 },
+            [RangeTableIds.Flat] = new[] { 0 },
         };
 
         public static int RangeModifier(string table, double distance)
@@ -589,7 +592,7 @@ namespace Bastion.Engine
             [WeaponIds.HuntingRifle] = Weapon(WeaponIds.HuntingRifle, "Fusil de cerrojo", 4, spread: 1, critDamage: 2, clip: 4, burst: 1, noise: 18),
             // Arco y ballesta (cuadros 101–103; ARCO-Y-BALLESTA.md): quiet. The crossbow the precision rifle's reach, a bolt
             // loaded, an action to reload; the recurve the assault rifle's, never reloaded (Clip 0: an arrow a shot).
-            [WeaponIds.Crossbow] = Weapon(WeaponIds.Crossbow, "Ballesta", 5, spread: 1, critDamage: 2, clip: 1, range: RangeTableIds.Long, burst: 1, noise: 2, arrows: true),
+            [WeaponIds.Crossbow] = Weapon(WeaponIds.Crossbow, "Ballesta", 5, spread: 1, critDamage: 2, clip: 1, range: RangeTableIds.Flat, burst: 1, noise: 2, arrows: true),
             [WeaponIds.Bow] = Weapon(WeaponIds.Bow, "Arco", 3, spread: 1, critDamage: 1, burst: 1, noise: 1, arrows: true),
         };
 

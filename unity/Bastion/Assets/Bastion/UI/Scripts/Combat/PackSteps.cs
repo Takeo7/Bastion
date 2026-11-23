@@ -83,6 +83,18 @@ namespace Bastion.UI.Combat
                 Debug.Log($"[mochila] arrastra {arg}: {(done ? "hecho" : "no está")}");
                 return done;
             }
+            // «mayus=g47»: Mayús and a click on it (M3); «equipo»: every place drawn and what lies in it, in the log.
+            if (what == "mayus" && control.Hud?.Gear is Bastion.UI.Gear.GearBoard sender)
+            {
+                var done = sender.TestSend(arg);
+                Debug.Log($"[mochila] mayus {arg}: {(done ? "va" : "no va (o no está)")}");
+                return done;
+            }
+            if (what == "equipo" && control.Hud?.Gear is Bastion.UI.Gear.GearBoard lister)
+            {
+                Debug.Log($"[mochila] equipo: {lister.TestList()}");
+                return true;
+            }
             if (what == "toca" && control.Hud?.Gear is Bastion.UI.Gear.GearBoard picker)
             {
                 var done = picker.TestPick(arg);
