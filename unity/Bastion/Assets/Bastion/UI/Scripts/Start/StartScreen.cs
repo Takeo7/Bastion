@@ -369,7 +369,12 @@ namespace Bastion.UI.Start
         // ------------------------------------------------------------ the keys
 
         /// <summary>«Continuar partida»: the saved game hosted and gone on with (NetLink.Continue), to the base or the mission.</summary>
-        void Continue() => WithName(Page.Menu, name => link.Continue(name), StartText.Opening, StartText.ContinueGo);
+        void Continue() => WithName(Page.Menu, name =>
+        {
+            // (What the loading sheet says: what was pressed, R22.)
+            App.AppFlow.Ask(App.AppFlow.Asked.GoOn);
+            return link.Continue(name);
+        }, StartText.Opening, StartText.ContinueGo);
 
         /// <summary>
         /// «Nueva partida»: over a saved game, asked first as the room's «Nueva campaña» asks (it is kept aside, as there);
@@ -377,7 +382,11 @@ namespace Bastion.UI.Start
         /// </summary>
         void NewGame()
         {
-            void Ask() => AskName(Page.Menu, name => link.NewGame(name, level), StartText.Opening, StartText.Start, true);
+            void Ask() => AskName(Page.Menu, name =>
+            {
+                App.AppFlow.Ask(App.AppFlow.Asked.New);
+                return link.NewGame(name, level);
+            }, StartText.Opening, StartText.Start, true);
             var saved = Saved;
             if (saved == null)
             {

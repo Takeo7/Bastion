@@ -129,6 +129,9 @@ namespace Bastion.UI.Start
             return $"{outings.Substring(0, 1)}{outings.Substring(1).ToLowerInvariant()} · Nivel {s.Level} · {Lore.DoomName(s.Level)} {s.Doom}/12";
         }
 
+        /// <summary>«Etapa a medias: Saqueo · Campo»: a stage left half played (also the loading sheet's, R22).</summary>
+        public static string HalfPlayed(string stage) => $"Etapa a medias: {stage}";
+
         /// <summary>
         /// Under «Continuar partida», after the chapter and level (StartText.SavedLine; cuadro 124): where the game is, «Etapa 3
         /// de 7 · 4 soldados · 245 §» or the stage left half played; a campaign of before the runs, as Saved.
@@ -136,7 +139,7 @@ namespace Bastion.UI.Start
         public static string SavedWhere(SavedCampaign s)
         {
             if (s.Chapter <= 0) return Saved(s);
-            if (s.InMission != null) return $"Etapa a medias: {s.InMission}";
+            if (s.InMission != null) return HalfPlayed(s.InMission);
             var where = s.Row == null ? "En la base" : s.Row == 0 ? "Antes de la etapa 1" : $"Etapa {s.Row} de 7";
             return $"{where} · {(s.Soldiers == 1 ? "1 soldado" : $"{s.Soldiers} soldados")} · {s.Supplies} §";
         }

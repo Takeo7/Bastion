@@ -906,7 +906,7 @@ namespace Bastion.Net
                         // Not over a campaign mission left half played: it would be lost, and played again.
                         if (PausedMission() != null)
                         {
-                            Send(seat.Socket!, new ErrorMessage { Message = "Antes, acabad la etapa a medias: «Continuar campaña»." });
+                            Send(seat.Socket!, new ErrorMessage { Message = "Antes, acabad la etapa a medias: «Continuar partida»." });
                             return;
                         }
                         if (m.Veterans != null) skirmishVeterans = m.Veterans.Value;
@@ -1194,6 +1194,17 @@ namespace Bastion.Net
         private GameState? PausedMission()
         {
             return phase == RoomPhases.Lobby && mode == "campaign" && state != null && state.Outcome == null ? state : null;
+        }
+
+        /// <summary>
+        /// The campaign mission being played (R22, Red, 23/11): named in the room's message as one left half played is, so
+        /// whoever comes into it from the start screen sees it on the window (AppFlow.WindowFor). A save opened straight into
+        /// its mission, or one continued from the lobby, said nothing once in, and the window took it for a skirmish
+        /// («ESCARAMUZA»). Over, or a skirmish, none.
+        /// </summary>
+        private GameState? MissionGoingOn()
+        {
+            return phase == RoomPhases.Mission && mode == "campaign" && state != null && state.Outcome == null ? state : null;
         }
 
         /// <summary>Back to the campaign mission left half played, as it was.</summary>
@@ -1654,8 +1665,8 @@ namespace Bastion.Net
 
         private RoomMessage RoomNow()
         {
-            var paused = PausedMission();
-            var saved = campaignRules != null ? SavedCampaign.Of(campaign, paused != null ? SaveStore.MissionName(paused) : null) : null;
+            var named = PausedMission() ?? MissionGoingOn();
+            var saved = campaignRules != null ? SavedCampaign.Of(campaign, named != null ? SaveStore.MissionName(named) : null) : null;
             // A campaign from before the 0.7 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.
             return new RoomMessage { Players = Players(), Phase = phase, SavedCampaign = saved, SetAside = store.SetAside != null ? Path.GetFileName(store.SetAside) : null, Restored = restored };
         }

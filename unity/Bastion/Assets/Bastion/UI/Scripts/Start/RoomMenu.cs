@@ -195,7 +195,12 @@ namespace Bastion.UI.Start
             var ok = room != null && players.Any(p => p.Connected);
             if (saved != null)
             {
-                Key(menu, RoomText.Continue, ok, () => Send(new ContinueCampaignMessage()));
+                Key(menu, RoomText.Continue, ok, () =>
+                {
+                    // (What the loading sheet says: what was pressed, R22.)
+                    App.AppFlow.Ask(App.AppFlow.Asked.GoOn);
+                    Send(new ContinueCampaignMessage());
+                });
                 if (saved.Chapter > 0) Ui.Text(StartText.SavedLine(saved.Chapter, Lore.GameLevelText.NameOf(saved.GameLevel)), "room__note room__note--level", menu);
                 Ui.Text(RoomText.SavedWhere(saved), "room__note", menu);
             }
@@ -275,10 +280,15 @@ namespace Bastion.UI.Start
             if (page == "new")
             {
                 Go("main");
+                App.AppFlow.Ask(App.AppFlow.Asked.New);
                 Send(new NewCampaignMessage { Level = levels.Level });
                 return;
             }
             if (previewRoom != null) return;
+            // The skirmish's sheet with its words from the start: its kind and whether by night; its map with its state.
+            var words = new App.LoadView { Paper = true, Kicker = RoomText.Skirmish, Title = RoomText.Missions.FirstOrDefault(x => x.Id == mission).Name ?? mission };
+            if (night) words.Notes.Add((Lore.NightText.Label.ToLowerInvariant(), false));
+            App.AppFlow.Ask(App.AppFlow.Asked.Skirmish, words);
             link.Send(new StartMessage { Mission = mission, Map = "city", Night = night });
         }
 

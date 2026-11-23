@@ -416,6 +416,82 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo"));
         }
 
+        /// <summary>
+        /// R22 (Red, 23/11): the stage going on is in the room's message (savedCampaign.inMission) in the mission as in the
+        /// lobby, whether the save opens straight into it or is continued from the lobby: whoever comes in from the start
+        /// screen gets its name on the window (AppFlow.WindowFor), which without it said «ESCARAMUZA».
+        /// </summary>
+        [Theory]
+        [InlineData("save")]
+        [InlineData("continue")]
+        public void TheStageGoingOnIsNamedInTheRoomsMessage(string how)
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            host.Say(ana, new { t = "newCampaign" });
+            GoOut(host, ana, pepe);
+            var name = SaveStore.MissionName(SavedState(host));
+            Assert.False(string.IsNullOrEmpty(name));
+            Assert.Equal(name, InMissionHeard(ana));
+            host.Say(ana, new { t = "backToMenu" });
+            Assert.Equal(name, InMissionHeard(ana));
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            if (how == "save") save.Phase = RoomPhases.Mission;
+            store.Save(save);
+            host.Room = host.Make();
+            ana = host.Join("Ana");
+            if (how == "continue")
+            {
+                Assert.Equal(name, InMissionHeard(ana));
+                host.Say(ana, new { t = "continueCampaign" });
+            }
+            Assert.Equal("mission", host.Room.Summary().phase);
+            Assert.Equal(name, InMissionHeard(ana));
+            pepe = host.Join("Pepe");
+            Assert.Equal(name, InMissionHeard(pepe));
+        }
+
+        /// <summary>
+        /// R22: a stage over (its squad down as the room opens it, over as soon as Ana is in) is no longer named: who comes in
+        /// after, Pepe, hears nothing going on.
+        /// </summary>
+        [Fact]
+        public void AStageOverIsNotNamedInTheRoomsMessage()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            GoOut(host, ana, pepe);
+            host.Say(ana, new { t = "backToMenu" });
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            foreach (var u in save.State!.Units.Where((u) => u.Team == Teams.Xcom))
+            {
+                u.Alive = false;
+                u.Hp = 0;
+            }
+            save.Phase = RoomPhases.Mission;
+            store.Save(save);
+            host.Room = host.Make();
+            host.Join("Ana", anaToken);
+            host.Advance(2000);
+            Assert.NotNull(SavedState(host).Outcome);
+            pepe = host.Join("Pepe", pepeToken);
+            Assert.Null(InMissionHeard(pepe));
+        }
+
+        /// <summary>The stage going on or left half played as `player` last heard the room name it; null, none.</summary>
+        private static string? InMissionHeard(MemoryEnd player)
+        {
+            var saved = player.Take("room").Last()["savedCampaign"];
+            return saved is JObject o ? (string?)o["inMission"] : null;
+        }
+
         private static List<JObject> Players(JObject room) => ((JArray)room["players"]!).Cast<JObject>().ToList();
 
         [Theory]

@@ -224,7 +224,7 @@ namespace Bastion.UI.Hud
             /// <summary>«Abandonar la misión» off while one's own call waits: the partner answers on their bar.</summary>
             public const string AbandonWaitingTip = "Contesta en su barra";
             public const string LeaveTitle = "¿Volver al menú principal?";
-            public const string LeaveCampaign = "La misión queda guardada tal como está; «Continuar campaña» vuelve a ella.";
+            public const string LeaveCampaign = "La misión queda guardada tal como está; «Continuar partida» vuelve a ella.";
             public const string LeaveSkirmish = "La escaramuza se acaba.";
             public const string LeaveYes = "Volver al menú";
             public const string LeaveNo = "Seguir aquí";

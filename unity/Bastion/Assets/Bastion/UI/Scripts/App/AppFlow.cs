@@ -301,6 +301,32 @@ namespace Bastion.UI.App
             if (preloaded != null) preloaded.allowSceneActivation = false;
         }
 
+        /// <summary>
+        /// What the player pressed to leave the start screen (R22, Red 23/11: the sheet said what the room said last, a new
+        /// game «Continuando la partida», a stage half played «Escaramuza»): the next change's words. A skirmish brings its
+        /// own (its kind, day or night). Whoever joins presses nothing: the room's words then.
+        /// </summary>
+        public enum Asked { None, New, GoOn, Skirmish }
+
+        static Asked asked;
+        static LoadView askedWords;
+        static float askedAt;
+
+        /// <summary>Said on the start screen or the room's menu as the key is pressed; good for a minute, taken once.</summary>
+        public static void Ask(Asked what, LoadView words = null)
+        {
+            asked = what;
+            askedWords = words;
+            askedAt = Time.realtimeSinceStartup;
+        }
+
+        static Asked TakeAsked()
+        {
+            var what = Time.realtimeSinceStartup - askedAt < 60 ? asked : Asked.None;
+            asked = Asked.None;
+            return what;
+        }
+
         /// <summary>What a scene is called in the change's line.</summary>
         string Label(string scene) => scene == battleScene ? "combate" : scene == baseScene ? "base" : "menú";
 
@@ -341,23 +367,29 @@ namespace Bastion.UI.App
                 back.Paper = true;
                 return back;
             }
-            // Into a game going on from the start screen: its chapter and level, and the stage left half played, from the first
-            // frame (the battle's own words came only after its load: 4 s of an empty window, 23/11).
-            if (scene == battleScene)
-            {
-                var going = link.LastRoom?.SavedCampaign;
-                // A skirmish (none half played: the room's menu blocks one then): its kind and map come with its state.
-                if (going == null || going.Chapter <= 0 || going.InMission == null) return new LoadView { Paper = true, Kicker = RoomText.Skirmish };
-                // On paper (Producto, from Red's inventory: 1,8 s under a black card), its red ring traced as its squad is made.
-                return new LoadView { Paper = true, Kicker = LoadText.GoingOn, Title = StartText.SavedLine(going.Chapter, Lore.GameLevelText.NameOf(going.GameLevel)), Place = going.InMission };
-            }
-            if (scene == baseScene)
-            {
-                var saved = link.LastRoom?.SavedCampaign;
-                if (saved != null && saved.Chapter > 0) return new LoadView { Paper = true, Kicker = LoadText.GoingOn, Title = StartText.SavedLine(saved.Chapter, Lore.GameLevelText.NameOf(saved.GameLevel)) };
-                return new LoadView { Paper = true, Kicker = LoadText.New, Title = StartText.SavedLine(1, Lore.GameLevelText.NameOf(StartScreen.HostLevel)) };
-            }
+            // From the start screen: what was pressed (TakeAsked), else what the room says (whoever joins).
+            if (scene == battleScene || scene == baseScene) return SheetFor(scene == battleScene, TakeAsked(), askedWords, link.LastRoom?.SavedCampaign, StartScreen.HostLevel);
             return new LoadView { Title = StartText.Title };
+        }
+
+        /// <summary>
+        /// The sheet out of the start screen (R22; the labs' too, VentanaLab): into a battle, a skirmish (its own words, its
+        /// map with its state) or a game going on with its stage half played; into the base, a new game or one going on.
+        /// Asked nothing, the room's words: a stage half played (InMission, Red's) is a game going on; a game with nothing
+        /// played yet (no stage entered, none half played) is a new one.
+        /// </summary>
+        public static LoadView SheetFor(bool battle, Asked what, LoadView skirmish, SavedCampaign saved, string hostLevel)
+        {
+            var chapter = saved != null && saved.Chapter > 0 ? saved.Chapter : 1;
+            var level = Lore.GameLevelText.NameOf(saved?.GameLevel ?? hostLevel);
+            if (battle)
+            {
+                var goingOn = what == Asked.GoOn || (what == Asked.None && saved != null && saved.Chapter > 0 && saved.InMission != null);
+                if (!goingOn) return skirmish != null && what == Asked.Skirmish ? skirmish : new LoadView { Paper = true, Kicker = RoomText.Skirmish };
+                return new LoadView { Paper = true, Kicker = LoadText.GoingOn, Title = StartText.SavedLine(chapter, level), Place = saved?.InMission != null ? RoomText.SavedWhere(saved) : null };
+            }
+            var fresh = what == Asked.New || (what == Asked.None && (saved == null || saved.Chapter <= 0 || (saved.NodesPlayed == 0 && saved.Row == null && saved.InMission == null)));
+            return new LoadView { Paper = true, Kicker = fresh ? LoadText.New : LoadText.GoingOn, Title = StartText.SavedLine(chapter, level) };
         }
 
         async Awaitable LiftAfterFrames(int frames)
@@ -467,8 +499,15 @@ namespace Bastion.UI.App
         public static void VeilWords(string kicker, string title, string place)
         {
             var app = instance;
-            if (app == null || app.loadVeil == null || !string.IsNullOrEmpty(app.shownView?.Title)) return;
-            app.Show(new LoadView { Paper = app.shownView?.Paper == true, Kicker = app.shownView?.Kicker ?? kicker, Title = title, Place = place });
+            if (app == null || app.loadVeil == null) return;
+            var shown = app.shownView;
+            // A game going on whose stage the room didn't name: the battle's stage under its chapter (R22).
+            if (shown?.Kicker == LoadText.GoingOn && string.IsNullOrEmpty(place)) place = string.IsNullOrEmpty(title) ? null : RoomText.HalfPlayed(title);
+            // Only what the sheet lacks (a skirmish's map; the stage of a game going on): what it says stays.
+            if (shown != null && !string.IsNullOrEmpty(shown.Title) && (!string.IsNullOrEmpty(shown.Place) || string.IsNullOrEmpty(place))) return;
+            var v = new LoadView { Paper = shown?.Paper == true, Kicker = shown?.Kicker ?? kicker, Title = string.IsNullOrEmpty(shown?.Title) ? title : shown.Title, Place = string.IsNullOrEmpty(shown?.Place) ? place : shown.Place };
+            if (shown != null) v.Notes.AddRange(shown.Notes);
+            app.Show(v);
             // For tests with the app (BASTION_FOTOS, Red's CampaignRun's): the window with its words, as this frame ends.
             var shots = System.Environment.GetEnvironmentVariable("BASTION_FOTOS");
             if (!string.IsNullOrEmpty(shots)) ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(shots, $"velo-{++app.veilShots}.png"));

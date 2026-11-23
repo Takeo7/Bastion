@@ -281,7 +281,10 @@ namespace Bastion.Net
         public int Supplies { get; set; }
         /// <summary>Nodes entered in all the campaign (CampaignState.NodesPlayed).</summary>
         public int NodesPlayed { get; set; }
-        /// <summary>The mission (in the runs, the node) left half played, by its name; null without one.</summary>
+        /// <summary>
+        /// The mission (in the runs, the node) left half played, by its name; in the room's message also the one being played
+        /// (R22: the window of whoever comes into it, AppFlow.WindowFor); null without one.
+        /// </summary>
         public string? InMission { get; set; }
         /// <summary>N9: the game's level (LevelIds; a game of before, Difícil); null in a campaign of before the runs.</summary>
         public string? GameLevel { get; set; }
