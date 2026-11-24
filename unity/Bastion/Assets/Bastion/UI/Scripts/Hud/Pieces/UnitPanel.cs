@@ -133,6 +133,8 @@ namespace Bastion.UI.Hud
             // The one in the hand's own (U29, Producto 21/11: the crossbow's by «Ballesta», not a gun's).
             var weaponSprite = icon?.Invoke(view.WeaponIcon ?? "stat:weapon") ?? icon?.Invoke("stat:weapon");
             if (weaponSprite != null) weaponIcon.style.backgroundImage = new StyleBackground(weaponSprite);
+            // «Sin cuchillo» beside the knife's picture said two things (Lore, 24/11): dimmed, as what it strikes like.
+            weaponIcon.style.opacity = view.WeaponBare ? 0.3f : 1f;
             tree.Q<Label>("weapon-name").text = view.Weapon;
             tips.Attach(tree.Q("weapon"), view.WeaponTip);
             // Its state and improvements (docs/FASE9.md §5): «GASTADA», «ROTA», «+2», each with its line.

@@ -393,6 +393,12 @@
     width: auto;
 }
 
+/* The Trueque's words (the 0.14.4's review, 5): they scroll within the plate when it is taller than the room (FitHeight). */
+.runstop__body {
+    flex-shrink: 1;
+    min-height: 0;
+}
+
 .runstop__sides {
     flex-direction: row;
     flex-wrap: wrap;
@@ -423,25 +429,45 @@
     margin-bottom: 6px;
 }
 
-/* Selling what is worn: its row asks first (Producto, 24/11), the question in amber under the name, «No» beside «Cambiar». */
-.runstop__ware--asking {
+/*
+ * Selling what is worn: its row asks first (Producto, 24/11), on a line under it (R23 B7): the row as it was, «Cambiar» in
+ * its place, the border taking a pixel of the padding; «Cancelar» under the picture and the question in amber beside it.
+ */
+/* (Both classes: .runstop__ware, further down, would keep its 50px.) */
+.runstop__ware.runstop__ware--asking {
     height: auto;
-    min-height: 50px;
-    padding-top: 4px;
-    padding-bottom: 4px;
+    flex-wrap: wrap;
+    padding: 3px 5px 6px 5px;
     border-width: 1px;
     border-color: rgb(242, 199, 115);
 }
 
+/* The name's width counts for nothing in the asking row's lines: a long one, at 130 %, wraps or narrows, «Cambiar» stays
+   on the first line (the 0.14.4's independent review, 5). */
+.runstop__ware.runstop__ware--asking .runstop__ware-words {
+    flex-basis: 0;
+}
+
+.runstop__ware-below {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 6px;
+}
+
 .runstop__ware-ask {
-    margin-top: 1px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
     font-size: 12px;
     white-space: normal;
     color: rgb(242, 199, 115);
 }
 
 .runstop__buy.runstop__no {
-    margin-left: 6px;
+    width: 84px;
+    margin-right: 10px;
+    padding: 0;
     color: #eef0ea;
     background-color: #3d4346;
 }

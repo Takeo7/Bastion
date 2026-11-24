@@ -53,12 +53,32 @@ namespace Bastion.UI.Strategy
             foreach (var e in ReportOrder(c, report))
             {
                 var card = ReportCard(c, report, e);
+                // One who never became a soldier (the survivor left outside La Lata): their bust as the fight drew it (R23 B8).
+                if (e.Id == "")
+                {
+                    card.Bust = "persona:" + e.Name;
+                    card.Look = SurvivorLook(c, run, e.Name);
+                    // (The fight's bust was by their unit's id: the Rescate's «vip», the loose one's «survivor».)
+                    card.BustSeed = run.NodeKind == NodeKinds.Rescue ? "vip" : "survivor";
+                }
                 // In a run, the health each has left to the next stage, not days of wounds.
                 if (e.Status != "dead" && run.Hp.TryGetValue(e.Id, out var hp) && c.Soldiers.FirstOrDefault(x => x.Id == e.Id) is CampaignSoldier s)
                     card.Lines[0] = StrategyText.Stash.Health(hp, Runs.MaxHp(s)).ToUpperInvariant();
                 v.Cards.Add(card);
             }
             return v;
+        }
+
+        /// <summary>
+        /// The look of a run's survivor named `name`, as their fight drew them (Runs.SurvivorOf, from the node's seed), while
+        /// the node is on the expedition's map; null when it isn't (the expedition over) or the name isn't theirs.
+        /// </summary>
+        static Appearance SurvivorLook(CampaignState c, RunReport run, string name)
+        {
+            var node = c.Run?.Nodes.FirstOrDefault(n => n.Id == run.Node);
+            if (node == null) return null;
+            var member = Runs.SurvivorOf(c, node);
+            return member.Name == name ? member.Appearance : null;
         }
     }
 }

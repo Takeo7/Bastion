@@ -426,6 +426,9 @@ namespace Bastion.UI.Combat
                 if (sameTurn) NextSoldier(current, mineInPlay);
                 return;
             }
+            // One fallen for the host but standing on screen (the enemy's turn not played yet: R23 A1) stays picked, their
+            // card and keys with them, till their fall is seen: none at once told of it before.
+            if (current == null && !CanAct() && UnitById(Shown, picked) is Unit seen && seen.Alive) return;
             // One inside La Lata picked by its card (T24): it stays, to get down or ask La Lata to go.
             if (current == null && insideChosen != null && insideChosen == picked && Inside() != null) return;
             // The partner's soldier comes into play: the camera to it too, if wanted (#47).

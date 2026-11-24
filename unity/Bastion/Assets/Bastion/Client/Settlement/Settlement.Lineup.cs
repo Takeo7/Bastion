@@ -204,7 +204,7 @@ namespace Bastion.Client
         static string Who(CampaignState c, LineupEntry e)
         {
             var s = c?.Soldiers?.FirstOrDefault(x => x.Id == e.SoldierId);
-            return Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { e.SoldierId, e.Colour, e.Status, s?.Appearance, s != null ? ArmsOf(c, s)?.Primary : null, s != null && UnitViews.CarriesPistol(ArmsOf(c, s)) });
+            return Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { e.SoldierId, e.Colour, e.Status, s?.Appearance, s != null ? ArmsOf(c, s)?.Primary : null, s != null && ArmsOf(c, s)?.Primary != null ? ArmsOf(c, s).Mods : null, s != null && UnitViews.CarriesPistol(ArmsOf(c, s)) });
         }
 
         /// <summary>The row's figures by who each is (Who), kept from one row to the next.</summary>
@@ -266,6 +266,8 @@ namespace Bastion.Client
                 stander.gun = inHand == null ? UnitViews.CarriesPistol(arms) ? UnitViews.Pistol(holder, catalog) : null
                     : stander.blade ? UnitViews.Blade(stander.art, holder, catalog) : UnitViews.Gun(stander.art, holder, catalog, out _);
                 stander.pistol = inHand == null && stander.gun != null;
+                // (Its silencer and its scope on it: cuadro 145.)
+                if (inHand != null && !stander.blade && arms?.Primary != null) UnitViews.Mods(stander.gun, stander.art, arms.Mods, catalog);
                 bool armed = stander.gun != null && !stander.pistol && !stander.blade;
                 var rests = Anims.RifleRests;
                 string rest = rests.Count > 0 ? rests[((index % rests.Count) + rests.Count) % rests.Count] : "rifleIdle";

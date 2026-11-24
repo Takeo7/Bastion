@@ -25,7 +25,8 @@ namespace Bastion.Client.Net.EditorTools
     /// the Synty atlases are mostly flat colour and the meshes repeat, so the Mac's 844 MB come to 306, but each build takes
     /// some 95 s more and each load some tenths of a second (26/10, docs/UNITY.md); the releases decide. The sound must be
     /// there as unity/tools/sonido.sh generated it (Sound); -sinSonido builds without checking. So must what the figures
-    /// are made of (Figures): what isn't used goes out of the app, and nothing that is may go with it.
+    /// are made of (Figures): what isn't used goes out of the app, and nothing that is may go with it. -desarrollo builds
+    /// a development one, only to measure with the profiler (Build).
     /// </summary>
     public static class AppBuild
     {
@@ -259,22 +260,45 @@ pause
                 return null;
             }
             var packed = args.Contains("-comprimir");
+            // -desarrollo (Red, 24/11, Producto's yes): a development build, only to measure, never to hand on: the profiler
+            // from the first frame (-profiler-enable -profiler-log-file <file> when it is opened), to split the start's
+            // 2.17 s without a line. Its player is the development one, slower than the release's: what it gives is the
+            // share of each part, not the release's times.
+            var development = args.Contains("-desarrollo");
+            if (development) Debug.Log($"[red] app ({target}): -desarrollo, compilación de desarrollo, solo para medir");
+            var options = (packed ? BuildOptions.CompressWithLz4HC : BuildOptions.None) | (development ? BuildOptions.Development : BuildOptions.None);
             // The Windows icon goes in through PlayerSettings, put back as it was once built (the Mac's, after: Mac).
             Action? unicon = target == BuildTarget.StandaloneWindows64 ? AppIcon.Windows() : () => { };
             if (unicon == null) return null;
+            // -sinPresentacion (Red, 24/11), only to measure: Unity's splash screen off for this build, put back as it was once
+            // built (as the icon): whether the start's 2.2 s without a line are the splash's (the player idle, nothing loading).
+            var splash = PlayerSettings.SplashScreen.show;
+            var splashLogo = PlayerSettings.SplashScreen.showUnityLogo;
+            var unsplashed = args.Contains("-sinPresentacion");
+            if (unsplashed)
+            {
+                PlayerSettings.SplashScreen.show = false;
+                PlayerSettings.SplashScreen.showUnityLogo = false;
+                Debug.Log($"[red] app ({target}): -sinPresentacion, sin la presentación de Unity (antes: {splash}, logo {splashLogo}), solo para medir");
+            }
             BuildReport report;
             try
             {
-                report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = output, target = target, options = packed ? BuildOptions.CompressWithLz4HC : BuildOptions.None });
+                report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = output, target = target, options = options });
             }
             finally
             {
                 unicon();
+                if (unsplashed)
+                {
+                    PlayerSettings.SplashScreen.show = splash;
+                    PlayerSettings.SplashScreen.showUnityLogo = splashLogo;
+                }
             }
             var summary = report.summary;
             // Left on another platform, everyone's next run would import the assets again for it (and capture on it).
             if (EditorUserBuildSettings.activeBuildTarget != before) EditorUserBuildSettings.SwitchActiveBuildTarget(BuildPipeline.GetBuildTargetGroup(before), before);
-            Debug.Log($"[red] app ({target}): {summary.result} en {summary.totalTime.TotalSeconds:F0} s · {summary.totalSize / (1024 * 1024)} MB{(packed ? " (LZ4HC)" : " sin comprimir")} · {summary.totalErrors} errores · {string.Join(", ", scenes)} → {output}");
+            Debug.Log($"[red] app ({target}): {summary.result} en {summary.totalTime.TotalSeconds:F0} s · {summary.totalSize / (1024 * 1024)} MB{(packed ? " (LZ4HC)" : " sin comprimir")}{(development ? " · de desarrollo" : "")} · {summary.totalErrors} errores · {string.Join(", ", scenes)} → {output}");
             if (summary.result == BuildResult.Succeeded) return output;
             if (Application.isBatchMode) EditorApplication.Exit(1);
             return null;

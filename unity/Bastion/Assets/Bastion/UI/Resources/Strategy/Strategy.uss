@@ -533,6 +533,13 @@
     background-color: rgba(0, 0, 0, 0.75);
 }
 
+/* The premise (R21): under the top bar, the claro's soldiers in sight below it, the veil lighter. */
+.strat-modal--high {
+    justify-content: flex-start;
+    padding-top: 60px;
+    background-color: rgba(0, 0, 0, 0.45);
+}
+
 /* Torn as every plate (7/11): no pale rim. */
 .strat-modal__card {
     width: 540px;

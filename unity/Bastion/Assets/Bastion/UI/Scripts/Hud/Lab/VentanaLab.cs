@@ -29,7 +29,8 @@ namespace Bastion.UI.Hud
             }
             switch (which)
             {
-                case "titulo": v = new LoadView { Title = Bastion.UI.Start.StartText.Title }; break;
+                // (As the app opens: the title where the start screen has it, Producto 24/11.)
+                case "titulo": v = new LoadView { Title = Bastion.UI.Start.StartText.Title, AsStart = true }; break;
                 // (All on paper but the title since the cuadro 139.)
                 case "continuar": v = new LoadView { Paper = true, Kicker = LoadText.GoingOn, Title = Bastion.UI.Start.StartText.SavedLine(1, "Medio") }; break;
                 case "nueva": v = new LoadView { Paper = true, Kicker = LoadText.New, Title = Bastion.UI.Start.StartText.SavedLine(1, "Supervivencia") }; break;

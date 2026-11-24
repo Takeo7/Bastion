@@ -816,6 +816,16 @@ namespace Bastion.Engine
             return melee == FoundWeaponIds.Katana || melee == FoundWeaponIds.Longsword || melee == FoundWeaponIds.Chainsaw;
         }
 
+        /// <summary>
+        /// Whether a run's soldier has nothing at the belt (its knife moved to the pack or left on the floor, or none taken
+        /// out of the base): «a mano», for the text (Producto, 24/11: the sheet said «Cuchillo» still). The blow is the knife's
+        /// all the same (AttackWeapon): no rule apart. Outside the runs (no Unit.Kit), there is always the knife.
+        /// </summary>
+        public static bool BareHanded(Unit u)
+        {
+            return u.Kit != null && u.Kit.Melee == null;
+        }
+
         /// <summary>How far a soldier's blade reaches, in tiles: the rake two (Ana's #5 of 2/11), anything else one.</summary>
         public static int ReachOf(Unit u)
         {

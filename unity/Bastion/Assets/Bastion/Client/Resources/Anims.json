@@ -1404,7 +1404,17 @@
     0.002,
     0.2
    ],
-   "sight": 0.098
+   "sight": 0.098,
+   "silencer": [
+    0,
+    0.084,
+    0.713
+   ],
+   "scope": [
+    0,
+    0.145,
+    0.152
+   ]
   },
   "rifle2": {
    "fbx": "SM_Wep_AssaultRifle_02",
@@ -1413,7 +1423,17 @@
     0.012,
     0.21
    ],
-   "sight": 0.096
+   "sight": 0.096,
+   "silencer": [
+    0,
+    0.092,
+    0.709
+   ],
+   "scope": [
+    0,
+    0.173,
+    0.117
+   ]
   },
   "rifle3": {
    "fbx": "SM_Wep_AssaultRifle_03",
@@ -1422,7 +1442,17 @@
     0.03,
     0.27
    ],
-   "sight": 0.1
+   "sight": 0.1,
+   "silencer": [
+    -0.001,
+    0.103,
+    0.703
+   ],
+   "scope": [
+    0,
+    0.154,
+    0.128
+   ]
   },
   "shotgun": {
    "fbx": "apocalypse:SM_Wep_Shotgun_01",
@@ -1437,7 +1467,18 @@
     0.2
    ],
    "sight": 0.057,
-   "reflex": true
+   "reflex": true,
+   "silencer": [
+    0,
+    0.058,
+    0.517
+   ],
+   "scope": [
+    0,
+    0.081,
+    0.19
+   ],
+   "scopeShort": true
   },
   "crossbow": {"fbx": "apocalypse:SM_Wep_CrossBow_01", "reach": 0.8, "palm": [0, -0.045, -0.03], "fore": [-0.014, 0.2], "sight": 0.17, "back": [0, -0.22], "cocked": true},
   "bow": {"fbx": "Wep_RecurveBow_01", "bow": true},
@@ -1463,7 +1504,12 @@
     -0.02,
     0.14
    ],
-   "sight": 0.053
+   "sight": 0.053,
+   "silencer": [
+    0,
+    0.056,
+    0.721
+   ]
   },
   "sniper2": {
    "fbx": "SM_Wep_SniperRifle_02",
@@ -1492,6 +1538,11 @@
     0,
     0.026,
     0.754
+   ],
+   "silencer": [
+    0,
+    0.026,
+    0.744
    ]
   },
   "machineGun": {
@@ -1527,7 +1578,12 @@
     0.3
    ],
    "sight": 0.11,
-   "reflex": true
+   "reflex": true,
+   "silencer": [
+    0,
+    0.084,
+    1.027
+   ]
   },
   "huntingRifle": {
    "fbx": "SM_Wep_HuntingRifle_01",
@@ -1552,7 +1608,12 @@
     -0.04,
     0.22
    ],
-   "sight": 0.043
+   "sight": 0.043,
+   "silencer": [
+    -0.001,
+    0.041,
+    0.952
+   ]
   },
   "smg": {
    "fbx": "SM_Wep_SubMGun_01",
@@ -1562,7 +1623,18 @@
     0.12
    ],
    "sight": 0.071,
-   "reflex": true
+   "reflex": true,
+   "silencer": [
+    0.008,
+    0.051,
+    0.33
+   ],
+   "scope": [
+    0,
+    0.103,
+    -0.007
+   ],
+   "scopeShort": true
   },
   "baton": {
    "fbx": "apocalypse:SM_Wep_Baton_01",
@@ -1575,7 +1647,12 @@
   },
   "pistol": {
    "fbx": "military:SM_Wep_Pistol_01",
-   "pistol": true
+   "pistol": true,
+   "silencer": [
+    0,
+    0.053,
+    0.205
+   ]
   },
   "knife": {
    "fbx": "SM_Wep_Melee_HuntingKnife_01",
@@ -1611,7 +1688,18 @@
     0.42
    ],
    "sight": 0.105,
-   "reflex": true
+   "reflex": true,
+   "silencer": [
+    0,
+    0.067,
+    0.634
+   ],
+   "scope": [
+    0,
+    0.098,
+    0.25
+   ],
+   "scopeShort": true
   },
   "boltRifle": {
    "fbx": "SM_Wep_HuntingRifle_Clean_01",
@@ -1636,7 +1724,12 @@
     -0.04,
     0.22
    ],
-   "sight": 0.043
+   "sight": 0.043,
+   "silencer": [
+    -0.001,
+    0.041,
+    0.952
+   ]
   },
   "machineGun2": {
    "fbx": "SM_Wep_MachineGun_02",
@@ -1666,7 +1759,17 @@
     0.3
    ],
    "sight": 0.122,
-   "reflex": true
+   "reflex": true,
+   "silencer": [
+    0,
+    0.139,
+    0.643
+   ],
+   "scope": [
+    0,
+    0.179,
+    0.076
+   ]
   },
   "pan": {
    "fbx": "apocalypse:SM_Prop_Pan_01",

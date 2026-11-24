@@ -388,6 +388,15 @@
     margin: 4px 0 2px 0;
 }
 
+/* Under the pack, how things are handled (as the Almacén's line under the stash): small, grey, within the grid's width. */
+.runpack-hint {
+    max-width: 260px;
+    margin-top: 6px;
+    font-size: 11px;
+    white-space: normal;
+    color: #a1a79d;
+}
+
 .runpack-kit,
 .runpack-give {
     flex-direction: row;

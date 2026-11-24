@@ -51,6 +51,15 @@ namespace Bastion.Client.Units
         public bool reflex;
         public float[] muzzle;
         /// <summary>
+        /// Where its silencer and its scope go on it (Arturo's cuadro 145, M13: the mods put on a weapon are seen on it), each
+        /// piece's own origin in the gun's frame, unscaled (AccesoriosLab.Tabla): the silencer's back on the muzzle, the
+        /// scope's foot on its top. None: it shows none (the bow and the crossbow; a gun that comes with its own scope);
+        /// scopeShort, the red dot instead of the tube, on the short guns. UnitViews.Mods.
+        /// </summary>
+        public float[] silencer;
+        public float[] scope;
+        public bool scopeShort;
+        /// <summary>
         /// A blade's (Ana's #10, 29/10: the pan, the bat, the crowbar, the chainsaw): where the fist closes on it and which way
         /// from there it runs along the fingers, in its own frame, unscaled (none: its origin and +z, as the knife and the
         /// machete); where the left hand takes it too (none: in one hand); and across the back instead of at the belt.

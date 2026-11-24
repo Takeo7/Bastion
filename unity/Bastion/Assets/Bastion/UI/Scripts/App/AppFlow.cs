@@ -138,7 +138,7 @@ namespace Bastion.UI.App
                 if (SceneManager.GetActiveScene().name == startScene)
                 {
                     Perf.Begin("abrir");
-                    _ = RaiseVeil(new LoadView { Title = StartText.Title }, 0);
+                    _ = RaiseVeil(new LoadView { Title = StartText.Title, AsStart = true }, 0);
                 }
             }
             root.pickingMode = PickingMode.Ignore;
@@ -371,7 +371,7 @@ namespace Bastion.UI.App
             }
             // From the start screen: what was pressed (TakeAsked), else what the room says (whoever joins).
             if (scene == battleScene || scene == baseScene) return SheetFor(scene == battleScene, TakeAsked(), askedWords, link.LastRoom?.SavedCampaign, StartScreen.HostLevel);
-            return new LoadView { Title = StartText.Title };
+            return new LoadView { Title = StartText.Title, AsStart = scene == startScene };
         }
 
         /// <summary>

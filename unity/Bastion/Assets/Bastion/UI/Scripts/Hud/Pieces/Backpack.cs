@@ -206,6 +206,8 @@ namespace Bastion.UI.Hud
                 var give = Ui.El("runpack-give", body);
                 foreach (var s in run.Give) Gear.SetSlot(Ui.El("runpack-place", give), s);
             }
+            // How things are handled, as the Almacén's line (Pruebas, 24/11: Mayús + clic from the floor always to the pack).
+            if (!Bastion.Client.GameInput.Touch) Ui.Text(HudText.Pack.Hint, "runpack-hint", body);
         }
 
         /// <summary>

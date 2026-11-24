@@ -12,7 +12,9 @@ namespace Bastion.UI
     /// For tests with the app, without clicking (never in a game of the players): a list of «t:step», each at so many
     /// seconds from when the list starts, as a player's press. «press=Texto» presses every button showing whose text is
     /// that (any case; as Red's UiPress), «click=Texto» clicks a text showing that says it (what listens above it gets
-    /// it), «shot=name» saves the screen as BASTION_FOTOS/name.png, «quit» closes the app; the rest goes to the screen's
+    /// it), «escribe=campo:texto» writes in the text field of that name (Write), «ventana=1920x1080» resizes the window
+    /// (Window), «shot=name» saves the screen as
+    /// BASTION_FOTOS/name.png, «quit» closes the app; the rest goes to the screen's
     /// own (`other`: BaseRun's steps on the base). Each step goes to the log as «[recorrido]».
     /// </summary>
     public static class TestSteps
@@ -50,6 +52,10 @@ namespace Bastion.UI
                     return Press(arg) > 0;
                 case "click":
                     return Click(arg) > 0;
+                case "escribe":
+                    return Write(arg) > 0;
+                case "ventana":
+                    return Window(arg);
                 case "shot":
                     var folder = Environment.GetEnvironmentVariable("BASTION_FOTOS");
                     if (string.IsNullOrEmpty(folder)) return false;
@@ -97,6 +103,41 @@ namespace Bastion.UI
                 clicked++;
             }
             return clicked;
+        }
+
+        /// <summary>
+        /// «escribe=address:127.0.0.1:3410» (Red, 24/11, Producto's yes; for joining by address without the keyboard): the text
+        /// field showing whose name is the one before the first «:» takes the rest as typing leaves it (focused, its value
+        /// set: the ChangeEvent goes out as with a key); how many.
+        /// </summary>
+        public static int Write(string arg)
+        {
+            var colon = arg.IndexOf(':');
+            if (colon <= 0) return 0;
+            var name = arg.Substring(0, colon);
+            var text = arg.Substring(colon + 1);
+            var written = 0;
+            foreach (var field in Showing<TextField>().Where(x => x.name == name))
+            {
+                field.Focus();
+                field.value = text;
+                written++;
+            }
+            return written;
+        }
+
+        /// <summary>
+        /// «ventana=1920x1080» (Red, 24/11, Producto's yes; for the interface's scale laid out again on a resize, Pruebas):
+        /// the window made that size, windowed (Screen.SetResolution), as dragging its corner would. Unity keeps the last
+        /// size in the app's own preferences when it quits: a test app's, with its own identifier, never Arturo's. False if
+        /// the size isn't «<width>x<height>».
+        /// </summary>
+        public static bool Window(string arg)
+        {
+            var size = arg.ToLowerInvariant().Split('x');
+            if (size.Length != 2 || !int.TryParse(size[0], out var width) || !int.TryParse(size[1], out var height) || width < 320 || height < 200) return false;
+            Screen.SetResolution(width, height, FullScreenMode.Windowed);
+            return true;
         }
 
         static System.Collections.Generic.IEnumerable<T> Showing<T>() where T : VisualElement

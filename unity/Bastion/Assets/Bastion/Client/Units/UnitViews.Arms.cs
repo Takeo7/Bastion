@@ -89,6 +89,45 @@ namespace Bastion.Client.Units
             return (bone, bone.InverseTransformPoint(world), Quaternion.Inverse(bone.rotation) * turn);
         }
 
+        /// <summary>
+        /// The pieces of the mods seen on a gun (cuadro 145): Synty's taped silencer (Apocalypse's) and a scope, Military's
+        /// low tube on the long guns and Apocalypse's red dot on the short ones (WeaponArt.scopeShort). The stock and the
+        /// extended magazine are not: a gun's own are part of its one mesh.
+        /// </summary>
+        public const string SilencerModel = "apocalypse:SM_Wep_Mod_Attach_Silencer_03", ScopeModel = "military:SM_Wep_Mod_Scope_04", ShortScopeModel = "SM_Wep_Mod_Attach_Scope_02";
+        /// <summary>How long the silencer is, in its own frame: the muzzle goes to its end.</summary>
+        const float SilencerLength = 0.205f;
+
+        /// <summary>
+        /// A gun's model (WeaponModel's, Gun's) with what `mods` (WeaponModIds) show on it, where its art has them
+        /// (WeaponArt.silencer, scope), as its children, at its scale. True if the silencer went on: its muzzle is that much further.
+        /// </summary>
+        public static bool Mods(Transform gun, WeaponArt art, IEnumerable<string> mods, FigureCatalog catalog)
+        {
+            if (gun == null || art == null || mods == null || catalog == null) return false;
+            bool silenced = false;
+            foreach (string mod in mods)
+            {
+                bool silencer = mod == WeaponModIds.Silencer;
+                if (!silencer && mod != WeaponModIds.Scope) continue;
+                var at = silencer ? art.silencer : art.scope;
+                if (at == null || at.Length < 3 || gun.Find(mod) != null) continue;
+                var prefab = catalog.Weapon(silencer ? SilencerModel : art.scopeShort ? ShortScopeModel : ScopeModel);
+                if (prefab == null) continue;
+                var piece = Instantiate(prefab, gun, false).transform;
+                piece.name = mod;
+                piece.localPosition = new Vector3(at[0], at[1], at[2]);
+                piece.localRotation = Quaternion.identity;
+                piece.localScale = Vector3.one;
+                foreach (var c in piece.GetComponentsInChildren<Collider>()) DestroyNow(c);
+                silenced |= silencer;
+            }
+            return silenced;
+        }
+
+        /// <summary>For the labs: the mods a unit's gun shows, instead of its Arms' (AccesoriosLab).</summary>
+        public static readonly Dictionary<string, string[]> ModsForLab = new Dictionary<string, string[]>();
+
         /// <summary>A weapon's model (any: a gun, the pistol, a blade) under `parent`, at the figures' scale, its muzzle in its own frame.</summary>
         static Transform WeaponModel(WeaponArt art, Transform parent, FigureCatalog catalog, out Vector3 muzzle)
         {
@@ -173,9 +212,15 @@ namespace Bastion.Client.Units
                 if (model == null) continue;
                 v.carried[carry] = model;
                 v.arts[carry] = art;
-                v.muzzles[carry] = muzzle;
                 v.middles[carry] = MiddleOf(model);
                 v.butts[carry] = ButtOf(model);
+                // (Its silencer and its scope on it, the primary's: Mods; once its middle and its butt are measured, the gun's own:
+                // with them on, the butt rose with the scope and the middle went a hand along with the silencer. The flash from
+                // the silencer's end.)
+                if (carry == MainCarry && (u.Id != null && ModsForLab.TryGetValue(u.Id, out var shown) ? (IEnumerable<string>)shown : !string.IsNullOrEmpty(u.Arms?.Primary) ? u.Arms.Mods : null) is IEnumerable<string> mods
+                    && Mods(model, art, mods, catalog))
+                    muzzle = new Vector3(art.silencer[0], art.silencer[1], art.silencer[2] + SilencerLength);
+                v.muzzles[carry] = muzzle;
             }
             if (v.carried.Count == 0) return false;
             Stows(v, u.Appearance?.Character);
@@ -1913,7 +1958,9 @@ namespace Bastion.Client.Units
         /// in 0.6 s on an ease, coming in and going over its ends (0.12 of it), the gun held fast in the right hand
         /// meanwhile. The pistol's, «Reloading 2»'s reload the same way (PistolReloadFrom; 0.10.1 had none).
         /// </summary>
-        static string ArmsKey(Unit u) => u.Arms != null ? $"{u.Arms.Primary}|{u.Arms.Melee}" : "";
+        // (Its mods too: another gun of the same kind taken from the pack or off the floor, with or without a silencer or
+        // a scope, is drawn again, its flash from where its muzzle now is. Producto's review of the 0.14.4.)
+        static string ArmsKey(Unit u) => u.Arms != null ? $"{u.Arms.Primary}|{u.Arms.Melee}|{(u.Arms.Mods != null ? string.Join(",", u.Arms.Mods) : "")}" : "";
 
         /// <summary>
         /// A weapon taken in hand from the backpack (unitViews.ts equip): the one it held turned over and down as a reload's

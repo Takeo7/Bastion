@@ -220,6 +220,8 @@ namespace Bastion.Client
                 stander.pistol = gun == "pistol";
                 stander.art = stander.pistol ? null : Anims.Weapon(gun);
                 stander.gun = stander.pistol ? UnitViews.Pistol(holder, catalog) : UnitViews.Gun(stander.art, holder, catalog, out _);
+                // (Its silencer and its scope on it: cuadro 145.)
+                if (!stander.pistol && entry.Gear?.Arms?.Primary != null) UnitViews.Mods(stander.gun, stander.art, entry.Gear.Arms.Mods, catalog);
                 string build = stander.build;
                 stander.anim = new FigureAnimator(stander.animator, m => catalog.Clip(Anims.Motion(build, m, false)), null, m => false);
             }

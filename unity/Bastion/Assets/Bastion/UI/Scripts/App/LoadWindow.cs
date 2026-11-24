@@ -28,6 +28,12 @@ namespace Bastion.UI.App
         public List<(string Name, string Color)> Who = new List<(string, string)>();
         /// <summary>To a stage from the base (the expedition's first): La Lata is seen leaving before it (cuadro 138).</summary>
         public bool Departs;
+        /// <summary>
+        /// The game's title where the start screen has it (Start.uss .start__side and .start__title: 7 % and 10 %, 92 px), not
+        /// small in the middle: as the start screen fades in under the lifting sheet the title stays still, and only one shows
+        /// (Producto, 24/11: with Unity's splash gone, the sheet's small one and the menu's big one were seen together).
+        /// </summary>
+        public bool AsStart;
     }
 
     /// <summary>The windows' words (cuadro 136; Lore's, 23/11).</summary>
@@ -90,7 +96,8 @@ namespace Bastion.UI.App
             var ink = Light;
             var soft = Muted;
             if (!string.IsNullOrEmpty(v.Kicker)) Text(words, v.Kicker.ToUpperInvariant(), 13, soft, true).style.letterSpacing = 2;
-            if (!string.IsNullOrEmpty(v.Title)) Text(words, v.Title.ToUpperInvariant(), 44, ink, true).style.letterSpacing = 1.5f;
+            if (!string.IsNullOrEmpty(v.Title) && v.AsStart) StartTitle(v.Title);
+            else if (!string.IsNullOrEmpty(v.Title)) Text(words, v.Title.ToUpperInvariant(), 44, ink, true).style.letterSpacing = 1.5f;
             var facts = new VisualElement { pickingMode = PickingMode.Ignore };
             facts.style.flexDirection = FlexDirection.Row;
             facts.style.alignItems = Align.Center;
@@ -192,6 +199,20 @@ namespace Bastion.UI.App
             into.Add(e);
             // The game's own mark (cuadro 143: no symbols by hand).
             if (LineIcon.Has(id)) e.Add(new LineIcon(id) { pickingMode = PickingMode.Ignore });
+        }
+
+        /// <summary>The title as the start screen's (AsStart): its column at 7 % and 10 %, the label in it as there.</summary>
+        void StartTitle(string title)
+        {
+            var side = new VisualElement { pickingMode = PickingMode.Ignore };
+            side.style.position = Position.Absolute;
+            side.style.left = Length.Percent(7);
+            side.style.top = Length.Percent(10);
+            side.style.alignItems = Align.FlexStart;
+            Root.Add(side);
+            var t = Text(side, title.ToUpperInvariant(), 92, Color.white, true);
+            t.style.letterSpacing = 3;
+            t.style.textShadow = new TextShadow { offset = new Vector2(0, 3), blurRadius = 0, color = new Color(0, 0, 0, 0.6f) };
         }
 
         static Label Text(VisualElement into, string text, float size, Color color, bool title)

@@ -60,7 +60,7 @@ namespace Bastion.Client
                 return;
             }
             var arms = ArmsOf(campaign, s);
-            Showcase(s.Id, look ?? s.Appearance, s.Alive ? InHand(arms) : null, !s.Alive, s.Name, SquadTint.ColourOf(s.Owner), UnitViews.CarriesPistol(arms));
+            Showcase(s.Id, look ?? s.Appearance, s.Alive ? InHand(arms) : null, !s.Alive, s.Name, SquadTint.ColourOf(s.Owner), UnitViews.CarriesPistol(arms), arms?.Primary != null ? arms.Mods : null);
         }
 
         /// <summary>
@@ -68,9 +68,9 @@ namespace Bastion.Client
         /// hands (none: the pistol, at rest by the thigh; without one, `pistol` false, empty-handed); `fallen`, their grave.
         /// A null id, nobody.
         /// </summary>
-        public void Showcase(string soldierId, Appearance look, string weapon, bool fallen, string name = null, string band = null, bool pistol = true)
+        public void Showcase(string soldierId, Appearance look, string weapon, bool fallen, string name = null, string band = null, bool pistol = true, System.Collections.Generic.IReadOnlyList<string> mods = null)
         {
-            string key = soldierId == null ? "" : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { soldierId, look, weapon, fallen, name, band, pistol });
+            string key = soldierId == null ? "" : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { soldierId, look, weapon, fallen, name, band, pistol, mods });
             if (key == showcaseKey) return;
             showcaseKey = key;
             // Turned by the player, they stay so while it is them (Personalizar's draft changes the figure, not them).
@@ -128,6 +128,8 @@ namespace Bastion.Client
                 showArt = ArtOf(weapon);
                 bool blade = showArt?.melee == true;
                 showGun = weapon == null ? pistol ? UnitViews.Pistol(showFigure, catalog) : null : blade ? UnitViews.Blade(showArt, showFigure, catalog) : UnitViews.Gun(showArt, showFigure, catalog, out _);
+                // (Its silencer and its scope on it: the mods put on a weapon are seen on it, cuadro 145.)
+                if (weapon != null && !blade) UnitViews.Mods(showGun, showArt, mods, catalog);
                 showPistol = weapon == null && showGun != null;
                 showBlade = blade && showGun != null;
                 bool armed = showGun != null && !showPistol && !showBlade;

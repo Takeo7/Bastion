@@ -174,7 +174,7 @@ namespace Bastion.Net
             if (RunSaqueo(s)) return RunLeaving(s, roomOf);
             if (m.Kind == MissionKinds.Scavenge && m.EvacZone.Count > 0)
             {
-                var enemies = Enemies(s).Select((e) => Grid.NodeOf(s, e.Pos)).ToList();
+                var enemies = Foes(s).Select((e) => Grid.NodeOf(s, e.At)).ToList();
                 return !Squad(s).Any((o) => !o.Evacuated && enemies.Any((n) => walksOf(o).Cost.TryGetValue(n, out _)));
             }
             return m.Kind != MissionKinds.Elimination && m.ObjectiveDone;
@@ -205,7 +205,7 @@ namespace Bastion.Net
                 var all = AllAboard(s);
                 // The one with the item aboard and the dead on it: now, with whoever is in.
                 var cornered = s.Mission.Item?.Carrier is string c && Grid.GetUnit(s, c) is Unit holder && Abilities.InEvacZone(s, holder.Pos)
-                    && Enemies(s).Any((e) => Grid.Distance(holder.Pos, e.Pos) <= 2);
+                    && Foes(s).Any((e) => Grid.Distance(holder.Pos, e.At) <= 2);
                 if (all || cornered) return new EvacCommand { Unit = u.Id };
             }
             if (leaving && Abilities.InEvacZone(s, u.Pos))
@@ -274,7 +274,7 @@ namespace Bastion.Net
                 return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = crate };
             // Arco y ballesta (cuadro 102): a body beside it with arrows in it, searched (they go back to the pack), with none of
             // the dead near to make it wait; hidden, only where nobody would hear it and turn to see the squad.
-            if (s.Run != null && Content.FiresArrows(u) && Usable(s, u, AbilityIds.Search) && !Enemies(s).Any((e) => e.Caged != true && !Paths.OnPatrol(s, e) && Grid.Distance(u.Pos, e.Pos) <= Close)
+            if (s.Run != null && Content.FiresArrows(u) && Usable(s, u, AbilityIds.Search) && !Foes(s).Any((e) => e.U.Caged != true && !e.Asleep && Grid.Distance(u.Pos, e.At) <= Close)
                 && Looting.SearchableTiles(s, u).FirstOrDefault((p) => ArrowBody(s, p) && (!Hush(s) || Quietly(s, u, p))) is Pos quiver)
                 return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = quiver };
             // A Guarida's box beside it: opened, the job done (H5).
@@ -290,7 +290,7 @@ namespace Bastion.Net
             // a camp of the living awake, who shoot from afar: going so, the squad fell 4 times in 5 in the camping (R15).
             var going = s.Run != null && leaving && !Holding(s) && !(RaidersFight(s) && CampAwake(s));
             var shot = BestShot(s, u, going ? 1.5 : Close);
-            var nearest = Enemies(s).Select((e) => Grid.Distance(u.Pos, e.Pos)).DefaultIfEmpty(double.MaxValue).Min();
+            var nearest = Foes(s).Select((e) => Grid.Distance(u.Pos, e.At)).DefaultIfEmpty(double.MaxValue).Min();
             // Mordido (G23.2): a medicine cabinet or shelf beside it searched before any shot while the antiviral is still in
             // one: the count runs.
             if (BittenFight(s) && Looting.AntiviralWhere(s) == AntiviralPlaces.Piece && Usable(s, u, AbilityIds.Search)
@@ -308,6 +308,15 @@ namespace Bastion.Net
             // and farther than the rest.
             if (EvacFight(s) && !carrier && Walkers(s) is List<Unit> walking && walking.Count > 0
                 && BestShot(s, u, Close * 2, null, (e) => walking.Any((c) => Grid.Distance(c.Pos, e.Pos) <= Rules.PanicRange + 2)) is (Command, int) cover && cover.hit >= 15) return cover.cmd;
+            // Careful, on the way out (improvement 1): away to a place that risks fewer bites before striking what stands by
+            // it, unless the blow kills it all but surely and none else reaches it then (on the way back, a strike was the last
+            // order of 22 % of those who fell in the dead's turn: row 1's bench, 24/11).
+            if (Careful && going && !carrier && shot != null && target is Pos homeward && Stride(s, u) >= Paths.CostOrtho && !SureKill(s, u, shot.Value.cmd))
+            {
+                var stops = Stops(s, u, Paths.ComputeReach(s, u, Stride(s, u)));
+                var step = CarefulMove(s, u, homeward, leaving, Paths.ComputeReach(s, u, Stride(s, u)), stops.Where((o) => leaving || s.Run == null || !Abilities.InEvacZone(s, o.Pos)).ToList(), WayTo(s, walks, homeward, leaving), walks);
+                if (step.Cmd != null && step.Tier < step.Here) return step.Cmd;
+            }
             if (shot != null && !carrier && shot.Value.hit >= 30) return shot.Value.cmd;
             // A run's Saqueo, before going: the room it stands in, then a box, a boot or a body beside it. Separados on the way
             // to La Lata, the same, never a step aside for one (G23.4: the walk is movement, the search an action).
@@ -365,11 +374,22 @@ namespace Bastion.Net
             if (going && !carrier && BestShot(s, u, Close) is (Command, int) way && way.hit >= 30) return way.cmd;
             // And with nothing to shoot, a step on regardless of the danger: inside, the horde at the door can't be seen,
             // and the blade alone waited by it for ever (R3: the offices' radio, 3000 turns).
-            if (going && goal != null && !Abilities.InEvacZone(s, u.Pos) && Stride(s, u) >= Paths.CostOrtho && MoveToward(s, u, goal, Stride(s, u), leaving, walks, reckless: true) is Command push) return push;
+            // (Careful, not so: MoveToward has weighed every place by its bites already, and walking blind into them is what it
+            // keeps from; standing still for ever it is kept from by Stalled.)
+            if (!Careful && going && goal != null && !Abilities.InEvacZone(s, u.Pos) && Stride(s, u) >= Paths.CostOrtho && MoveToward(s, u, goal, Stride(s, u), leaving, walks, reckless: true) is Command push) return push;
             if (shot != null && shot.Value.hit >= 15) return shot.Value.cmd;
             // Separados hidden (G23.4): no watch kept. Its shot at one of the dead going by gave the squad away on the first
             // turn, both groups at once (R13, 20/11: city, 2 seats, seed 1).
             // So too in Saqueadores (G23.5), and with the camp asleep, even with the squad found by the dead.
+            // Careful (improvement 1): with walk left where bites reach it, to a place that risks fewer, before keeping watch.
+            if (Careful && Paths.MoveBudget(s, u) >= Paths.CostOrtho && BiteRisk(s, u, u.Pos, null, leaving).Tier > 0)
+            {
+                var budget = Paths.MoveBudget(s, u) < Paths.FullMoves(s, u) ? Paths.MoveBudget(s, u) : Stride(s, u);
+                var reach = Paths.ComputeReach(s, u, budget);
+                var stops = Stops(s, u, reach).Where((o) => leaving || s.Run == null || !Abilities.InEvacZone(s, o.Pos)).ToList();
+                var safer = CarefulMove(s, u, goal ?? u.Pos, leaving, reach, stops, goal != null ? WayTo(s, walks, goal, leaving) : null, walks);
+                if (safer.Cmd != null && safer.Tier < safer.Here) return safer.Cmd;
+            }
             var watch = !((SplitFight(s) || RaidersFight(s)) && s.Concealed) && !Quiet(s);
             if (watch && Usable(s, u, AbilityIds.Overwatch) && nearest <= Close * 2) return Ability(u, AbilityIds.Overwatch);
             if (watch && Usable(s, u, AbilityIds.OverwatchMelee) && nearest <= Close) return Ability(u, AbilityIds.OverwatchMelee);
@@ -378,6 +398,91 @@ namespace Bastion.Net
         }
 
         private static IEnumerable<Unit> Enemies(GameState s) => Grid.Combatants(s, Teams.Alien);
+
+        // ------------------------------------------------------------ The prudent bot (Bots, 24/11)
+
+        /// <summary>
+        /// How the bot plays (Bots, 24/11): off by default, so that the apps, Measure, the determinism probe and every seed of
+        /// the tests play as before; the benches and the prudent bot's tests turn it on, per thread (they play several fights
+        /// at once). Careful plays Fair too.
+        /// </summary>
+        public sealed class BotStyle
+        {
+            /// <summary>
+            /// Only what the squad knows of the dead (Bots' rule 2: no cheating): those it sees now, and those it saw before,
+            /// where it saw them last (BotMemory); never where one it doesn't see stands now.
+            /// </summary>
+            public bool Fair { get; set; }
+
+            /// <summary>
+            /// Improvement 1, moving without being bitten (.dev-snapshots/bots/MEJORA-1-DISENO.md): each place to walk to by
+            /// the bites it risks (BiteRisk: the dead awake it knows that reach it next turn, the bites going past on the way),
+            /// away before striking on the way out, the blade only where it holds, the walk left spent getting safe.
+            /// </summary>
+            public bool Careful { get; set; }
+        }
+
+        [System.ThreadStatic] public static BotStyle? Style;
+
+        private static bool Careful => Style?.Careful == true;
+
+        private static bool Fair => Style?.Fair == true || Careful;
+
+        /// <summary>One of the other side as the squad knows it: where it was last seen (At), and asleep then or not.</summary>
+        private readonly struct Foe
+        {
+            public readonly Unit U;
+            public readonly Pos At;
+            public readonly bool Asleep;
+
+            public Foe(Unit u, Pos at, bool asleep)
+            {
+                U = u;
+                At = at;
+                Asleep = asleep;
+            }
+        }
+
+        /// <summary>
+        /// What the squad has seen of the other side in a fight (Fair): each one by its id, where it was seen last and whether
+        /// it was asleep then. Kept per state (a fight's GameState), the bot being called for each order; a state copied anew
+        /// (an app's snapshot) starts with none, and knows only what it sees.
+        /// </summary>
+        private sealed class BotMemory
+        {
+            public int Seq = -1;
+            public readonly Dictionary<string, (Pos At, bool Asleep)> Seen = new Dictionary<string, (Pos At, bool Asleep)>();
+            public List<Foe> Known = new List<Foe>();
+            /// <summary>Careful: each soldier's walk left to its goal at the first careful move of a turn, and how many turns running it got no nearer (Stalled).</summary>
+            public readonly Dictionary<string, (int Turn, double Left, int Stalls)> Progress = new Dictionary<string, (int Turn, double Left, int Stalls)>();
+        }
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GameState, BotMemory> memories = new System.Runtime.CompilerServices.ConditionalWeakTable<GameState, BotMemory>();
+
+        /// <summary>
+        /// The other side as the squad knows it now. Not Fair: all of them where they stand (as before). Fair: those it sees
+        /// (Los.VisibleEnemies), and those seen before at their last place, forgotten once that place is in sight with nobody
+        /// on it, or once seen elsewhere.
+        /// </summary>
+        private static List<Foe> Foes(GameState s)
+        {
+            if (!Fair) return Enemies(s).Select((e) => new Foe(e, e.Pos, Asleep(s, e))).ToList();
+            var m = memories.GetValue(s, (_) => new BotMemory());
+            if (m.Seq == s.Seq) return m.Known;
+            var visible = Los.VisibleEnemies(s, Teams.Xcom).Where((e) => e.Alive && e.Team == Teams.Alien && !e.Objective && !e.Captive).ToList();
+            foreach (var e in visible) m.Seen[e.Id] = (Events.CopyPos(e.Pos), Asleep(s, e));
+            var view = Los.TeamView(s, Teams.Xcom);
+            foreach (var id in m.Seen.Keys.ToList())
+            {
+                if (visible.Any((e) => e.Id == id)) continue;
+                var at = m.Seen[id].At;
+                var node = Grid.NodeOf(s, at);
+                if (Grid.GetUnit(s, id) == null || (node >= 0 && node < view.Length && view[node])) m.Seen.Remove(id);
+            }
+            m.Known = m.Seen.Select((kv) => new Foe(Grid.GetUnit(s, kv.Key)!, kv.Value.At, kv.Value.Asleep)).ToList();
+            m.Seq = s.Seq;
+            return m.Known;
+        }
 
         /// <summary>
         /// The squad on the field: of the squad's side, but not an Evacuación's civilians (G23.6: of it to the dead, nobody's,
@@ -424,7 +529,7 @@ namespace Bastion.Net
             int Walk(Pos p) => walks.Cost.TryGetValue(Grid.NodeOf(s, p), out var w) ? w : int.MaxValue;
             // The caged (H9) are none to go for but in a Limpieza, and there by the tile across their bars nearest by the
             // walk, where the blade reaches them (Rules.CagedReach); never their own, behind the bars.
-            var targets = Enemies(s).Where((e) => e.Caged != true).Select((e) => (e.Id, At: e.Pos)).ToList();
+            var targets = Foes(s).Where((e) => e.U.Caged != true).Select((e) => (e.U.Id, e.At)).ToList();
             if (Hunting(s))
                 foreach (var e in Enemies(s).Where((e) => e.Caged == true))
                 {
@@ -444,6 +549,17 @@ namespace Bastion.Net
         /// asleep, none still unaware but by a silent kill: BestShot, SilentShot.)
         /// </summary>
         private static bool Worth(GameState s, Unit u, Unit e) => e.Caged != true || Hunting(s) || Rules.CagedReach(s, e).Any((p) => Grid.SamePos(p, u.Pos));
+
+        /// <summary>
+        /// Careful: `cmd`, an attack, kills its target SilentOdds or likelier (KillOdds), and then none of the dead awake the
+        /// squad knows reaches `u` where it stands (BiteRisk with the target spared): then it is struck, not walked away from.
+        /// </summary>
+        private static bool SureKill(GameState s, Unit u, Command cmd)
+        {
+            if (cmd is not AbilityCommand a || a.Target == null || Grid.GetUnit(s, a.Target) is not Unit t) return false;
+            var p = Aim.PreviewShot(s, u, t, new ShotOptions { Ability = a.Ability });
+            return p != null && KillOdds(u, t, a.Ability, p) >= SilentOdds && BiteRisk(s, u, u.Pos, null, false, t.Id).Tier == 0;
+        }
 
         /// <summary>
         /// Arco y ballesta: a silent shot is taken when it kills this likely or likelier (KillOdds): one that misses or only
@@ -491,7 +607,11 @@ namespace Bastion.Net
             // (Mordido's bitten not cured never gets in: none to wait for, G23.2.)
             foreach (var o in Squad(s).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos) && !Rules.BittenUncured(s, o)))
             {
-                var reach = Paths.ComputeReach(s, o, double.MaxValue);
+                // Careful: past the dead too, who move (a mate kept off by them, hanging back, was left on the ground 29 times
+                // in 708 fights against 2: row 1's bench, 24/11); but not once it has got no nearer two turns running: the dead
+                // round the foot of the only ladder down never left, nor climbed, and La Lata waited 2900 turns (hard, seed 35).
+                var past = Careful && StallsOf(s, o) < 2;
+                var reach = past ? Paths.ComputeReach(s, o, double.MaxValue, null, (x) => x.Team != o.Team) : Paths.ComputeReach(s, o, double.MaxValue);
                 if (bus.Any((n) => reach.Cost.TryGetValue(n, out _))) return false;
             }
             return true;
@@ -697,7 +817,7 @@ namespace Bastion.Net
                 var equip = Try(new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Gear = gun.Id });
                 if (equip != null) return equip;
             }
-            var near = Enemies(s).Any((e) => e.Caged != true && Grid.Distance(u.Pos, e.Pos) <= Close);
+            var near = Foes(s).Any((e) => e.U.Caged != true && Grid.Distance(u.Pos, e.At) <= Close);
             if (!near && u.Kit.Vest == null && packed.FirstOrDefault((g) => g.Kind == GearKinds.Vest) is Gear vest) return Try(new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Gear = vest.Id });
             return null;
         }
@@ -754,9 +874,9 @@ namespace Bastion.Net
         private static Command? MoveToStrike(GameState s, Unit u, bool leaving)
         {
             if (Paths.MoveBudget(s, u) <= 0 || !Usable(s, u, AbilityIds.Slash)) return null;
-            var enemies = Enemies(s).ToList();
+            var enemies = Foes(s);
             // A caged one in a Limpieza even unseen: where it is, it stays (its cell shows only from right in front of the bars).
-            var seen = enemies.Where((e) => e.Caged != true ? Aim.TeamSees(s, u.Team, e) : Hunting(s)).ToList();
+            var seen = Enemies(s).Where((e) => e.Caged != true ? Aim.TeamSees(s, u.Team, e) : Hunting(s)).ToList();
             if (seen.Count == 0) return null;
             var reach = Paths.ComputeReach(s, u, Stride(s, u));
             Destination? best = null;
@@ -766,7 +886,14 @@ namespace Bastion.Net
                 if (s.Run != null && !leaving && Abilities.InEvacZone(s, o.Pos)) continue;
                 var beside = seen.Where((e) => Aim.InMeleeReach(s, o.Pos, e.Pos)).ToList();
                 if (beside.Count == 0) continue;
-                var key = (hp: beside.Min((e) => e.Hp), crowd: enemies.Count((e) => Grid.Distance(o.Pos, e.Pos) <= 2.5), cost: o.Cost);
+                // Careful: only where, the one it strikes aside, the bites that reach it there and on the way leave it standing
+                // (BiteRisk: tier 1 at most).
+                if (Careful)
+                {
+                    var weakest = beside.OrderBy((e) => e.Hp).ThenBy((e) => e.Id, System.StringComparer.Ordinal).First();
+                    if (BiteRisk(s, u, o.Pos, Paths.BuildPath(s, u, reach, o.Pos), false, weakest.Id).Tier > 1) continue;
+                }
+                var key = (hp: beside.Min((e) => e.Hp), crowd: enemies.Count((e) => Grid.Distance(o.Pos, e.At) <= 2.5), cost: o.Cost);
                 if (best == null || key.hp < bestKey.hp || (key.hp == bestKey.hp && (key.crowd < bestKey.crowd || (key.crowd == bestKey.crowd && key.cost < bestKey.cost - 1e-9))))
                 {
                     best = o;
@@ -801,19 +928,25 @@ namespace Bastion.Net
             // of 1000 turns in the hospital and the police station, the squad waiting a few tiles off; a radio fixed in the
             // offices and La Lata never reached).
             var careful = !bus && !Bold(s.Mission);
-            var enemies = Enemies(s).Where((e) => e.Caged != true && (careful || !Asleep(s, e))).ToList();
+            var enemies = Foes(s).Where((e) => e.U.Caged != true && (careful || !e.Asleep)).ToList();
             // The caged (H9), only on the tiles across their bars: nowhere else can they bite. Not in a Limpieza, where those
             // tiles are where the squad has to stand to kill them.
             var caged = new HashSet<int>(Hunting(s) ? Enumerable.Empty<int>() : Enemies(s).Where((e) => e.Caged == true).SelectMany((e) => Rules.CagedReach(s, e)).Select((p) => Grid.NodeOf(s, p)));
             // El Toro's charge ready (or by the next turn): his lines are kept out of (H6).
             var bull = Bull(s);
             var charging = bull != null && (!bull.Cooldowns.TryGetValue(AbilityIds.Charge, out var wait) || wait <= 1);
-            double Danger(Pos p) => reckless ? 0 : enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0) + (caged.Contains(Grid.NodeOf(s, p)) ? 4 : 0) + (charging && InChargeLine(bull!, p) ? 6 : 0);
+            double Danger(Pos p) => reckless ? 0 : enemies.Sum((e) => Grid.Distance(p, e.At) <= 2.5 ? 4 : Grid.Distance(p, e.At) <= 5 ? 1.5 : 0) + (caged.Contains(Grid.NodeOf(s, p)) ? 4 : 0) + (charging && InChargeLine(bull!, p) ? 6 : 0);
             // Not going for La Lata, never a stop on a tile of it in a run: a walk that ends there gets in (T24), and with the
             // street between the start and the police station, two of four got in on their first walk (R9, La llave).
             var stops = Stops(s, u, reach).Where((o) => bus || s.Run == null || !Abilities.InEvacZone(s, o.Pos)).ToList();
             Destination? best = null;
             var end = WayTo(s, walks, goal, bus);
+            // Careful (improvement 1): by the bites each place risks first, then by how near it is (CarefulMove).
+            if (Careful && !reckless)
+            {
+                bool Extra(Pos p) => caged.Contains(Grid.NodeOf(s, p)) || (charging && InChargeLine(bull!, p));
+                return CarefulMove(s, u, goal, bus, reach, stops, end, walks, Extra).Cmd;
+            }
             if (end != null)
             {
                 // Along the way: the walk left from each place on it, in tiles; any place of La Lata is there.
@@ -853,6 +986,155 @@ namespace Bastion.Net
             return new MoveCommand { Unit = u.Id, To = best.Pos };
         }
 
+        // ------------------------------------------------------------ Improvement 1: moving without being bitten (Bots, 24/11)
+
+        /// <summary>A known one of the dead awake: the tiles (nodes) its bite reaches next turn, and its worst bite.</summary>
+        private sealed class Zone
+        {
+            public string Id = "";
+            public readonly HashSet<int> Tiles = new HashSet<int>();
+            public int Bite;
+        }
+
+        [System.ThreadStatic] private static GameState? zonesOf;
+        [System.ThreadStatic] private static int zonesSeq;
+        [System.ThreadStatic] private static List<Zone>? zones;
+
+        /// <summary>
+        /// The bite zones of the dead awake the squad knows (Foes, not asleep, not caged): from where each was seen, its walk
+        /// of a whole turn (Paths.FullMoves, past its own side), and a bite from any tile of it (Aim.InMeleeReach). Kept a
+        /// state's seq.
+        /// </summary>
+        private static List<Zone> Zones(GameState s)
+        {
+            if (zones != null && ReferenceEquals(zonesOf, s) && zonesSeq == s.Seq) return zones;
+            var list = new List<Zone>();
+            foreach (var f in Foes(s))
+            {
+                if (f.Asleep || f.U.Caged == true || !f.U.Alive || !Content.Templates[f.U.Template].Undead) continue;
+                var z = new Zone { Id = f.U.Id, Bite = WorstBite(f.U) };
+                var reach = Paths.ComputeReach(s, f.U, Paths.FullMoves(s, f.U), f.At, (o) => o.Team == f.U.Team);
+                foreach (var n in reach.Cost.Keys.Append(Grid.NodeOf(s, f.At)).Distinct())
+                {
+                    var q = Grid.PosOf(s, n);
+                    foreach (var d in Grid.Dirs8)
+                    {
+                        var p = new Pos { X = q.X + d.X, Y = q.Y + d.Y, Z = q.Z };
+                        if (Grid.InBounds(s, p.X, p.Y) && Aim.InMeleeReach(s, q, p)) z.Tiles.Add(Grid.NodeOf(s, p));
+                    }
+                }
+                list.Add(z);
+            }
+            zonesOf = s;
+            zonesSeq = s.Seq;
+            return zones = list;
+        }
+
+        /// <summary>The worst a bite of `e` takes without a crit (its melee weapon's damage and spread; a crit adds more).</summary>
+        private static int WorstBite(Unit e)
+        {
+            var t = Content.Templates[e.Template];
+            return Content.Weapons.TryGetValue(t.MeleeWeapon ?? t.Weapon, out var w) ? w.Damage + w.Spread : 4;
+        }
+
+        /// <summary>
+        /// What `u` risks walking `path` to `p` and ending its turn there (improvement 1): the worst bites of the dead awake
+        /// whose zone takes `p` (Zones; but `spared`, the one it is to strike), and those going past on the way (Rules
+        /// .ReactionsAlong: the squad's sight, as the screen draws it). A tile of La Lata in a run, going for it, takes no
+        /// bite at the end (in it, nobody was bitten in the 708 fights of row 1). Tier 0: none; 1: fewer than its health; 2:
+        /// as many or more, or the place is otherwise kept out of (`extra`: a caged one's bars, El Toro's line).
+        /// </summary>
+        private static (int Tier, int Damage) BiteRisk(GameState s, Unit u, Pos p, List<Pos>? path, bool bus, string? spared = null, System.Func<Pos, bool>? extra = null)
+        {
+            var damage = 0;
+            var node = Grid.NodeOf(s, p);
+            if (!(bus && s.Run != null && Abilities.InEvacZone(s, p)))
+                foreach (var z in Zones(s))
+                    if (z.Id != spared && z.Tiles.Contains(node)) damage += z.Bite;
+            if (path != null && path.Count > 0 && !Grid.SamePos(p, u.Pos))
+                foreach (var r in Rules.ReactionsAlong(s, u, path))
+                    if (r.Kind != PathReactions.Suppress && r.Unit != spared && Grid.GetUnit(s, r.Unit) is Unit o) damage += WorstBite(o);
+            var tier = damage == 0 ? 0 : damage < u.Hp ? 1 : 2;
+            if (extra != null && extra(p)) tier = 2;
+            return (tier, damage);
+        }
+
+        /// <summary>Careful: Stalled as last reckoned for `u`, without reckoning it anew (0 if never).</summary>
+        private static int StallsOf(GameState s, Unit u) => memories.TryGetValue(s, out var m) && m.Progress.TryGetValue(u.Id, out var p) ? p.Stalls : 0;
+
+        /// <summary>
+        /// Careful: how many turns running `u` got no nearer its goal (`left`, its walk left, at its first careful move of each
+        /// turn), at most 2: the tiers of bite taken as none (CarefulMove). Kept in the fight's BotMemory.
+        /// </summary>
+        private static int Stalled(GameState s, Unit u, double left)
+        {
+            var m = memories.GetValue(s, (_) => new BotMemory());
+            if (!m.Progress.TryGetValue(u.Id, out var was))
+            {
+                m.Progress[u.Id] = (s.Turn, left, 0);
+                return 0;
+            }
+            if (was.Turn == s.Turn) return was.Stalls;
+            var stalls = left < was.Left - 0.5 ? 0 : System.Math.Min(2, was.Stalls + 1);
+            m.Progress[u.Id] = (s.Turn, left, stalls);
+            return stalls;
+        }
+
+        /// <summary>
+        /// Improvement 1's move (MoveToward when Careful): of the places `u` can stop on this stretch (`stops`), the one with the
+        /// lowest BiteRisk tier, then the nearest its goal by the walk back from the way's end (`end`; as the crow flies
+        /// without one), then the least walked; only if better than staying (a lower tier, or the same and a tile nearer).
+        /// So it steps back with nowhere safer ahead. Here: the tier where it stands.
+        /// </summary>
+        private static (Command? Cmd, int Tier, int Here) CarefulMove(GameState s, Unit u, Pos goal, bool bus, Reach reach, List<Destination> stops, Pos? end, Reach walks, System.Func<Pos, bool>? extra = null)
+        {
+            var back = end != null ? Paths.ComputeReach(s, u, double.MaxValue, end, (o) => o.Team != u.Team) : null;
+            // On the way there (`walks`, from `u`), what is left of it; the walk back from the end can't climb what the way
+            // drops down (a survivor found upstairs, up by a way that only goes down, stood still 2900 turns: hard, seed 35).
+            var along = new Dictionary<int, double>();
+            if (end != null)
+            {
+                var total = walks.Cost.Get(Grid.NodeOf(s, end), 0);
+                foreach (var n in Way(s, walks, end)) along[n] = (double)(total - walks.Cost.Get(n, 0)) / Paths.CostOrtho;
+                along[Grid.NodeOf(s, u.Pos)] = (double)total / Paths.CostOrtho;
+            }
+            double Left(Pos p)
+            {
+                if (bus && Abilities.InEvacZone(s, p)) return 0;
+                if (along.TryGetValue(Grid.NodeOf(s, p), out var a)) return back != null && back.Cost.TryGetValue(Grid.NodeOf(s, p), out var b) ? System.Math.Min(a, (double)b / Paths.CostOrtho) : a;
+                if (back != null && back.Cost.TryGetValue(Grid.NodeOf(s, p), out var w)) return (double)w / Paths.CostOrtho;
+                return Grid.Distance(p, goal) + 3 * System.Math.Abs(p.Z - goal.Z) + (back != null ? 1000 : 0);
+            }
+            // Waiting where it is safe has its own cost (the horde grows every turn, and a group between it and La Lata may never
+            // move): each turn running it got no nearer, one tier more is taken as none (Stalled). Without it, 5 fights of 708
+            // stood still for ever (row 1's bench, 24/11).
+            var allowed = Stalled(s, u, Left(u.Pos));
+            int Eff(int tier) => tier <= allowed ? 0 : tier;
+            var here = Eff(BiteRisk(s, u, u.Pos, null, bus, null, extra).Tier);
+            var stay = (Tier: here, Left: Left(u.Pos));
+            // By the tier at the end first (the way's bites only add to it), then the walk left, then the walk taken.
+            var order = stops.Where((o) => !Grid.SamePos(o.Pos, u.Pos))
+                .Select((o) => (Stop: o, End: Eff(BiteRisk(s, u, o.Pos, null, bus, null, extra).Tier), Left: Left(o.Pos)))
+                .OrderBy((x) => x.End).ThenBy((x) => x.Left).ThenBy((x) => x.Stop.Cost).ThenBy((x) => Grid.NodeOf(s, x.Stop.Pos)).ToList();
+            Destination? best = null;
+            (int Tier, double Left, int Cost) bestKey = (int.MaxValue, double.MaxValue, int.MaxValue);
+            foreach (var x in order)
+            {
+                if (x.End > bestKey.Tier) break;
+                var path = Paths.BuildPath(s, u, reach, x.Stop.Pos);
+                if (path == null) continue;
+                var tier = Eff(BiteRisk(s, u, x.Stop.Pos, path, bus, null, extra).Tier);
+                var key = (tier, x.Left, x.Stop.Cost);
+                if (key.tier < bestKey.Tier || (key.tier == bestKey.Tier && (key.Left < bestKey.Left - 1e-9 || (System.Math.Abs(key.Left - bestKey.Left) < 1e-9 && key.Cost < bestKey.Cost))))
+                {
+                    best = x.Stop;
+                    bestKey = key;
+                }
+            }
+            if (best == null || !(bestKey.Tier < stay.Tier || (bestKey.Tier == stay.Tier && bestKey.Left < stay.Left - 0.5))) return (null, here, here);
+            return (new MoveCommand { Unit = u.Id, To = best.Pos }, bestKey.Tier, here);
+        }
+
         // ------------------------------------------------------------ Arco y ballesta (cuadros 101–106)
 
         /// <summary>Arco y ballesta: with this many arrows or fewer, one with a bow or a crossbow goes for those in a body near.</summary>
@@ -872,12 +1154,12 @@ namespace Bastion.Net
         private static Pos? ArrowGoal(GameState s, Unit u, Reach walks)
         {
             if (s.Run == null || !Content.FiresArrows(u) || (u.Arrows ?? 0) > ArrowsLow) return null;
-            var awake = Enemies(s).Where((e) => e.Caged != true && !Paths.OnPatrol(s, e)).ToList();
+            var awake = Foes(s).Where((e) => e.U.Caged != true && !e.Asleep).Select((e) => e.At).ToList();
             Pos? best = null;
             var bestWalk = ArrowWalk * Paths.CostOrtho + 1;
             foreach (var b in s.Units.Where((b) => !b.Alive && ArrowBody(s, b.Pos)))
             {
-                if (awake.Any((e) => Grid.Distance(e.Pos, b.Pos) <= Close)) continue;
+                if (awake.Any((e) => Grid.Distance(e, b.Pos) <= Close)) continue;
                 var w = WalkTo(s, walks, b.Pos);
                 if (w >= bestWalk) continue;
                 best = b.Pos;
@@ -1619,7 +1901,7 @@ namespace Bastion.Net
                     Pos? Nearest(IEnumerable<Pos> spots) => spots.Select((p) => (At: p, Walk: squad.Select((o) => WalkTo(s, o.Id == u.Id ? walks : Paths.ComputeReach(s, o, double.MaxValue, null, (x) => x.Team != o.Team), p)).DefaultIfEmpty(int.MaxValue).Min()))
                         .Where((x) => x.Walk < int.MaxValue).OrderBy((x) => x.Walk).ThenBy((x) => Grid.NodeOf(s, x.At)).Select((x) => (Pos?)x.At).FirstOrDefault();
                     return Nearest(s.Units.Where((b) => !b.Alive && b.Team == Teams.Alien && InUniform(b) && UniformBody(s, b.Pos)).Select((b) => b.Pos))
-                        ?? Nearest(Enemies(s).Where((e) => e.Caged != true && InUniform(e)).Select((e) => e.Pos));
+                        ?? Nearest(Foes(s).Where((e) => e.U.Caged != true && InUniform(e.U)).Select((e) => e.At));
                 }
                 case KeyPlaces.Floor:
                     return (s.FloorGear ?? new List<DroppedGear>()).First((d) => d.Gear.Kind == GearKinds.Key).Pos;

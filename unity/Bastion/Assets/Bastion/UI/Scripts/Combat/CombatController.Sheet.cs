@@ -24,7 +24,9 @@ namespace Bastion.UI.Combat
             var pistol = Content.Weapons[WeaponIds.Pistol].Name;
             // With no pistol (where the Armería counts them: Arturo, 01/11 #10) and nothing in the hand, the knife or the machete is all.
             var hasPistol = Content.HasPistol(u);
-            var blade = arms != null && !string.IsNullOrEmpty(arms.Melee) ? Content.FoundWeapons[arms.Melee].Name : Content.Weapons[WeaponIds.Knife].Name;
+            // Nothing in the belt (the knife in the pack or dropped: Gameplay, 24/11) says so; it strikes as with the knife.
+            var blade = Content.BareHanded(u) ? HudText.Bare.Name
+                : arms != null && !string.IsNullOrEmpty(arms.Melee) ? Content.FoundWeapons[arms.Melee].Name : Content.Weapons[WeaponIds.Knife].Name;
             var bare = arms != null && string.IsNullOrEmpty(arms.Primary) && !hasPistol;
             // The unit's own name for its weapon only with one in the hand: it said «Cuchillo» still with a pistol put on (0.11.5).
             var held = arms == null || !string.IsNullOrEmpty(arms.Primary);
@@ -74,9 +76,9 @@ namespace Bastion.UI.Combat
             Stat("Esquiva", dodge.ToString(), Lore.GuardText.Dodge(dodge) + "\n" + Lore.GuardText.Against);
             Stat("Defensa", defense.ToString(), Lore.GuardText.Defense(defense) + "\n" + Lore.GuardText.Against);
             if (u.Armor > 0) Stat("Blindaje", u.Armor.ToString());
-            void Carry(string key, string value) => v.Carries.Add(new SheetRowView { Key = key, Value = value });
+            void Carry(string key, string value, string tip = null) => v.Carries.Add(new SheetRowView { Key = key, Value = value, Tip = tip });
             var (weapon, extras) = ArmsOf(u);
-            Carry("Armas", string.Join(" · ", new[] { weapon }.Concat(extras)));
+            Carry("Armas", string.Join(" · ", new[] { weapon }.Concat(extras)), Content.BareHanded(u) ? HudText.Bare.Tip : null);
             var belt = u.Gear.Select(g =>
             {
                 var charge = Content.Items[g].Charges?.Keys.FirstOrDefault();
@@ -84,7 +86,9 @@ namespace Bastion.UI.Combat
             }).ToList();
             Carry("Cinturón", belt.Count > 0 ? string.Join(" · ", belt) : "Nada");
             if (u.Worn?.Count > 0) Carry("Puesto", string.Join(" · ", u.Worn.Select(w => Content.Items[w].Name)));
-            var pack = (u.Backpack ?? new List<Loot>()).Select(Lore.LootName).ToList();
+            // A run's soldier keeps its pack in Unit.Pack (RunPack), not in the old Backpack: it said «Vacía» with it full (24/11).
+            var pack = u.Pack != null ? u.Pack.Items.Select(p => Lore.GearName(p.Gear.Kind, p.Gear.Type, p.Gear.Count)).ToList()
+                : (u.Backpack ?? new List<Loot>()).Select(Lore.LootName).ToList();
             Carry("Mochila", pack.Count > 0 ? string.Join(" · ", pack) : "Vacía");
             v.Skills.AddRange(u.Perks.Select(p => Bastion.Engine.Board.Cells.FirstOrDefault(c => c.Perk == p)?.Name).Where(n => !string.IsNullOrEmpty(n)));
             // In a campaign, its board as in the Cuartel, not to be touched.

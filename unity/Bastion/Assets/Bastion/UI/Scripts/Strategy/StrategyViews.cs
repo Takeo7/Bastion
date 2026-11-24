@@ -158,6 +158,8 @@ namespace Bastion.UI.Strategy
         public List<string> Buttons = new List<string>();
         /// <summary>The level's cards (LevelPicker, as the start screen's) with this one picked; null, none (N8: a new game after one lost).</summary>
         public string Level;
+        /// <summary>High on the screen, under the top bar, the veil lighter: the claro's soldiers in sight under it (the premise, R21).</summary>
+        public bool High;
     }
 
     [Serializable]

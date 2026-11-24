@@ -1114,6 +1114,8 @@ namespace Bastion.UI.Combat
             // Those raised or arrived in the turn so far: a walk that names one (a noise they hear) waits for them (B8, z67).
             var born = new HashSet<string>();
             var waiting = new HashSet<string>();
+            // Where each walker began the turn (its chain's start): one whose walk doesn't go with the others still stands there.
+            var startOf = new Dictionary<string, Pos>();
             // Where someone still stands when the walks play: one of ours felled after, one whose own walk comes after.
             var held = new HashSet<int>();
             var at = new Dictionary<string, Pos>();
@@ -1170,6 +1172,7 @@ namespace Bastion.UI.Combat
                     {
                         chains[actor] = chain = new List<int>();
                         order.Add(actor);
+                        if (Where(actor) is Pos start) startOf[actor] = start;
                     }
                     chain.Add(i);
                     if (moved != null && moved.Path.Any(p => held.Contains(Grid.NodeOf(v, p)))) broken.Add(actor);
@@ -1187,6 +1190,21 @@ namespace Bastion.UI.Combat
                     if (moved != null && Where(moved.Unit) is Pos from) held.Add(Grid.NodeOf(v, from));
                 }
                 if (moved != null && moved.Path.Count > 0) at[moved.Unit] = moved.Path[moved.Path.Count - 1];
+            }
+            // Those whose walks go in order (their way through someone, or waiting for one raised) still stand where they began
+            // while the others walk: a walk over such a tile goes in order too, and so on (the 0.14.3's independent review, 8:
+            // one waiting for a raised one could be walked through).
+            for (var changed = true; changed;)
+            {
+                changed = false;
+                var standing = new HashSet<int>(order.Where(id => (broken.Contains(id) || waiting.Contains(id)) && startOf.ContainsKey(id)).Select(id => Grid.NodeOf(v, startOf[id])));
+                foreach (var id in order)
+                {
+                    if (broken.Contains(id) || waiting.Contains(id)) continue;
+                    if (!chains[id].Any(i => all[i].e is MovedEvent m && m.Path.Any(p => standing.Contains(Grid.NodeOf(v, p))))) continue;
+                    broken.Add(id);
+                    changed = true;
+                }
             }
             var walkers = order.Where(id => !broken.Contains(id) && !waiting.Contains(id) && chains[id].Any(i => all[i].e is MovedEvent)).ToList();
             var taken = new HashSet<int>(walkers.SelectMany(id => chains[id]));
@@ -3868,10 +3886,10 @@ namespace Bastion.UI.Combat
                 case MissionKinds.Hack: success = "Equipo en marcha"; break;
                 // An expedition's Rescate is a Saqueo too (N2, 17/11): what was found; and first, if the survivor got out in La
                 // Lata, that they join (Lore's line). Left without a seat, or dead, the log has said so.
-                case MissionKinds.Rescue when s.Run != null: success = RunJoined(s, stays) + RunHaul(s, stays); break;
+                case MissionKinds.Rescue when s.Run != null: success = RunJoined(s, stays) + RunHaul(s, stays, campaign); break;
                 case MissionKinds.Rescue: success = vip != null ? $"{vip}, a salvo" : "La persona retenida, a salvo"; break;
                 // (On an expedition, every stage that is a Saqueo underneath: normal, Asedio, Travesía, Guarida, the boss's.)
-                case MissionKinds.Scavenge: success = s.Run != null ? RunJoined(s, stays) + RunHaul(s, stays) : loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
+                case MissionKinds.Scavenge: success = s.Run != null ? RunJoined(s, stays) + RunHaul(s, stays, campaign) : loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
                 default: success = "No queda ninguno en pie"; break;
             }
             string why;
@@ -3948,7 +3966,7 @@ namespace Bastion.UI.Combat
         /// how many more. Not Looting.BroughtBack, the missions' of before (their backpacks, empty here: R4 said «Volvéis con
         /// las mochilas vacías» with 13 § aboard).
         /// </summary>
-        static string RunHaul(GameState s, bool stays)
+        static string RunHaul(GameState s, bool stays, CampaignState campaign)
         {
             var found = new List<Bastion.Engine.Gear>();
             // The one who joined too (a recruit coming home): what they carry comes home in the report (RunFights), so here
@@ -3961,13 +3979,21 @@ namespace Bastion.UI.Combat
                         if (Gears.InSlot(u.Kit, slot) is Bastion.Engine.Gear g) found.Add(g);
             }
             found = found.Where(g => g != null && GearNumber(g.Id) > s.Run.FirstGear).ToList();
+            // A survivor with no bed for them leaves in the squad's packs what fits there, found out there or not
+            // (Runs.HandOverPreview, as ApplyFight's HandOver): home too, as the report says (R23 B6: the card left it out);
+            // what finds no room, not (the 0.14.4's independent review, 4: it was counted all the same).
+            if (!stays && campaign != null && Runs.HandOverPreview(campaign, s) is RunNoBed handed) found.AddRange(handed.Gave);
             var list = new List<string>();
             var supplies = found.Where(g => g.Kind == GearKinds.Supplies).Sum(g => g.Count);
             if (supplies > 0) list.Add(Lore.GearA(GearKinds.Supplies, null, supplies));
             foreach (var same in found.Where(g => g.Kind != GearKinds.Supplies).GroupBy(g => (g.Kind, g.Type)))
                 list.Add(Lore.GearA(same.Key.Kind, same.Key.Type, same.Sum(g => Math.Max(1, g.Count))));
-            if (list.Count == 0) return HudText.Mission.NoHaul;
             if (list.Count > 4) list = list.Take(3).Append(HudText.Mission.HaulMore(list.Count - 3)).ToList();
+            // The reward too, where the stage gives one (as RunFights.ApplyFight: the boss's, a special's but an Élite's, La
+            // llave's or Saqueadores'), won: its figure is drawn with the report, which says it.
+            var kind = s.Run.NodeKind;
+            if (kind == NodeKinds.Boss || kind != NodeKinds.Elite && kind != NodeKinds.Key && kind != NodeKinds.Raiders && RunMap.Rewarded(kind)) list.Add(HudText.Mission.HaulReward);
+            if (list.Count == 0) return HudText.Mission.NoHaul;
             return HudText.Mission.Haul + Ui.List(list);
         }
 

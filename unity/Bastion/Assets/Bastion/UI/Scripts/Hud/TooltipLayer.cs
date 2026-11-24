@@ -43,6 +43,29 @@ namespace Bastion.UI.Hud
             // scheduled Place may come before its layout.
             box.RegisterCallback<GeometryChangedEvent>(_ => Place());
             Ui.Show(box, false);
+            // A panel hidden without being taken down (the board's totals in Soldados and Almacén, Pruebas 24/11): no leave
+            // nor detach comes, so its help is watched and goes with it; with the finger too.
+            layer.schedule.Execute(Watch).Every(WatchMs);
+        }
+
+        const long WatchMs = 150;
+
+        /// <summary>
+        /// The help shown goes once its element is out of sight: out of its panel, or it or one round it hidden (a test's
+        /// pinned one too).
+        /// </summary>
+        void Watch()
+        {
+            if (over == null || Shown(over)) return;
+            Hide();
+        }
+
+        static bool Shown(VisualElement e)
+        {
+            if (e.panel == null) return false;
+            for (var x = e; x != null; x = x.parent)
+                if (x.resolvedStyle.display == DisplayStyle.None || x.resolvedStyle.visibility == Visibility.Hidden) return false;
+            return true;
         }
 
         /// <summary>Back over everything (a layer added after it, as the game's menu).</summary>

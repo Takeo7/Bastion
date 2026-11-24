@@ -267,11 +267,16 @@ namespace Bastion.UI.Strategy
         public StrategyModalView Premise()
         {
             var c = State;
-            if ((c.MissionsFlown ?? 0) > 0 || c.Day > 1) return null;
+            // Under way: in the runs neither missions flown nor days rise, so a stage entered, an expedition on or a chapter
+            // done (Red's R23 B6: it came after stages played, on a computer that hadn't seen it).
+            if ((c.MissionsFlown ?? 0) > 0 || c.Day > 1 || (c.NodesPlayed ?? 0) > 0 || c.Run != null || (c.ChaptersDone ?? 0) > 0) return null;
+            // Its words say La Lata is the motorbike for two: only while it is.
+            if (c.Stash != null && Lore.RunTransport(Runs.SeatsOf(c)) != Lore.Moto) return null;
             var key = LocalMarks.Key("seenPremise", c);
             if (LocalMarks.Read(key) != null) return null;
             LocalMarks.Write(key, new[] { "1" });
-            var v = new StrategyModalView { Kind = "alert", Buttons = { "Entendido" } };
+            // High, so as not to cover the soldiers in the claro (R21).
+            var v = new StrategyModalView { Kind = "alert", Buttons = { "Entendido" }, High = true };
             v.Body.AddRange(Lore.Premise.Lines);
             return v;
         }

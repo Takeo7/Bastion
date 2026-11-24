@@ -25,6 +25,9 @@ namespace Bastion.UI.Combat
         static readonly Unity.Profiling.ProfilerMarker MFlags = new Unity.Profiling.ProfilerMarker("Bastion.UI.Hud.Flags");
         static readonly Unity.Profiling.ProfilerMarker MMarks = new Unity.Profiling.ProfilerMarker("Bastion.UI.Hud.Marks");
 
+        /// <summary>The picked one's keys the last time this player could act: kept, locked, while the screen is behind (RefreshHud).</summary>
+        (string id, List<AbilityView> keys) shownKeys;
+
         void RefreshHud()
         {
             if (Hud == null || State == null) return;
@@ -35,11 +38,18 @@ namespace Bastion.UI.Combat
             var mine = HasCommand();
             ActionBarView bar;
             using (MBar.Auto()) bar = new ActionBarView { Abilities = BarKeys() };
+            // The host ahead of the screen (the enemy's turn worked out, to the end even, and not played yet: R23 A1): one of
+            // mine still standing on screen keeps the keys it had, under the lock, till the screen gets there. An empty row
+            // told of their fall before it was seen.
+            if (CanAct()) shownKeys = (picked, bar.Abilities);
+            else if (bar.Abilities.Count == 0 && Shown.Outcome == null && shownKeys.id != null && shownKeys.id == picked && UnitById(Shown, picked) is Unit seen && seen.Alive)
+                bar.Abilities = shownKeys.keys;
             var u = Unit();
             // One inside La Lata too (T24): its Bajar waits for the command as any key.
             if ((u ?? Inside()) is Unit commanded && Commands(commanded) && CanAct() && !mine) bar.Lock = HudText.Turn.PartnerLock(PlayerName(s.Command));
             // Why the cards rest in the enemy's turn: the bar says it over itself (hud.ts setTurn).
-            else if (s.Outcome == null && (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien)) bar.Lock = HudText.Turn.EnemyLock;
+            // (Till the end is on screen: the host may know it while the enemy's turn still plays.)
+            else if (Shown.Outcome == null && (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien)) bar.Lock = HudText.Turn.EnemyLock;
             // The picked soldier's movement left, before the keys (Arturo, 5/11 #14).
             var shownUnit = u != null ? UnitById(Shown, u.Id) ?? u : null;
             if (shownUnit != null && shownUnit.Team == Teams.Xcom && shownUnit.Automaton == null && Paths.FullMoves(Shown, shownUnit) > 0)
@@ -58,8 +68,9 @@ namespace Bastion.UI.Combat
             // Without the command too (Arturo, 7/11): the key ends one's own turn, «A punto» until the partner's is over.
             // One of mine in play: the key ends its turn first (Arturo, 7/11, Ana's #5).
             var playing = InPlayMine();
-            // The stage over: no key to end a turn (Producto, 18/11: one left alone under the card).
-            var endMode = s.Outcome != null ? "over" : !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : (EndArmed && idle > 0) || (playing != null && WarnedLeft) ? "confirm" : playing != null && !EndArmed ? "done" : "act";
+            // The stage over: no key to end a turn (Producto, 18/11: one left alone under the card); over on screen, not
+            // only for the host (R23 A1: gone while the last enemy turn still played, the row empty).
+            var endMode = Shown.Outcome != null ? "over" : !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : (EndArmed && idle > 0) || (playing != null && WarnedLeft) ? "confirm" : playing != null && !EndArmed ? "done" : "act";
             // (With actions or movement left: the turn ends by itself only when none has either, Arturo 5/11 #14; Lore's words.)
             var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} sin terminar" : waiting;
             Hud.SetEndTurn(new EndTurnView
@@ -921,7 +932,8 @@ namespace Bastion.UI.Combat
                 Name = !string.IsNullOrEmpty(u.Nickname) ? $"{u.Name} «{u.Nickname}»" : u.Name,
                 Weapon = weapon,
                 WeaponIcon = WeaponIconOf(u),
-                WeaponTip = string.Join(" · ", new[] { weapon }.Concat(extras)),
+                WeaponTip = string.Join(" · ", new[] { weapon }.Concat(extras)) + (Content.BareHanded(u) ? "\n" + HudText.Bare.Tip : ""),
+                WeaponBare = weapon == HudText.Bare.Name,
             };
             // Its cover, a shield in its colour (Arturo, 7/11).
             var shown = UnitById(Shown, u.Id) ?? u;

@@ -229,6 +229,11 @@ namespace Bastion.Client.Units
             /// <summary>Where its root was as the last frame was stepped, and the last frame a walk had moved it by (Step; Sync leaves it on its way: OnItsWay).</summary>
             public Vector3 rootWas;
             public int movedIn = -9;
+            /// <summary>Stepped out of its tile to fire from the one beside it (Slide), and till when (the battle's clock) Sync leaves it there: SteppedOut.</summary>
+            public float outUntil;
+            public bool steppingHome;
+            /// <summary>Each step out or home, counted: a newer one ends the older (StepHomeFrom).</summary>
+            public int stepOut;
             public bool striking;
             /// <summary>The yaw it turns to (degrees; null, none: where it is) and how fast (unitViews.ts pose.yawTarget, turn).</summary>
             public float? yawTo;
@@ -528,6 +533,72 @@ namespace Bastion.Client.Units
         /// tile's middle and back out, 0.35 to 0.45 m, as a Sync fell in it (M11: one of the dead's blow as another's step settled).
         /// </summary>
         static bool Lunging(View v) => !WayOff && Application.isPlaying && v.striking;
+        /// <summary>
+        /// Whether it is out of its tile to fire from the one beside it (UI's shot from cover: Slide out, and back 1.1 s after
+        /// the shot): on the same tile as before, Sync leaves it where it is. The next event settled while it was out (the
+        /// death, the noise) put it on its own tile at a stroke, 1.5 m, and its slide home began there (M11: SaltosLab, 0 to 2
+        /// in a game of the bots'; CombatLab.Casos). For StepOutMost seconds at most: a shot cut short leaves it out no longer.
+        /// </summary>
+        static bool SteppedOut(View v) => !WayOff && Application.isPlaying && Time.time < v.outUntil;
+
+        /// <summary>
+        /// One stepped out (SteppedOut) that a Sync finds off its tile is not put on it: it steps back to it from where it
+        /// is, over StepHomeSeconds, once. (UI's own slide home comes 1.1 s after the shot, if the round is not over by
+        /// then; the events settled before it were what brought it home, at a stroke.) True while it is out or on its way.
+        /// </summary>
+        bool StepsHome(View v, Unit u)
+        {
+            // (One dead does not step: its body lies where it fell, as ever.)
+            if (!u.Alive || v.dead)
+            {
+                v.outUntil = 0;
+                return false;
+            }
+            if (!SteppedOut(v) || v.root == null || v.walking) return false;
+            var home = StandOf(v, v.place, MapSpace.StandAt(state, v.place));
+            if (Flat(home - v.root.position) > 2.2f * MapSpace.Tile)
+            {
+                v.outUntil = 0;
+                return false;
+            }
+            if (!v.steppingHome) _ = StepHomeFrom(v, home);
+            return true;
+        }
+
+        /// <summary>
+        /// Home from where it is, unless something else takes it meanwhile: a second shot stepping out again (Slide: a
+        /// newer step), its death, a move (its place another, a walk).
+        /// </summary>
+        async Awaitable StepHomeFrom(View v, Vector3 home)
+        {
+            v.steppingHome = true;
+            int step = ++v.stepOut;
+            var place = v.place;
+            try
+            {
+                var from = v.root.position;
+                for (float t = 0; t < StepHomeSeconds; t += Time.deltaTime)
+                {
+                    if (v.root == null || v.stepOut != step || v.walking || v.dead || !Same(v.place, place)) return;
+                    v.root.position = Vector3.Lerp(from, home, Mathf.SmoothStep(0, 1, t / StepHomeSeconds));
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                }
+                if (v.root != null && v.stepOut == step && !v.walking && !v.dead && Same(v.place, place)) v.root.position = home;
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                if (v.stepOut == step)
+                {
+                    v.steppingHome = false;
+                    v.outUntil = 0;
+                }
+            }
+        }
+        static bool Same(Pos a, Pos b) => a == b || (a != null && b != null && a.X == b.X && a.Y == b.Y && a.Z == b.Z);
+        const float StepHomeSeconds = 0.25f;
+        const float StepOutMost = 8;
+
         /// <summary>BASTION_SIN_CAMINO=1: put on its tile at every Sync as it walks, for the labs' «before» (M11).</summary>
         public static bool WayOff = Environment.GetEnvironmentVariable("BASTION_SIN_CAMINO") == "1";
 
@@ -1390,7 +1461,7 @@ namespace Bastion.Client.Units
                 // straight (Straighten) or round a corner is off the tiles' middles: put on its tile's it was there for a frame
                 // and back on its way the next, up to a tile off, four times in a dash of four tiles askew. Arturo's M11 of
                 // 23/11, SaltosLab. Its walk leaves it on its tile as it ends; one cut short, still again, is put on it here.)
-                if (v.alight < 0 && u.CarriedBy == null && !OnItsWay(v) && !Lunging(v) && !(still && (v.feeding || v.reachFor != null || v.dead || v.cage != null))) v.root.position = StandOf(v, v.place, MapSpace.StandAt(view, v.place));
+                if (v.alight < 0 && u.CarriedBy == null && !OnItsWay(v) && !Lunging(v) && !StepsHome(v, u) && !(still && (v.feeding || v.reachFor != null || v.dead || v.cage != null))) v.root.position = StandOf(v, v.place, MapSpace.StandAt(view, v.place));
                 // (Turned as the state has it, by its bars: the caged one's TurnedEvent, which UI's event player leaves to the view.)
                 if (v.cage != null && u.Alive && u.Facing is double facing && !v.walking && !v.barsLunge && !v.barsHeld && v.yawTo == null
                     && Mathf.Abs(Mathf.DeltaAngle(v.root.eulerAngles.y, YawOf(facing))) > 2) TurnTo(v, YawOf(facing));
@@ -2702,13 +2773,22 @@ namespace Bastion.Client.Units
         public async Awaitable Slide(string id, Vector3 to, float seconds, CancellationToken ct = default)
         {
             if (!views.TryGetValue(id, out var v)) return;
+            bool home = state != null && Flat(to - MapSpace.StandAt(state, v.place)) < 0.05f;
+            // (Home already, or on its way there by itself: StepsHome. Out again, a second shot on the heels of the first:
+            // this step ends that one, from where it is.)
+            if (home && (v.steppingHome || Flat(to - v.root.position) < 0.01f)) return;
+            v.stepOut++;
+            v.steppingHome = false;
             var from = v.root.position;
+            // (Out of its tile from now, or on its way back to it: Sync leaves it to this till it is home. SteppedOut.)
+            v.outUntil = Time.time + seconds + (home ? 0.05f : StepOutMost);
             for (float t = 0; t < seconds; t += Time.deltaTime)
             {
                 v.root.position = Vector3.Lerp(from, to, Mathf.SmoothStep(0, 1, t / seconds));
                 await Awaitable.NextFrameAsync(ct);
             }
             v.root.position = to;
+            if (home) v.outUntil = 0;
         }
 
         /// <summary>A blow at `target` (the claw's bite, `eats`: it kills and eats); `onHit` as it lands.</summary>

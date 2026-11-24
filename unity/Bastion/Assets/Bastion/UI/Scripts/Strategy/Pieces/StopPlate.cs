@@ -32,6 +32,16 @@ namespace Bastion.UI.Strategy
         /// </summary>
         float askedAt;
         const float AskGrace = 0.5f;
+        /// <summary>
+        /// The offers' list as it was scrolled, for the plate drawn again (a question opened or closed): it went back to the top,
+        /// and the second click of a double click landed on another row (the 0.14.4's independent review, 1). By whose they are.
+        /// </summary>
+        ScrollView offersList;
+        Vector2 offersAt;
+        string offersOf;
+        /// <summary>The Trueque's whole words, scrolling when the plate is taller than the room (runstop__body), kept as the offers'.</summary>
+        ScrollView bodyList;
+        Vector2 bodyAt;
 
         public StopPlate(VisualElement parent, TooltipLayer tips, Func<string, Sprite> icon, IStrategyHandlers handlers)
         {
@@ -40,7 +50,30 @@ namespace Bastion.UI.Strategy
             this.handlers = handlers;
             Root = Ui.El("runstop", parent);
             Ui.Show(Root, false);
+            parent.RegisterCallback<GeometryChangedEvent>(_ => FitHeight());
+            Root.RegisterCallback<GeometryChangedEvent>(_ => FitHeight());
         }
+
+        /// <summary>
+        /// The Trueque's plate no lower than the map's foot (the 0.14.4's review, 5: at 130 % on 1280 × 800 its two sides went one
+        /// under the other and the second ran off the screen): its words scroll inside it. Other plates as they were.
+        /// </summary>
+        void FitHeight()
+        {
+            var parent = Root.parent;
+            if (!Root.ClassListContains("runstop--trade") || parent == null || float.IsNaN(parent.layout.height) || float.IsNaN(Root.layout.y))
+            {
+                if (fitRoom >= 0) Root.style.maxHeight = StyleKeyword.Null;
+                fitRoom = -1;
+                return;
+            }
+            var room = Mathf.Round(parent.layout.height - Root.layout.y - 8);
+            if (room <= 0 || Mathf.Abs(room - fitRoom) < 1) return;
+            fitRoom = room;
+            Root.style.maxHeight = room;
+        }
+
+        float fitRoom = -1;
 
         public void Set(StopView v)
         {
@@ -51,18 +84,38 @@ namespace Bastion.UI.Strategy
             var k = Ui.Key(v) + "|" + confirming;
             if (k == key) return;
             key = k;
+            if (offersList != null) offersAt = offersList.scrollOffset;
+            if (bodyList != null) bodyAt = bodyList.scrollOffset;
+            offersList = bodyList = null;
+            if (v?.OffersFrom != offersOf) offersAt = bodyAt = Vector2.zero;
+            offersOf = v?.OffersFrom;
             Root.Clear();
             if (v == null) return;
+            // The Trueque (M10): its words in a list that scrolls when the plate is taller than the room (FitHeight).
+            var trade = v.Offers != null;
+            Root.EnableInClassList("runstop--trade", trade);
+            VisualElement into = Root;
+            if (trade)
+            {
+                var body = new ScrollView(ScrollViewMode.Vertical);
+                body.AddToClassList("runstop__body");
+                body.AddToClassList("settle-scroll");
+                body.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+                Root.Add(body);
+                into = body.contentContainer;
+                bodyList = body;
+                KeepScroll(body, bodyAt);
+            }
             // The small line over the title only when it says something else (Arturo, 17/11: «TRUEQUE / Trueque» said it
             // twice); a Suceso's name under its kind keeps it.
             if (!string.IsNullOrEmpty(v.Kicker) && !string.Equals(v.Kicker, v.Title, System.StringComparison.OrdinalIgnoreCase))
-                Ui.Text(v.Kicker.ToUpperInvariant(), "runstop__kicker font-title", Root);
-            Ui.Text(v.Title ?? "", "runstop__title font-title", Root);
-            if (!string.IsNullOrEmpty(v.Text)) Ui.Text(v.Text, "runstop__text", Root);
+                Ui.Text(v.Kicker.ToUpperInvariant(), "runstop__kicker font-title", into);
+            Ui.Text(v.Title ?? "", "runstop__title font-title", into);
+            if (!string.IsNullOrEmpty(v.Text)) Ui.Text(v.Text, "runstop__text", into);
 
             if (v.Wares.Count > 0 || !string.IsNullOrEmpty(v.Purse))
             {
-                var purse = Ui.El("runstop__purse", Root);
+                var purse = Ui.El("runstop__purse", into);
                 // «Tus soldados llevan [95 and the crate].»: a stop after it, close to the crate.
                 var line = Ui.El("runstop__purse-line", purse);
                 var tail = StrategyText.Runs.PurseAfter;
@@ -73,9 +126,8 @@ namespace Bastion.UI.Strategy
                 if (!string.IsNullOrEmpty(v.PurseNote)) Ui.Text(v.PurseNote, "runstop__for muted", purse);
                 // The Trueque's two sides (M10): what the trader has, and what the chosen soldier has for him; side by side
                 // where they fit, the second under the first where not.
-                var sides = v.Offers != null ? Ui.El("runstop__sides", Root) : Root;
-                Root.EnableInClassList("runstop--trade", v.Offers != null);
-                var has = v.Offers != null ? Ui.El("runstop__side", sides) : Root;
+                var sides = v.Offers != null ? Ui.El("runstop__sides", into) : into;
+                var has = v.Offers != null ? Ui.El("runstop__side", sides) : into;
                 if (v.Offers != null) Ui.Text(StrategyText.Runs.Wares.ToUpperInvariant(), "runstop__side-head font-title", has);
                 var list = Ui.El("runstop__wares", has);
                 foreach (var w in v.Wares) Ware(list, w, false);
@@ -89,16 +141,18 @@ namespace Bastion.UI.Strategy
                     // The game's thin and faint bar (the sides' and the settlement's), not Unity's.
                     offered.AddToClassList("runstop__offers");
                     offered.AddToClassList("settle-scroll");
-                    // (Never sideways: a row asking, with «No» beside «Cambiar», is narrowed, not scrolled.)
+                    // (Never sideways: a row asking grows a line under it, never wider.)
                     offered.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
                     offer.Add(offered);
                     foreach (var w in v.Offers) Ware(offered.contentContainer, w, true);
+                    offersList = offered;
+                    KeepScroll(offered, offersAt);
                 }
             }
 
             if (v.Options.Count > 0)
             {
-                var options = Ui.El("runstop__options", Root);
+                var options = Ui.El("runstop__options", into);
                 foreach (var o in v.Options)
                 {
                     var index = o.Index;
@@ -114,12 +168,12 @@ namespace Bastion.UI.Strategy
                     }
                 }
             }
-            if (!string.IsNullOrEmpty(v.Vote)) Ui.Text(v.Vote, "runstop__vote muted", Root);
-            if (!string.IsNullOrEmpty(v.Outcome)) Ui.Text(v.Outcome, "runstop__outcome", Root);
+            if (!string.IsNullOrEmpty(v.Vote)) Ui.Text(v.Vote, "runstop__vote muted", into);
+            if (!string.IsNullOrEmpty(v.Outcome)) Ui.Text(v.Outcome, "runstop__outcome", into);
 
             if (!string.IsNullOrEmpty(v.Leave))
             {
-                var foot = Ui.El("runstop__foot", Root);
+                var foot = Ui.El("runstop__foot", into);
                 // An event not answered yet: no «Seguir» greyed under its two cards, which are what is pressed (Producto's
                 // review, 23/11, B19); why, in its place.
                 if (v.LeaveWhy != null && v.Options.Count > 0) Ui.Text(v.LeaveWhy, "runstop__waiting muted", foot);
@@ -151,6 +205,18 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>A ware: its picture, name, what it costs and «Cambiar»; offered (M10), what it pays and «Cambiar» to sell.</summary>
+        /// <summary>A list drawn again where it was scrolled to, once laid out (before, the offset is clamped to nothing).</summary>
+        static void KeepScroll(ScrollView list, Vector2 at)
+        {
+            if (at == Vector2.zero) return;
+            void Back(GeometryChangedEvent e)
+            {
+                list.scrollOffset = at;
+                list.UnregisterCallback<GeometryChangedEvent>(Back);
+            }
+            list.RegisterCallback<GeometryChangedEvent>(Back);
+        }
+
         void Ware(VisualElement list, WareView w, bool offered)
         {
             var row = Ui.El("runstop__ware", list);
@@ -172,18 +238,18 @@ namespace Bastion.UI.Strategy
             var asking = offered && confirming == w.Gear.Id;
             var name = Ui.Text(w.Gear.Name, "runstop__ware-name", words);
             tips.Attach(name, w.Gear.Tip);
-            // What is worn goes for good: asked first, in its row (its name, the question under it, «Cambiar» and «No»).
-            if (asking) Ui.Text(StrategyText.Runs.SellWorn(w.Gear.Kind, w.Gear.Type, w.Gear.Count, w.Price), "runstop__ware-ask", words);
-            else if (w.Why != null) Ui.Text(w.Why, "runstop__ware-why", words);
+            if (w.Why != null) Ui.Text(w.Why, "runstop__ware-why", words);
             else if (w.Note != null) Ui.Text(w.Note, "runstop__ware-note muted", words);
             SuppliesMark.Make(row, w.Price, "supplies-mark--small runstop__price" + (offered ? " runstop__price--gain" : ""));
             var ware = w.Gear.Id;
             var worn = offered && w.Note != null;
             var b = new Button(() =>
             {
+                // For a moment after a question opens or closes, no key of the plate buys or sells: the second click of a
+                // double click lands on the plate drawn again, on whatever row is there (the 0.14.4's independent review, 1).
+                if (Time.realtimeSinceStartup - askedAt < AskGrace) return;
                 if (!offered) handlers.OnBuy(ware);
                 else if (worn && confirming != ware) Ask(ware);
-                else if (worn && Time.realtimeSinceStartup - askedAt < AskGrace) return;
                 else
                 {
                     confirming = null;
@@ -197,12 +263,17 @@ namespace Bastion.UI.Strategy
                 b.SetEnabled(false);
                 tips.Attach(b, w.Why);
             }
+            // What is worn goes for good: asked first, on a line of its own under the row, which stays as it was: «Cambiar»
+            // where it was (a double click presses it twice, the second heeding nothing for AskGrace), «Cancelar» on the
+            // other side, under the picture, and the question beside it under the name, room enough for it (R23 B7).
             if (asking)
             {
                 row.AddToClassList("runstop__ware--asking");
+                var below = Ui.El("runstop__ware-below", row);
                 var no = new Button(() => Ask(null)) { text = StrategyText.Runs.SellNo };
                 Ui.AddClasses(no, "runstop__buy runstop__no font-title");
-                row.Add(no);
+                below.Add(no);
+                Ui.Text(StrategyText.Runs.SellWorn(w.Gear.Kind, w.Gear.Type, w.Gear.Count, w.Price), "runstop__ware-ask", below);
             }
         }
 

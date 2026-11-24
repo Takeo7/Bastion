@@ -195,6 +195,8 @@ namespace Bastion.UI.Hud
         /// <summary>The weapon in the hand's picture, an id of the HUD's table (U29); null, the rifle's as before.</summary>
         public string WeaponIcon;
         public string WeaponTip;
+        /// <summary>Nothing in the hand nor in the belt (Content.BareHanded): «Sin cuchillo», its knife's picture dimmed (Lore, 24/11).</summary>
+        public bool WeaponBare;
         /// <summary>A weapon of the Armería's state and improvements (arms.ts wearMarks): «GASTADA» (worn), «ROTA» (broken), «+2» (mods).</summary>
         public List<TagView> WeaponMarks = new List<TagView>();
         /// <summary>Its backpack, where there is anything to search or it carries something (game.ts packView); null, none.</summary>

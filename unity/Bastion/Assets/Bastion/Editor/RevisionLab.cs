@@ -45,6 +45,9 @@ namespace Bastion.EditorTools
                 Put(u, 1 + 2 * k, y, -Math.PI / 2);
                 state.Units.Add(u);
                 UnitViews.ArtsForLab[u.Id] = arts[k];
+                // (BASTION_ACC=silencer,scope: the mods its gun shows, cuadro 145's; UnitViews.Mods.)
+                if (Environment.GetEnvironmentVariable("BASTION_ACC") is string shown)
+                    UnitViews.ModsForLab[u.Id] = shown.Split(',').Select(m => m == "silencer" ? WeaponModIds.Silencer : m == "scope" ? WeaponModIds.Scope : null).Where(m => m != null).ToArray();
                 string label = arts[k];
                 if (palms != null && k < palms.Length && palms[k] != "-")
                 {

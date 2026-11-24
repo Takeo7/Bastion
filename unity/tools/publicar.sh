@@ -121,10 +121,17 @@ probar() {
   prefsMark() { [ -f "$prefs" ] && echo "$(stat -f '%Sm %z' "$prefs") $(shasum -a 256 "$prefs" | cut -d' ' -f1)" || echo "sin archivo"; }
   prefsBefore=$(prefsMark)
   appFaults=0
+  # The measuring room on a port of its own, on 127.0.0.1 alone (Red, 24/11): on the game's default one (41391) another
+  # session's app, joining «127.0.0.1» with no port, came into it (Pruebas, 05:28). PUBLICAR_PUERTO changes it; taken, stop.
+  trialPort=${PUBLICAR_PUERTO:-3400}
+  if lsof -nP -iTCP:$trialPort -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "El puerto $trialPort, el de la sala de medida, está ocupado: «PUBLICAR_PUERTO=<otro> $0 …»."
+    exit 1
+  fi
   for mode in ciudad base; do
     data=$out/app-$mode
     rm -rf "$data"; mkdir -p "$data"
-    BASTION_DATOS=$data BASTION_ANFITRION=Medida BASTION_SEMILLA=7 BASTION_MEDIR=$mode \
+    BASTION_DATOS=$data BASTION_ANFITRION=Medida BASTION_SEMILLA=7 BASTION_MEDIR=$mode BASTION_PUERTO=$trialPort BASTION_SOLO_LOCAL=1 \
       "$trial/Contents/MacOS/Bastion" -logFile "$data/Player.log"
     code=$?
     faults=$(grep -c "Exception" "$data/Player.log")

@@ -42,6 +42,7 @@ namespace Bastion.UI.Strategy
             host.Clear();
             vote = null;
             Ui.Show(host, v != null);
+            host.EnableInClassList("strat-modal--high", v?.High == true);
             if (v == null) return;
             if (opening) sound?.Invoke("paper");
             // The level's (N8), on the start screen's plate rather than the torn panel: the same piece as there.

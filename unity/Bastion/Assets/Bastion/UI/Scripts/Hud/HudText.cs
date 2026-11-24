@@ -179,6 +179,11 @@ namespace Bastion.UI.Hud
             public const string Haul = "Botín a salvo: ";
             public const string NoHaul = "No habéis encontrado nada";
             public static string HaulMore(int n) => $"{n} más";
+            /// <summary>
+            /// The stage's reward, last on the haul (R23 B6; Lore to confirm): drawn as the report is made (RunFights.ApplyFight),
+            /// so the card can't say how much; the report does.
+            /// </summary>
+            public const string HaulReward = "la recompensa";
             public const string RunToBase = "VOLVER A LA BASE";
             public const string RunReturning = "VOLVIENDO A LA BASE…";
             public const string RunGoOn = "SEGUIR LA EXPEDICIÓN";
@@ -408,6 +413,16 @@ namespace Bastion.UI.Hud
             public const string Melee = "CaC";
         }
 
+        /// <summary>
+        /// A soldier with no blade in the belt (Content.BareHanded: the knife put in the pack, dropped, or left at the base),
+        /// who strikes as with the knife (Lore, 24/11: not «A mano», read as «near», nor «Puños», read as weaker).
+        /// </summary>
+        public static class Bare
+        {
+            public const string Name = "Sin cuchillo";
+            public const string Tip = "No lleva arma cuerpo a cuerpo puesta. Golpea igual que con el cuchillo.";
+        }
+
         public static class Arrows
         {
             public static string Tip(int n) => n == 0 ? "Sin flechas" : n == 1 ? "1 flecha en la mochila" : $"{n} flechas en la mochila";
@@ -548,6 +563,11 @@ namespace Bastion.UI.Hud
             public const string KitHead = "EQUIPO";
             public const string PackHead = "MOCHILA";
             public const string GiveHead = "DAR A";
+            /// <summary>
+            /// Under a run's pack, as the Almacén's line (Pruebas, 24/11; Lore to confirm): Mayús + clic in a fight, the floor's
+            /// and what is on to the pack, the pack's to the floor (equipping is from the pack, M3). No line with the finger.
+            /// </summary>
+            public const string Hint = "Arrastra para mover. Mayús + clic: lo del suelo y lo puesto, a la mochila; lo de la mochila, al suelo.";
             public const string NotThere = "Ahí no va.";
             public const string UseSelf = "Usar";
             public static string HealOther(string name) => $"Curar a {name}";

@@ -258,6 +258,49 @@ namespace Bastion.Engine.Tests
             Assert.Equal(100, RunsHelpers.Squad(c)[0].Kit!.Pack.Items.Where((p) => p.Gear.Kind == GearKinds.Supplies).Sum((p) => p.Gear.Count));
         }
 
+        [Fact(DisplayName = "se une › at the cap, what they'll leave and lose, before the fight is applied: as it comes out, nothing changed")]
+        public void HandOverPreviewIsWhatComesOut()
+        {
+            var (c, s, vip) = AtTheCap();
+            var squad = Squad(s);
+            foreach (var u in squad)
+            {
+                u.Pack!.Items.Clear();
+                for (var y = 0; y < u.Pack.H; y++)
+                    if (u != squad[0] || y < u.Pack.H - 1) Assert.True(RunPack.Put(u.Pack, Gears.NewGear(c, GearKinds.Weapon, FoundWeaponIds.AssaultRifle), 0, y, false));
+            }
+            var last = squad[0].Pack!.H - 1;
+            Assert.True(RunPack.Put(squad[0].Pack!, Gears.NewGear(c, GearKinds.Supplies, null, 80), 0, last, false));
+            Assert.True(RunPack.Put(squad[0].Pack!, Gears.NewGear(c, GearKinds.Weapon, FoundWeaponIds.Bat), 1, last, false));
+            Assert.True(RunPack.Put(vip.Pack!, Gears.NewGear(c, GearKinds.Weapon, FoundWeaponIds.AssaultRifle), 0, 0, false));
+            Assert.True(RunPack.Put(vip.Pack!, Gears.NewGear(c, GearKinds.Supplies, null, 50), 0, 1, false));
+            Assert.True(RunPack.Put(vip.Pack!, Gears.NewGear(c, GearKinds.Mags, null), 0, 2, false));
+            Board(s, squad.Append(vip));
+            // Before the fight is applied: nothing of the campaign nor the fight changed by asking.
+            var (campaign, fight) = (Json.Write(c), Json.Write(s));
+            var preview = Runs.HandOverPreview(c, s)!;
+            Assert.Equal((campaign, fight), (Json.Write(c), Json.Write(s)));
+            string Of(IEnumerable<Gear> gear) => string.Join(",", gear.Select((g) => $"{g.Id}×{g.Count}"));
+            var noBed = EndFight(c, s, Outcomes.Victory, EndReasons.Objective).Run!.NoBed!;
+            Assert.Equal((Of(noBed.Gave), Of(noBed.Lost)), (Of(preview.Gave), Of(preview.Lost)));
+            // The packs full but for the room on the pile of 80 §: 20 § of their 50 go, the rifle, 30 § and the magazines don't.
+            Assert.Equal((GearKinds.Supplies, 20), (Assert.Single(preview.Gave).Kind, preview.Gave[0].Count));
+            Assert.Equal(new[] { GearKinds.Weapon, GearKinds.Supplies, GearKinds.Mags }, preview.Lost.Select((g) => g.Kind));
+            Assert.Equal(30, preview.Lost[1].Count);
+        }
+
+        [Fact(DisplayName = "se une › no preview of what they leave when they stay, or were never brought out")]
+        public void NoHandOverPreviewWhenTheyStay()
+        {
+            var (c, s) = Fight(NodeKinds.Rescue, 3);
+            var vip = Join(s);
+            Assert.Null(Runs.HandOverPreview(c, s));
+            Board(s, Squad(s).Append(vip));
+            Assert.Null(Runs.HandOverPreview(c, s));
+            var (d, t, _) = AtTheCap();
+            Assert.Null(Runs.HandOverPreview(d, t));
+        }
+
         [Fact(DisplayName = "se une › whether they'll stay, before the fight is applied: the beds of the squad fallen in it count free")]
         public void WhetherTheyStay()
         {

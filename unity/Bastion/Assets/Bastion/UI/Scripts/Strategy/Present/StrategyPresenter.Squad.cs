@@ -210,8 +210,10 @@ namespace Bastion.UI.Strategy
             var out_ = new List<Bastion.Client.Settlement.LineupEntry>();
             if (report && c.LastReport != null)
             {
+                // One left outside La Lata is alive and not on the road: their pad empty, no figure nor cross (Producto's
+                // cuadro, 24/11; their card says «SE QUEDÓ FUERA»). The scene draws a cross for one it can't find.
                 foreach (var e in ReportOrder(c, c.LastReport))
-                    out_.Add(new Bastion.Client.Settlement.LineupEntry { SoldierId = e.Id, Colour = PlayerColor(e.Owner), Status = e.Status == ReportStatuses.Lost ? ReportStatuses.Dead : e.Status });
+                    out_.Add(e.Status == ReportStatuses.Lost ? null : new Bastion.Client.Settlement.LineupEntry { SoldierId = e.Id, Colour = PlayerColor(e.Owner), Status = e.Status });
                 return out_;
             }
             // The runs: La Lata's seats, the squad that goes out and the free ones.

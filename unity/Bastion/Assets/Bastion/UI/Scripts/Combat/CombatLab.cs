@@ -106,6 +106,8 @@ namespace Bastion.UI.Combat
         {
             public GameState State { get; set; }
             public List<long> Rng { get; set; }
+            /// <summary>The campaign as the squad took off: the app's CombatSession gives it (the end card's survivor with a bed or not).</summary>
+            public CampaignState Campaign { get; set; }
         }
 
         /// <summary>A recorded order (record-step2.ts): what was asked, the events it gave, and the dice before it.</summary>
@@ -125,6 +127,7 @@ namespace Bastion.UI.Combat
         Rng rng;
         CombatController control;
         EventPlayer player;
+        CampaignState savedCampaign;
         readonly Dictionary<string, Transform> bodies = new Dictionary<string, Transform>();
         Material squad;
         Material enemy;
@@ -158,6 +161,7 @@ namespace Bastion.UI.Combat
             {
                 var room = Json.Read<SavedRoom>(File.ReadAllText(path));
                 file.State = room.State;
+                savedCampaign = room.Campaign;
                 rng = room.Rng != null ? new Rng(room.Rng) : new Rng(0);
             }
             else rng = new Rng(file.RngSeed);
@@ -245,6 +249,8 @@ namespace Bastion.UI.Combat
                 var first = mine.Units.FirstOrDefault(x => x.Team == Teams.Xcom && x.Alive);
                 if (first != null) first.CampaignId = campaign.Soldiers[0].Id;
             }
+            // A room's save, its own campaign, as the app's session has it (BASTION_LAB_CAMPANA's sample over it).
+            else if (savedCampaign != null) control.Campaign = () => savedCampaign;
             if (Hud != null)
             {
                 Hud.MenuChose += control.MenuChose;
@@ -555,6 +561,12 @@ namespace Bastion.UI.Combat
                             // Three of the dead and one of the living arriving where the squad sees them, nearest the edge
                             // (Arrivals: in on foot from it); «-dentro», farthest from it (up out of the dust where they are).
                             ArriveInSight(what == "llegada-dentro");
+                            break;
+                        case "final":
+                            // A save of a fight already over (its Outcome set): its end card, as its last event would put it up
+                            // (R23 B6: the card of a survivor with no bed).
+                            Debug.Log($"[lab] final: {control.State.Outcome ?? "ninguno"}, {control.State.OutcomeReason ?? "sin razón"}");
+                            if (control.State.Outcome != null) player?.ShowOutcome(control.State.Outcome, control.State.OutcomeReason ?? "objective");
                             break;
                         case "botin":
                             // The first soldier two tiles from the nearest shut loot box, and the fog shown again from there:

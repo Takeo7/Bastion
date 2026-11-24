@@ -147,6 +147,13 @@ namespace Bastion.UI.Strategy
         public string Tip;
         /// <summary>The stage's report (U10): «1 punto por gastar», a key to the soldier's board; null, none.</summary>
         public string Learn;
+        /// <summary>
+        /// One who never became a soldier (Id «»: the survivor left outside La Lata, R23 B8): their bust's own key, their look
+        /// as the fight had it (null: a body of their sex by their name) and the seed they were dressed by there.
+        /// </summary>
+        public string Bust;
+        public Bastion.Engine.Appearance Look;
+        public string BustSeed;
     }
 
     [Serializable]

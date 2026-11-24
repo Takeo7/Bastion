@@ -160,29 +160,12 @@ namespace Bastion.EditorTools
         /// </summary>
         public static void Manos()
         {
-            // (Where each piece goes worked out now, out of play, by the gun's mesh: in play a mesh's vertices can't be read.)
-            var catalog = FigureCatalog.Load();
-            var pieces = Pieces();
-            string[] kinds = (Environment.GetEnvironmentVariable("BASTION_ACC") ?? "silencer,scope").Split(',');
+            // (The game's own way since cuadro 145: UnitViews.Mods, by each gun's WeaponArt; BASTION_ACC=silencer,scope names the mods, «ninguno» none.)
+            var kinds = (Environment.GetEnvironmentVariable("BASTION_ACC") ?? "silencer,scope").Split(',')
+                .Select(k => k == "silencer" ? Bastion.Engine.WeaponModIds.Silencer : k == "scope" ? Bastion.Engine.WeaponModIds.Scope : null).Where(k => k != null).ToArray();
             var places = new Dictionary<string, List<(GameObject piece, Vector3 at)>>();
-            foreach (string id in (Environment.GetEnvironmentVariable("BASTION_ARMAS") ?? "rifle").Split(','))
-            {
-                var art = Anims.Weapon(id.Trim());
-                var prefab = art != null ? catalog.Weapon(art.fbx) : null;
-                if (prefab == null) continue;
-                var gun = UnityEngine.Object.Instantiate(prefab).transform;
-                foreach (var part in gun.GetComponentsInChildren<Transform>(true).Where(x => x != gun && (x.name.Contains("Silencer") || x.name.Contains("Sheath"))).ToList()) part.gameObject.SetActive(false);
-                string mesh = gun.GetComponentsInChildren<MeshFilter>().Select(mf => mf.sharedMesh).FirstOrDefault(m => m != null)?.name ?? "";
-                Dress(gun, id, kinds, pieces, Points(gun, gun), true);
-                var list = new List<(GameObject, Vector3)>();
-                foreach (Transform child in gun)
-                    if (kinds.Any(k => pieces.TryGetValue(k, out string path) && AssetDatabase.LoadAssetAtPath<GameObject>(path) is GameObject source && child.name.StartsWith(source.name)))
-                        list.Add((AssetDatabase.LoadAssetAtPath<GameObject>(pieces[kinds.First(k => pieces.TryGetValue(k, out string path) && child.name.StartsWith(System.IO.Path.GetFileNameWithoutExtension(path)))]), child.localPosition));
-                places[mesh] = list;
-                Debug.Log($"[accesorio] {id}: mesh {mesh}, {list.Count} pieces to put on in play");
-                UnityEngine.Object.DestroyImmediate(gun.gameObject);
-            }
             CombatLab.Agarres();
+            foreach (string id in (Environment.GetEnvironmentVariable("BASTION_ARMAS") ?? "rifle").Split(',')) UnitViews.ModsForLab["lab-" + id.Trim()] = kinds;
             EditorApplication.playModeStateChanged += change =>
             {
                 if (change != PlayModeStateChange.EnteredPlayMode) return;
@@ -195,6 +178,50 @@ namespace Bastion.EditorTools
             public Dictionary<string, List<(GameObject piece, Vector3 at)>> places;
             readonly HashSet<Transform> done = new HashSet<Transform>();
 
+            readonly List<(Transform gun, string mesh)> dressed = new List<(Transform, string)>();
+            Camera eye;
+            int frame;
+            readonly string folder = Environment.GetEnvironmentVariable("BASTION_ACC_FOTOS");
+            readonly float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_ACC_DIST"), System.Globalization.NumberStyles.Float, CultureInfo.InvariantCulture, out float d) ? d : 24;
+            readonly int every = int.TryParse(Environment.GetEnvironmentVariable("BASTION_ACC_CADA"), out int n) && n > 0 ? n : 12;
+
+            /// <summary>
+            /// BASTION_ACC_FOTOS=folder: every BASTION_ACC_CADA frames (12), each dressed gun's soldier from the game's camera at
+            /// BASTION_ACC_DIST tiles (24), from its four sides (the player turns the camera by quarters): folder/&lt;mesh&gt;-&lt;0..3&gt;/t&lt;seconds&gt;.png,
+            /// the game's frame cropped to its middle 400 pixels of 1000, as CombatLab's Film.
+            /// </summary>
+            void LateUpdate()
+            {
+                if (folder == null || dressed.Count == 0 || ++frame % every != 0) return;
+                if (eye == null)
+                {
+                    eye = new GameObject("Cámara de accesorios").AddComponent<Camera>();
+                    eye.enabled = false;
+                    eye.farClipPlane = 400;
+                    eye.clearFlags = CameraClearFlags.SolidColor;
+                    eye.backgroundColor = new Color(0.72f, 0.78f, 0.86f);
+                }
+                foreach (var (gun, mesh) in dressed)
+                {
+                    if (gun == null) continue;
+                    var root = gun;
+                    while (root.parent != null && root.parent.name != "Unidades") root = root.parent;
+                    var on = root.position + Vector3.up * 0.9f;
+                    eye.fieldOfView = 40;
+                    Bastion.Client.Map.MapSpace.Aim(eye, on, off);
+                    var from = eye.transform.position - on;
+                    eye.fieldOfView = 2 * Mathf.Atan(Mathf.Tan(20 * Mathf.Deg2Rad) * 400 / 1000f) * Mathf.Rad2Deg;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        eye.transform.position = on + Quaternion.Euler(0, 90 * k, 0) * from;
+                        eye.transform.LookAt(on);
+                        string into = System.IO.Path.Combine(folder, mesh + "-" + k);
+                        System.IO.Directory.CreateDirectory(into);
+                        Shots.Render(eye, 400, 400, System.IO.Path.Combine(into, FormattableString.Invariant($"t{Time.time:00.00}.png")));
+                    }
+                }
+            }
+
             void Update()
             {
                 if (Time.time < 1 || places == null) return;
@@ -203,16 +230,80 @@ namespace Bastion.EditorTools
                 {
                     if (t.name != "arma" || !done.Add(t)) continue;
                     string mesh = t.GetComponentsInChildren<MeshFilter>().Select(mf => mf.sharedMesh).FirstOrDefault(m => m != null)?.name ?? "";
-                    if (!places.TryGetValue(mesh, out var list)) continue;
-                    foreach (var (piece, at) in list)
-                    {
-                        var made = Instantiate(piece, t, false).transform;
-                        made.localRotation = Quaternion.identity;
-                        made.localPosition = at;
-                        foreach (var c in made.GetComponentsInChildren<Collider>()) Destroy(c);
-                    }
-                    Debug.Log($"[accesorio] dressed in play: {mesh}, {list.Count} pieces");
+                    Debug.Log($"[accesorio] in play: {mesh}, with {string.Join(", ", t.Cast<Transform>().Select(c => c.name))}");
+                    dressed.Add((t, mesh));
                 }
+            }
+        }
+
+        /// <summary>
+        /// Synty's scopes, red dots and silencers side by side, from their right, each with its name and its box (cm), to pick
+        /// which goes on our guns (cuadro 145: a lower scope).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.AccesoriosLab.Piezas -shotCamera "Shot camera" -shotSize 2000x1500 -shotOut &lt;file&gt;
+        /// </summary>
+        public static void Piezas()
+        {
+            var paths = AssetDatabase.FindAssets("t:Prefab", new[] { Military + "Scopes", Military + "Attachments", Apocalypse.TrimEnd('/') })
+                .Select(AssetDatabase.GUIDToAssetPath).Where(q => q.Contains("Scope") || q.Contains("Reddot") || q.Contains("Silencer") || q.Contains("Sight")).OrderBy(q => q).ToList();
+            const int Across = 6;
+            const float Wide = 0.62f, High = 0.36f;
+            for (int k = 0; k < paths.Count; k++)
+            {
+                var piece = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(paths[k])).transform;
+                var box = Box(Points(piece, piece));
+                var at = new Vector3(0, -(k / Across) * High, (k % Across) * Wide);
+                piece.position = at - new Vector3(0, box.min.y, box.center.z);
+                string name = System.IO.Path.GetFileNameWithoutExtension(paths[k]).Replace("SM_Wep_Mod_", "");
+                Label(FormattableString.Invariant($"{name}  {box.size.z * 100:0}x{box.size.y * 100:0} cm"), at + new Vector3(0, -0.06f, -0.28f));
+                Debug.Log(FormattableString.Invariant($"[accesorio] pieza {paths[k]}: box {F(box.min)} to {F(box.max)}"));
+            }
+            int rows = (paths.Count + Across - 1) / Across;
+            var sun = new GameObject("Sol").AddComponent<Light>();
+            sun.type = LightType.Directional;
+            sun.intensity = 1.1f;
+            sun.transform.rotation = Quaternion.Euler(35, -70, 0);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.55f, 0.55f, 0.58f);
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.80f, 0.82f, 0.85f);
+            camera.orthographic = true;
+            float height = rows * High + 0.1f, width = Across * Wide;
+            camera.transform.position = new Vector3(6, 0.22f - height / 2, -0.31f + width / 2);
+            camera.transform.rotation = Quaternion.LookRotation(Vector3.left, Vector3.up);
+            camera.orthographicSize = height / 2;
+            camera.nearClipPlane = 0.1f;
+            camera.farClipPlane = 20;
+        }
+
+        /// <summary>
+        /// What the mods' pieces cost a figure (cuadro 145): each one's triangles, vertices and materials, and whether its
+        /// material is one a gun already draws with ([accesorio] coste).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.AccesoriosLab.Coste -quit
+        /// </summary>
+        public static void Coste()
+        {
+            var catalog = FigureCatalog.Load();
+            var guns = new HashSet<Material>();
+            foreach (string id in Guns)
+                if (Anims.Weapon(id) is WeaponArt art && catalog.Weapon(art.fbx) is GameObject gun)
+                {
+                    int tris = gun.GetComponentsInChildren<MeshFilter>(true).Where(mf => mf.sharedMesh != null).Sum(mf => mf.sharedMesh.triangles.Length / 3);
+                    foreach (var r in gun.GetComponentsInChildren<Renderer>(true)) foreach (var m in r.sharedMaterials) guns.Add(m);
+                    Debug.Log($"[accesorio] coste arma {id}: {tris} triangles, {gun.GetComponentsInChildren<Renderer>(true).Length} renderers, materials {string.Join(", ", gun.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials).Distinct().Select(m => m != null ? m.name : "-"))}");
+                }
+            foreach (string name in new[] { UnitViews.SilencerModel, UnitViews.ScopeModel, UnitViews.ShortScopeModel })
+            {
+                var piece = catalog.Weapon(name);
+                if (piece == null)
+                {
+                    Debug.Log($"[accesorio] coste {name}: not in the catalog");
+                    continue;
+                }
+                var meshes = piece.GetComponentsInChildren<MeshFilter>(true).Where(mf => mf.sharedMesh != null).ToList();
+                var materials = piece.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials).Distinct().ToList();
+                Debug.Log($"[accesorio] coste {name}: {meshes.Sum(mf => mf.sharedMesh.triangles.Length / 3)} triangles, {meshes.Sum(mf => mf.sharedMesh.vertexCount)} vertices, {piece.GetComponentsInChildren<Renderer>(true).Length} renderers, materials {string.Join(", ", materials.Select(m => m != null ? m.name + (guns.Contains(m) ? " (a gun's too)" : " (no gun's)") : "-"))}");
             }
         }
 
@@ -260,7 +351,7 @@ namespace Bastion.EditorTools
             label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             label.GetComponent<MeshRenderer>().sharedMaterial = label.font.material;
             label.fontSize = 64;
-            label.characterSize = 0.011f;
+            label.characterSize = 0.006f;
             label.color = Color.black;
             label.anchor = TextAnchor.MiddleLeft;
             label.transform.position = at + Vector3.right * 0.3f;

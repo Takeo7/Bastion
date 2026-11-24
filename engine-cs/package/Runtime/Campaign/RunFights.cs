@@ -566,6 +566,35 @@ namespace Bastion.Engine
             return HasBed(c, talker, gone) || c.Players.Any((p) => HasBed(c, p, gone));
         }
 
+        /// <summary>
+        /// What a survivor with no bed for them (SurvivorStays false) will leave the squad's packs and what will find no room
+        /// there, as ApplyFight's HandOver will: on copies, nothing of `c` nor `mission` changed. For the card at the fight's
+        /// end, before the room applies it (UI, review of 0.14.4). Null with no survivor brought out, or one who stays.
+        /// </summary>
+        public static RunNoBed? HandOverPreview(CampaignState c, GameState mission)
+        {
+            var run = c.Run;
+            var fight = mission.Run;
+            if (run == null || fight == null || string.IsNullOrEmpty(mission.Mission.Survivor)) return null;
+            var vip = mission.Units.FirstOrDefault((u) => u.Id == mission.Mission.Survivor);
+            if (vip == null || !vip.Evacuated || SurvivorStays(c, mission)) return null;
+            // The squad's packs as ApplyFight leaves them before the survivor's turn: those of the fight as they came out
+            // (KitBack), the fallen and the left behind out, the rest of the squad's as they were; in the squad's order.
+            var home = new List<CampaignSoldier>();
+            foreach (var id in run.Squad)
+            {
+                var s = c.Soldiers.FirstOrDefault((x) => x.Id == id && x.Alive);
+                if (s == null) continue;
+                var u = mission.Units.FirstOrDefault((x) => x.CampaignId == id);
+                if (u != null && FellInFight(u)) continue;
+                var pack = u != null ? KitBack(u, s).Pack : s.Kit != null ? Gears.CloneGrid(s.Kit.Pack) : null;
+                if (pack != null) home.Add(new CampaignSoldier { Id = s.Id, Kit = new Kit { Pack = pack } });
+            }
+            var report = new RunReport();
+            HandOver(vip, home, report, fight);
+            return report.NoBed;
+        }
+
         /// <summary>One of a run's fight who fell in it, or was left behind when La Lata went (LeftBehindEvent).</summary>
         private static bool FellInFight(Unit u) => (!u.Alive && !u.Evacuated && u.Hp <= 0) || u.Lost == true;
 

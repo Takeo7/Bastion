@@ -99,8 +99,11 @@ namespace Bastion.UI.Strategy
                 card.AddToClassList("lineup-card--bust");
                 var bust = Ui.El("lineup-card__bust", card);
                 if (!v.Fallen) bust.style.borderTopColor = bust.style.borderBottomColor = bust.style.borderLeftColor = bust.style.borderRightColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
-                // (No bust for a row with no soldier: the survivor fallen after joining, cuadro 140.)
-                var portrait = string.IsNullOrEmpty(v.Id) ? null : PortraitOf?.Invoke(v.Id);
+                // (No bust for a row with no soldier: the survivor fallen after joining, cuadro 140.) One who never became a
+                // soldier, their own (R23 B8: an empty black circle).
+                if (string.IsNullOrEmpty(v.Id) && !string.IsNullOrEmpty(v.Bust)) Bastion.Client.Portraits.Know(v.Bust, v.Look, v.Name, null, v.BustSeed);
+                var face = !string.IsNullOrEmpty(v.Id) ? v.Id : v.Bust;
+                var portrait = string.IsNullOrEmpty(face) ? null : PortraitOf?.Invoke(face);
                 if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
                 else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
             }

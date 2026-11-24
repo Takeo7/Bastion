@@ -49,6 +49,9 @@ namespace Bastion.UI.Strategy
 
         void Update()
         {
+            // The panels' scale as the app's (AppFlow does it each frame): BASTION_DENSIDAD and BASTION_INTERFAZ count here
+            // too (the 2560 × 1440 proposal, 24/11: the base came out at the project's own scale).
+            Bastion.UI.App.GameSettings.WatchScreen();
             var net = NetLink.Instance;
             var phase = net.LastRoom?.Phase;
             if (phase == RoomPhases.Lobby && !asked && net.Slot >= 0)
@@ -108,7 +111,8 @@ namespace Bastion.UI.Strategy
                 return;
             }
             var step = steps.Dequeue();
-            Debug.Log($"[base-run] {step} a {Time.time:0.0} s");
+            // (And the real clock: the plates' graces count by it, AskGrace.)
+            Debug.Log($"[base-run] {step} a {Time.time:0.0} s (reloj real {Time.realtimeSinceStartup:0.00} s)");
             if (Do(control, step))
             {
                 waitingFor = control.State;
@@ -269,6 +273,16 @@ namespace Bastion.UI.Strategy
                     return done && parts[1].EndsWith("!");
                 }
                 // «estado»: what is open now, in the log (U10's test with two).
+                // «baja:runstop__offers»: that scroll list to its bottom, as the wheel would; its offset in the log (the 0.14.4's
+                // review, 1: the Trueque's list kept where it was when a question opens). «mira:runstop__offers»: just the log.
+                case "baja":
+                case "mira":
+                {
+                    var list = FindFirstObjectByType<StrategyRoot>()?.GetComponent<UIDocument>()?.rootVisualElement?.Q<ScrollView>(className: S(1));
+                    if (list != null && part[0] == "baja") list.scrollOffset = new Vector2(0, list.contentContainer.layout.height);
+                    Debug.Log($"[base-run] {part[0]} {S(1)}: {(list != null ? $"desplazada {list.scrollOffset.y:0} de {list.contentContainer.layout.height - list.contentViewport.layout.height:0}" : "no está")}");
+                    return false;
+                }
                 case "estado": Debug.Log($"[base-run] estado: {control.OpenNow()}"); return false;
                 // «ocultar»: every panel of the screen hidden, the clearing and its row as they are (A8: Arte's shots of the
                 // squad's feet and shadows on the halt); «mostrar», back.

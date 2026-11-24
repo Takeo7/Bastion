@@ -240,11 +240,19 @@ namespace Bastion.UI.App
 
         /// <summary>
         /// How much bigger than at 1440 × 900 the HUD's pixels are on this screen (before Ajustes' «Interfaz»): with the
-        /// screen, but never past its density. The 0.10.1 drew in CSS pixels, which grow only with the density: on a big
-        /// screen of ordinary density its panels stayed their size, and Unity's, grown with the screen, came out two
-        /// thirds bigger (Ana, 28/10: «está todo muy grande»). The map's lines (Bastion/Marks) take the same.
+        /// screen, but never past its density times HeightGrowth. The 0.10.1 drew in CSS pixels, which grow only with the
+        /// density: on a big screen of ordinary density its panels stayed their size, and Unity's, grown with the screen,
+        /// came out two thirds bigger (Ana, 28/10: «está todo muy grande»); at 2560 × 1440 the letters were then too small
+        /// (Pruebas, 24/11): half the way back (cuadro 146). The map's lines (Bastion/Marks) take the same.
         /// </summary>
-        public static float PixelScale(int width, int height) => Mathf.Min(Mathf.Sqrt(width / 1440f * height / 900f), Density);
+        public static float PixelScale(int width, int height) => Mathf.Min(Mathf.Sqrt(width / 1440f * height / 900f), Density * HeightGrowth(height));
+
+        /// <summary>
+        /// What a window taller than 900 points (its pixels over the density) adds over the density (cuadro 146, «Que crezca
+        /// sola, media»): half of what its height grows past 900: 1080 → 1.1, 1440 → 1.3. At 900 or less, 1: there the HUD
+        /// shrinks with the screen as before (1280 × 800 as it was).
+        /// </summary>
+        public static float HeightGrowth(int heightPixels) => Mathf.Max(1, (1 + heightPixels / Density / 900f) / 2);
 
         static Vector2Int appliedFor;
 
@@ -264,7 +272,17 @@ namespace Bastion.UI.App
         public static void WatchScreen()
         {
             if (DrawnOn() != appliedFor) ApplyInterface();
+            if (scaleLine != null && Time.realtimeSinceStartup - scaleLineAt > ScaleLineAfter)
+            {
+                Debug.Log(scaleLine);
+                scaleLine = null;
+            }
         }
+
+        /// <summary>The last scale applied, for the log once the window has kept its size ScaleLineAfter seconds.</summary>
+        static string scaleLine;
+        static float scaleLineAt;
+        const float ScaleLineAfter = 0.5f;
 
         /// <summary>
         /// The size on the panels the screens draw on (the UIDocuments there are: AppFlow's, whose panel every screen
@@ -286,19 +304,28 @@ namespace Bastion.UI.App
                 if (panel == null) continue;
                 if (!references.TryGetValue(panel, out var own))
                 {
-                    references[panel] = own = panel.referenceResolution;
+                    // The project's own (HudPanel: 1440 × 900, as PixelScale), not the asset's as found: in the editor a first
+                    // test's scale stayed on it past a reload and was taken as its own, the scale applied twice (24/11).
+                    references[panel] = own = Reference;
                     if (Application.isEditor) Application.quitting += () => panel.referenceResolution = own;
                 }
                 // The screen's own scale against the reference (ScaleWithScreenSize's, matched half and half), and the
                 // reference that gives the one wanted instead.
                 var screen = Mathf.Sqrt(on.x * (float)on.y / (own.x * (float)own.y));
-                var wanted = Mathf.Min(screen, Density) * size;
+                var wanted = Mathf.Min(screen, Density * HeightGrowth(on.y)) * size;
+                // Said once the size stops changing (WatchScreen): dragging the window's edge set it each frame (the 0.14.4's
+                // independent review, 2).
+                scaleLine = FormattableString.Invariant($"[interfaz] {on.x}×{on.y}, densidad {Density:0.##}, pantalla {screen:0.00}, crece {HeightGrowth(on.y):0.00}, «Interfaz» {size:0.##} → {wanted:0.00}");
+                scaleLineAt = Time.realtimeSinceStartup;
                 var k = wanted > 0 ? screen / wanted : 1 / size;
                 panel.referenceResolution = new Vector2Int(Mathf.RoundToInt(own.x * k), Mathf.RoundToInt(own.y * k));
             }
         }
 
         static readonly int PixelScaleId = Shader.PropertyToID("_BastionPixelScale");
+
+        /// <summary>The reference the panels are made for (HudPanel.asset, ScaleWithScreenSize).</summary>
+        static readonly Vector2Int Reference = new Vector2Int(1440, 900);
 
         /// <summary>Each panel's own reference resolution, as the project has it.</summary>
         static readonly System.Collections.Generic.Dictionary<PanelSettings, Vector2Int> references = new System.Collections.Generic.Dictionary<PanelSettings, Vector2Int>();
