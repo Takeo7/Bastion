@@ -67,11 +67,14 @@ namespace Bastion.UI.EditorTools
             var screen = new GameObject("Start");
             screen.AddComponent<UIDocument>().panelSettings = Panel();
             var start = screen.AddComponent<Bastion.UI.Start.StartScreen>();
+            // BASTION_TECLAS: keys pressed with no pointer (TeclasLab), what they do in the log.
+            if (!string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("BASTION_TECLAS"))) screen.AddComponent<Bastion.UI.Start.TeclasLab>();
             var ask = System.Environment.GetEnvironmentVariable("BASTION_INICIO");
             if (string.IsNullOrEmpty(ask)) return;
             var parts = ask.Split(',');
             var heard = System.Array.Find(parts, p => p.StartsWith("red="))?.Substring(4);
-            start.Preview(System.Array.IndexOf(parts, "guardada") >= 0, heard, parts[0]);
+            var name = System.Array.Find(parts, p => p.StartsWith("nombre="))?.Substring(7);
+            start.Preview(System.Array.IndexOf(parts, "guardada") >= 0, heard, parts[0], name);
         }
 
         /// <summary>
@@ -130,6 +133,7 @@ namespace Bastion.UI.EditorTools
             screen.AddComponent<UIDocument>().panelSettings = Panel();
             screen.AddComponent<Bastion.UI.Start.RoomMenu>();
             screen.AddComponent<RoomLab>();
+            if (!string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("BASTION_TECLAS"))) screen.AddComponent<Bastion.UI.Start.TeclasLab>();
             // BASTION_TEMA: one of the proposals over the room's sheets (Assets/Bastion/UI/Propuestas).
             var tema = System.Environment.GetEnvironmentVariable("BASTION_TEMA");
             if (!string.IsNullOrEmpty(tema)) screen.AddComponent<Temas>().Tema = tema;

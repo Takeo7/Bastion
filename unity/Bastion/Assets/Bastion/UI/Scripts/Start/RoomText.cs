@@ -56,7 +56,7 @@ namespace Bastion.UI.Start
         public const string Day = "De día";
         public const string DayAbout = "Como siempre";
         public const string Night = "De noche";
-        public const string NightAbout = "Se ve poco, salvo bajo las farolas. Más muertos y más botín";
+        public const string NightAbout = "Se ve poco, salvo bajo las farolas. Más muertos y más botín.";
         public const string StartAlone = "Empezar en solitario";
         public const string StartAloneAbout = "Controlarás a todos los soldados";
         public const string StartTwo = "Empezar escaramuza";
@@ -121,7 +121,7 @@ namespace Bastion.UI.Start
             if (s.Chapter > 0)
             {
                 if (s.InMission != null) return $"Capítulo {s.Chapter} · Etapa a medias: {s.InMission}";
-                var where = s.Row == null ? "En la base" : s.Row == 0 ? "Antes de la etapa 1" : $"Etapa {s.Row} de 7";
+                var where = s.Row == null ? "En la base" : s.Row == 0 ? "Antes de la etapa 1" : $"Etapa {s.Row} de {Bastion.Engine.RunMap.Rows}";
                 return $"Capítulo {s.Chapter} · {where} · {(s.Soldiers == 1 ? "1 soldado" : $"{s.Soldiers} soldados")} · {s.Supplies} §";
             }
             if (s.InMission != null) return $"Misión a medias: {s.InMission}";
@@ -140,14 +140,19 @@ namespace Bastion.UI.Start
         {
             if (s.Chapter <= 0) return Saved(s);
             if (s.InMission != null) return HalfPlayed(s.InMission);
-            var where = s.Row == null ? "En la base" : s.Row == 0 ? "Antes de la etapa 1" : $"Etapa {s.Row} de 7";
+            var where = s.Row == null ? "En la base" : s.Row == 0 ? "Antes de la etapa 1" : $"Etapa {s.Row} de {Bastion.Engine.RunMap.Rows}";
             return $"{where} · {(s.Soldiers == 1 ? "1 soldado" : $"{s.Soldiers} soldados")} · {s.Supplies} §";
         }
 
-        /// <summary>The saved campaign the new one replaces (renderConfirm).</summary>
+        /// <summary>
+        /// The saved campaign the new one replaces (renderConfirm): as «Continuar partida» says it (Lore, 24/11: «7 etapas
+        /// jugadas» beside «Etapa 3 de 7» read as two games), «(capítulo 1 · etapa 3 de 7 · 4 soldados · 245 §)».
+        /// </summary>
         public static string Replaces(SavedCampaign s) => s.Chapter > 0
-            ? $"La partida guardada (capítulo {s.Chapter}, {(s.NodesPlayed == 0 ? "sin etapas jugadas" : s.NodesPlayed == 1 ? "1 etapa jugada" : $"{s.NodesPlayed} etapas jugadas")}) se sustituye por una nueva."
+            ? $"La partida guardada (capítulo {s.Chapter} · {Lower(SavedWhere(s))}) se sustituye por una nueva."
             : $"La campaña guardada ({Lore.OutingsMark(s.Missions).ToLowerInvariant()}) se sustituye por una nueva.";
+
+        static string Lower(string s) => string.IsNullOrEmpty(s) ? s : char.ToLowerInvariant(s[0]) + s.Substring(1);
 
         /// <summary>A campaign from before the 0.7 kept aside (setAsideNote).</summary>
         public static string SetAside(string file)
@@ -170,7 +175,7 @@ namespace Bastion.UI.Start
             ("elimination", "Limpieza", "Abatid a todo lo que haya en el mapa."),
             ("recovery", "Botín", "Recuperad la carga y salid " + Lore.Bus.In + "."),
             ("sabotage", "Sabotaje", "Apagad la alarma antes de que acabe la cuenta atrás."),
-            ("hack", "Arreglar la radio", "Arreglad la radio. Si falla, salta la alarma."),
+            ("hack", "Arreglar la radio", "Llegad a la radio y arregladla. Si falla, salta la alarma."),
             // Not «el VIP»: neither an English acronym nor always a man (Lore, 23/10).
             ("rescue", "Rescate", "Llegad hasta la persona retenida y sacadla con vida."),
             ("scavenge", "Saqueo", "Registrad las casas y salid con lo que podáis: cada ruido trae más muertos."),

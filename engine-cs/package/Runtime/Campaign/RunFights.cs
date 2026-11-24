@@ -578,8 +578,35 @@ namespace Bastion.Engine
             if (run == null || fight == null || string.IsNullOrEmpty(mission.Mission.Survivor)) return null;
             var vip = mission.Units.FirstOrDefault((u) => u.Id == mission.Mission.Survivor);
             if (vip == null || !vip.Evacuated || SurvivorStays(c, mission)) return null;
-            // The squad's packs as ApplyFight leaves them before the survivor's turn: those of the fight as they came out
-            // (KitBack), the fallen and the left behind out, the rest of the squad's as they were; in the squad's order.
+            var report = new RunReport();
+            HandOver(vip, HomeBefore(c, run, mission), report, fight);
+            return report.NoBed;
+        }
+
+        /// <summary>
+        /// The § the squad's packs would still take of a stage's reward, as ApplyFight leaves them just before it: after a
+        /// survivor with no bed has left them what they carried (HandOver). The room on the supplies piles, and 100 a free
+        /// cell (Content.PileOf); 0, none of it fits. On copies, nothing changed. For the card at the fight's end (UI, cuadro
+        /// 148: «y la recompensa» with the packs full). A boss's weapon goes in before its § (ApplyFight), and is only drawn
+        /// then: not counted.
+        /// </summary>
+        public static int RewardRoom(CampaignState c, GameState mission)
+        {
+            var run = c.Run;
+            var fight = mission.Run;
+            if (run == null || fight == null) return 0;
+            var home = HomeBefore(c, run, mission);
+            var vip = string.IsNullOrEmpty(mission.Mission.Survivor) ? null : mission.Units.FirstOrDefault((u) => u.Id == mission.Mission.Survivor);
+            if (vip != null && vip.Evacuated && !SurvivorStays(c, mission)) HandOver(vip, home, new RunReport(), fight);
+            return home.Sum((s) => SuppliesRoom(s.Kit!.Pack));
+        }
+
+        /// <summary>
+        /// The squad's packs as ApplyFight leaves them before the survivor's turn, as copies: those of the fight as they came
+        /// out (KitBack), the fallen and the left behind out, the rest of the squad's as they were; in the squad's order.
+        /// </summary>
+        private static List<CampaignSoldier> HomeBefore(CampaignState c, RunState run, GameState mission)
+        {
             var home = new List<CampaignSoldier>();
             foreach (var id in run.Squad)
             {
@@ -590,9 +617,26 @@ namespace Bastion.Engine
                 var pack = u != null ? KitBack(u, s).Pack : s.Kit != null ? Gears.CloneGrid(s.Kit.Pack) : null;
                 if (pack != null) home.Add(new CampaignSoldier { Id = s.Id, Kit = new Kit { Pack = pack } });
             }
-            var report = new RunReport();
-            HandOver(vip, home, report, fight);
-            return report.NoBed;
+            return home;
+        }
+
+        /// <summary>The § a grid takes: the room on its supplies piles, and a full pile in each cell a pile fits in.</summary>
+        private static int SuppliesRoom(GearGrid grid)
+        {
+            var copy = Gears.CloneGrid(grid);
+            var most = Content.PileOf(GearKinds.Supplies, null);
+            var room = 0;
+            foreach (var p in copy.Items.Where((x) => x.Gear.Kind == GearKinds.Supplies))
+            {
+                room += Gears.Room(p.Gear);
+                p.Gear.Count = Math.Max(p.Gear.Count, most);
+            }
+            for (var at = Gears.FirstFit(copy, new Gear { Kind = GearKinds.Supplies, Count = most }); at != null; at = Gears.FirstFit(copy, new Gear { Kind = GearKinds.Supplies, Count = most }))
+            {
+                copy.Items.Add(at);
+                room += most;
+            }
+            return room;
         }
 
         /// <summary>One of a run's fight who fell in it, or was left behind when La Lata went (LeftBehindEvent).</summary>

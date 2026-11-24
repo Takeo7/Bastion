@@ -38,6 +38,8 @@ namespace Bastion.UI.Start
         /// <summary>main, new (a new game's level and question) or skirmish.</summary>
         string page = "main";
         LevelPicker levels;
+        /// <summary>The band's entries and the sheet's keys (StartLook, cuadro 151).</summary>
+        StartLook.Entries roomEntries, sheetEntries;
         /// <summary>Made-up room and addresses for a capture (Preview); null, NetLink's.</summary>
         RoomMessage previewRoom;
         IReadOnlyList<HostAddress> previewAddresses;
@@ -58,7 +60,12 @@ namespace Bastion.UI.Start
             doc.rootVisualElement.Clear();
             tree.CloneTree(doc.rootVisualElement);
             root = doc.rootVisualElement.Q("room");
-            root.Q("fade").generateVisualContent += StartScreen.Fade;
+            // As the start screen's (cuadro 151): the veil, not the dark band; the keys as entries.
+            var fade = root.Q("fade");
+            Ui.Show(fade, false);
+            root.Insert(root.IndexOf(fade) + 1, StartLook.Veil());
+            roomEntries = new StartLook.Entries(root);
+            sheetEntries = new StartLook.Entries(root);
             // The crossroads of «Partida multijugador», where the room is hosted or joined from; again when the room comes back
             // after a mission or the base (the start scene loaded anew).
             if (MenuBackdrop.Current == null || MenuBackdrop.Current.Shown != MenuBackdrop.Scene.Crossroads) MenuBackdrop.Show(MenuBackdrop.Scene.Crossroads);
@@ -74,10 +81,8 @@ namespace Bastion.UI.Start
             root.Q<Label>("mission-head").text = RoomText.Mission.ToUpperInvariant();
             root.Q<Label>("map-head").text = RoomText.Map.ToUpperInvariant();
             root.Q<Label>("hour-head").text = RoomText.Hour.ToUpperInvariant();
-            root.Q<Button>("start").clicked += Begin;
-            var back = root.Q<Button>("back");
-            back.text = RoomText.Back.ToUpperInvariant();
-            back.clicked += () => Go("main");
+            sheetEntries.Make(root.Q<Button>("start"), "", Begin, false);
+            sheetEntries.Make(root.Q<Button>("back"), RoomText.Back, () => Go("main"), false);
             levels = new LevelPicker(StartScreen.HostLevel);
             levels.Picked += id => StartScreen.HostLevel = id;
             root.Q("levels").Add(levels.Root);
@@ -123,6 +128,14 @@ namespace Bastion.UI.Start
             var k = room == null ? "" : string.Join("|", room.Players.Select(p => $"{p.Slot}:{p.Name}:{p.Connected}:{p.Away}:{p.Color}"));
             var saved = room?.SavedCampaign;
             k += $"#{Hosting}#{mission}#{night}#{warned}#{addresses}#{page}#{(saved != null ? RoomText.Saved(saved) + saved.GameLevel : "")}#{room?.SetAside}#{room?.Restored}#{Router}#{Internet}#{RoomKey}";
+            // One chosen always; the arrows and Intro on the band's column.
+            if (page == "main")
+            {
+                roomEntries.ChooseFirst();
+                // (Not under a loading sheet: the review, 2.)
+                if (!App.AppFlow.Veiled) roomEntries.Keys();
+            }
+            else sheetEntries.ChooseFirst();
             if (k == key) return;
             key = k;
             Draw();
@@ -191,6 +204,7 @@ namespace Bastion.UI.Start
         {
             var menu = root.Q("menu");
             menu.Clear();
+            roomEntries.Clear();
             var saved = room?.SavedCampaign;
             var ok = room != null && players.Any(p => p.Connected);
             if (saved != null)
@@ -214,13 +228,12 @@ namespace Bastion.UI.Start
             Key(menu, warned ? Lore.QuitText.Accept : Lore.HostClosed.Home, true, Leave);
         }
 
-        static void Key(VisualElement menu, string text, bool enabled, System.Action click)
+        void Key(VisualElement menu, string text, bool enabled, System.Action click)
         {
-            var b = new Button(click) { text = text.ToUpperInvariant() };
-            b.AddToClassList("start__key");
-            b.AddToClassList("font-title");
-            b.SetEnabled(enabled);
+            var b = new Button();
             menu.Add(b);
+            roomEntries.Make(b, text, click);
+            b.SetEnabled(enabled);
         }
 
         /// <summary>
@@ -246,7 +259,7 @@ namespace Bastion.UI.Start
             if (isNew && alone) Ui.Text(RoomText.AloneText, "room__ask-text", ask);
             if (skirmish) Ui.Text(connected < 2 ? RoomText.StartAloneAbout : RoomText.StartTwoAbout, "room__ask-text", ask);
             var start = root.Q<Button>("start");
-            start.text = (isNew ? (saved != null ? RoomText.StartAgain : RoomText.StartNew) : connected < 2 ? RoomText.StartAlone : RoomText.StartTwo).ToUpperInvariant();
+            StartLook.Entries.SetText(start, isNew ? (saved != null ? RoomText.StartAgain : RoomText.StartNew) : connected < 2 ? RoomText.StartAlone : RoomText.StartTwo);
             start.SetEnabled(room != null && connected > 0);
             if (!skirmish) return;
             Options(root.Q("missions"), RoomText.Missions.Select(m => (m.Id, m.Name, m.About)), mission, id =>
@@ -320,6 +333,8 @@ namespace Bastion.UI.Start
                     key = null;
                 }) { text = (addresses ? "▾ " : "▸ ") + RoomText.NotSeen };
                 more.AddToClassList("room__more");
+                // (Out of UI Toolkit's own navigation, as the entries: the review.)
+                more.focusable = false;
                 plate.Add(more);
                 if (!addresses) return;
             }
@@ -353,6 +368,7 @@ namespace Bastion.UI.Start
                 copy.schedule.Execute(() => copy.text = RoomText.Copy).StartingIn(1500);
             }) { text = RoomText.Copy };
             copy.AddToClassList("room__copy");
+            copy.focusable = false;
             row.Add(copy);
         }
 

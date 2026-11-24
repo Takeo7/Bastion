@@ -306,7 +306,8 @@ pause
 
         /// <summary>
         /// What is missing of what the figures are made of, or null: every preset the game draws (UnitViews.PresetsUsed) in
-        /// FigureCatalog, and every Sidekick part the wardrobe names (Wardrobe.json), with the base model, in a Resources
+        /// FigureCatalog, every weapon and piece on the weapon it draws (Anims.json's, the accessories, the sheath) there with
+        /// its prefab, and every Sidekick part the wardrobe names (Wardrobe.json), with the base model, in a Resources
         /// folder (Sidekick's runtime loads them from there by name). Arte takes what isn't used out of the app (26/10).
         /// </summary>
         private static string? Figures()
@@ -315,6 +316,13 @@ pause
             if (catalog == null) return "no hay Resources/FigureCatalog.asset";
             var presets = UnitViews.PresetsUsed.Where((n) => catalog.Preset(n) == null).ToList();
             if (presets.Count > 0) return $"FigureCatalog no tiene {presets.Count} de los presets que se dibujan: {string.Join(", ", presets)}";
+            // The weapons and what goes on them (Producto's review of the 0.14.4, cuadro 148; the catalog is Arte's): every
+            // model Anims.json's weapons name, and the accessories and the sheath UnitViews.Arms draws, in the catalog with
+            // its prefab. A prefab missing in the clean copy comes back null: a version without them, and nothing said.
+            var arms = Anims.Weapons.Select((w) => w.fbx).Concat(new[] { UnitViews.SilencerModel, UnitViews.ScopeModel, UnitViews.ShortScopeModel, UnitViews.KnifeSheath })
+                .Where((n) => !string.IsNullOrEmpty(n)).Distinct().ToList();
+            var unarmed = arms.Where((n) => catalog.Weapon(n) == null).OrderBy((n) => n).ToList();
+            if (unarmed.Count > 0) return $"FigureCatalog no tiene {unarmed.Count} de las {arms.Count} armas y piezas del arma que se dibujan, o falta su prefab: {string.Join(", ", unarmed.Take(12))}{(unarmed.Count > 12 ? "…" : "")}";
             var wardrobe = JToken.Parse(File.ReadAllText("Assets/Bastion/Client/Resources/Wardrobe.json"));
             var parts = new HashSet<string>(wardrobe.SelectTokens("..parts[*]").Select((t) => (string?)t ?? "")) { "SK_BaseModel" };
             var there = new HashSet<string>(AssetDatabase.FindAssets("t:Model", new[] { "Assets/Synty/SidekickCharacters/Resources" })
@@ -325,7 +333,7 @@ pause
             // right, but carries them, some 176 MB.
             var spare = there.Count((p) => !parts.Contains(p));
             if (spare > 0) Debug.LogWarning($"[red] figuras: {spare} piezas de Sidekick en Resources que no nombra el armario van en la app; FigureCatalogMake.Run las saca (Trim)");
-            Debug.Log($"[red] figuras: {catalog.presetNames.Length} presets en el catálogo, los {UnitViews.PresetsUsed.Count()} que se dibujan; las {parts.Count} piezas del armario en Resources");
+            Debug.Log($"[red] figuras: {catalog.presetNames.Length} presets en el catálogo, los {UnitViews.PresetsUsed.Count()} que se dibujan; las {parts.Count} piezas del armario en Resources; las {arms.Count} armas y piezas del arma");
             return null;
         }
 

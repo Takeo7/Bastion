@@ -116,6 +116,18 @@ namespace Bastion.Client.Menu
         /// Nightfall in the snow (the mockups' blue hour): the sky's light blue and dim, a low cold light from the west, the
         /// haze a dusky blue that the far pines go into; the grade a little darker and bluer than the winter's day.
         /// </summary>
+        /// <summary>
+        /// The road's own night, the start menu's (Arturo's cuadros 149 to 151, 24/11: the picture he sent, measured patch
+        /// by patch against it): a dull indigo, far from ultramarine (the road's snow #2f4ca7, the sky #1b2c61), its
+        /// shadows navy and long across the road from a sun low on the left, the post's lamp warm. The crossroads keeps Dusk.
+        /// </summary>
+        static readonly Mood.Values RoadDusk = new Mood.Values
+        {
+            haze = 0x22306a, hazeDensity = 0.017f, sun = 0xa8baf6, sunIntensity = 2.6f, sunFrom = new Vector3(-30, 6.5f, 3),
+            skyLight = 0x6a82dc, groundLight = 0x2c3a70, skyIntensity = 1.5f, fill = 0xa4b6f0, fillIntensity = 0.45f, exposure = 1.16f,
+            bloomStrength = 0.75f, bloomThreshold = 0.8f, saturation = 0.84f, contrast = 1.06f, vignette = 0.42f,
+            shadowTint = new Vector3(0.94f, 0.97f, 1.06f), highlightTint = new Vector3(1.0f, 1.0f, 1.02f), lift = new Vector3(0.022f, 0.032f, 0.07f),
+        };
         static readonly Mood.Values Dusk = new Mood.Values
         {
             haze = 0x4b5784, hazeDensity = 0.012f, sun = 0xaab8e6, sunIntensity = 1.2f, sunFrom = new Vector3(-30, 12, 8),
@@ -125,8 +137,12 @@ namespace Bastion.Client.Menu
         };
 
         /// <summary>The sky's colours at nightfall (Sky's globals, sRGB): the horizon is the haze; the afterglow low in the west.</summary>
-        const int SkyMiddle = 0x4d5884, SkyZenith = 0x161c36, SkyGlow = 0xd9a58a, SkyLand = 0x8490c0;
+        const int SkyMiddle = 0x4d5884, SkyZenith = 0x161c36, RoadSkyMiddle = 0x394f9a, RoadSkyZenith = 0x182756;
+        const int SkyGlow = 0xd9a58a, SkyLand = 0x8490c0;
         static readonly Vector3 GlowFrom = new Vector3(-0.85f, 0.02f, 0.5f);
+
+        /// <summary>Whether it is the road that is shown (its own night and sky: RoadDusk).</summary>
+        bool road;
 
         void Build(Scene s)
         {
@@ -157,7 +173,8 @@ namespace Bastion.Client.Menu
                 borrowed = had;
                 borrowedValues = had.Now;
             }
-            var mood = Mood.Show(Dusk);
+            road = s == Scene.Road;
+            var mood = Mood.Show(road ? RoadDusk : Dusk);
             if (had == null) mood.transform.SetParent(transform, false);
             // The road's sun throws its shadows no further than the 4×4 and the trees round it need (the sun's shadows are
             // 0.8 to 1.1 ms of its frame on «Alto» on the Mac, MenuLab.Coste); the crossroads', as far as the project has them.
@@ -202,7 +219,9 @@ namespace Bastion.Client.Menu
         // ---- Road ----
 
         /// <summary>How far from the camera the road's shadows reach (metres).</summary>
-        const float RoadShadows = 30;
+        // (75 m since Arturo's menu of 24/11: the fence's and the pines' long shadows across the road, the sun low. It was 30;
+        // what the 45 m more cost a frame is not measured yet.)
+        const float RoadShadows = 75;
 
         /// <summary>The road's middle (x, metres) and its tiles (x), north–south through the whole ground map.</summary>
         const float RoadX = 48;
@@ -225,7 +244,13 @@ namespace Bastion.Client.Menu
             var lataAt = new Vector3(49.6f, 0, -122.6f);
             lata.Park(Tiles(lataAt), Heading(250), Tiles(new Vector3(RoadX, 0, -120)), true, 0, false);
             lata.Headlights(true);
-            Beams(lata);
+            // (No pool of light on the snow before it in his picture: its lamps lit, their beams off.)
+            // (And a cold light of its own, from above the camera's left, on La Lata alone: in the navy night it was near black
+            // against the snow; his picture reads the snow on its bonnet and its roof and the edges of its plates.)
+            {
+                var from = lataAt + new Vector3(-3.5f, 6f, -5.5f);
+                Spot(from, Quaternion.LookRotation(lataAt + Vector3.up - from), 0xc4d2ff, 6, 13, 46);
+            }
             // The post up the road: a watchtower on the right behind a concrete wall, its lamp under the eaves (on the
             // road's side) flickering.
             var towerAt = new Vector3(56.5f, 0, -58);
@@ -237,6 +262,8 @@ namespace Bastion.Client.Menu
                 var head = BoundsOf(flood.transform);
                 Lamp(new Vector3(head.center.x, head.max.y - 0.35f, head.center.z), 0xffb468, 0, 0, true, 0.7f,
                     Spot(new Vector3(head.center.x, head.max.y - 0.2f, head.center.z), Quaternion.Euler(28, 235, 0), 0xffd9a0, 30, 26, 70));
+                // (His picture's: a warm point with a halo by the tower.)
+                Halo(new Vector3(head.center.x, head.max.y - 0.35f, head.center.z), new Color(1, 0.62f, 0.28f, 0.85f), 5.5f);
             }
             // (A palisade of Apocalypse's stakes, not Construction's concrete: each pack's atlas loads whole with MenuArt,
             // Construction's 4096² for one wall; MenuLab.Make lists them.)
@@ -282,24 +309,8 @@ namespace Bastion.Client.Menu
             // Two big pines close on the right, framing it.
             PutPine(0, new Vector3(60.5f, 0, -124), 35, 1);
             PutPine(1, new Vector3(58.6f, 0, -118), 110, 1);
-            Snowfall(eye + Eye.transform.forward * 18 + Vector3.up * 5, new Vector3(44, 12, 36), 0.16f, new Color(1, 1, 1, 0.85f), 1.3f);
-        }
-
-        /// <summary>
-        /// The 4×4's headlights: a cone of light from each lamp along its nose, down to the snow before it, warm, without
-        /// shadows; and the flakes falling through it lit (flakes are unlit: a fall of their own there, warmer and brighter).
-        /// Narrower (Arte, 15/11, with UI's menu over it): a 74° cone laid a wide pool of light on the snow, bottom left, that
-        /// showed through UI's dark column as a loose patch.
-        /// </summary>
-        void Beams(LaLata lata)
-        {
-            var lamps = lata.GetComponentsInChildren<MeshRenderer>().Where(r => r.name == "Faro").ToList();
-            var ahead = lata.transform.forward;
-            foreach (var lamp in lamps)
-                Spot(lamp.transform.position + ahead * 0.1f, Quaternion.LookRotation(Quaternion.AngleAxis(12, Vector3.Cross(Vector3.up, ahead)) * ahead), 0xffe2b4, 13, 18, 50).name = "Haz";
-            if (lamps.Count == 0) return;
-            var middle = lamps.Aggregate(Vector3.zero, (a, r) => a + r.transform.position) / lamps.Count;
-            Snowfall(middle + ahead * 6 + Vector3.up * 0.6f, new Vector3(4, 2.4f, 10), 1.6f, new Color(1, 0.93f, 0.78f, 0.9f), 2.2f, Quaternion.LookRotation(ahead), 3);
+            // (Fewer flakes in his picture.)
+            Snowfall(eye + Eye.transform.forward * 18 + Vector3.up * 5, new Vector3(44, 12, 36), 0.07f, new Color(1, 1, 1, 0.85f), 1.3f);
         }
 
         // ---- Crossroads ----
@@ -586,6 +597,35 @@ namespace Bastion.Client.Menu
         /// living `life` seconds, as Weather's snowfall falls (ClimaGota, its soft dot), in `colour` times `gain`; the air
         /// filled from the start.
         /// </summary>
+        /// <summary>A lamp's halo: the flakes' soft dot, once, `across` metres, in `colour`, standing where the lamp is.</summary>
+        void Halo(Vector3 at, Color colour, float across)
+        {
+            var material = KitMaterials.New(KitMaterials.ClimaGota, "Halo del farol");
+            if (material == null) return;
+            made.Add(material);
+            material.mainTexture = Dot();
+            material.SetFloat("_Gain", 1.6f);
+            var ps = new GameObject("Halo").AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ps.transform.SetParent(transform, false);
+            ps.transform.position = at;
+            var main = ps.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startLifetime = 100000;
+            main.startSpeed = 0;
+            main.startSize = across;
+            main.startColor = colour;
+            main.maxParticles = 1;
+            var emission = ps.emission;
+            emission.enabled = false;
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            ps.Emit(1);
+        }
+
         void Snowfall(Vector3 middle, Vector3 size, float rate, Color colour, float gain, Quaternion? turn = null, float life = 10)
         {
             var material = KitMaterials.New(KitMaterials.ClimaGota, "Copos del menú");
@@ -715,10 +755,10 @@ namespace Bastion.Client.Menu
         {
             if (this == null || camera != Eye) return;
             Widen(camera);
-            var haze = Linear(Dusk.haze);
+            var haze = Linear((road ? RoadDusk : Dusk).haze);
             Shader.SetGlobalVector("_SkyHorizon", haze);
-            Shader.SetGlobalVector("_SkyMiddle", Linear(SkyMiddle));
-            Shader.SetGlobalVector("_SkyZenith", Linear(SkyZenith));
+            Shader.SetGlobalVector("_SkyMiddle", Linear(road ? RoadSkyMiddle : SkyMiddle));
+            Shader.SetGlobalVector("_SkyZenith", Linear(road ? RoadSkyZenith : SkyZenith));
             Shader.SetGlobalVector("_SkySunDir", GlowFrom.normalized);
             Shader.SetGlobalVector("_SkySun", Linear(SkyGlow) * 0.35f);
             Shader.SetGlobalFloat("_SkyGlow", 1);

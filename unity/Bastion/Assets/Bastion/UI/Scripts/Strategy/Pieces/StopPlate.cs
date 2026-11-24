@@ -67,13 +67,33 @@ namespace Bastion.UI.Strategy
                 fitRoom = -1;
                 return;
             }
-            var room = Mathf.Round(parent.layout.height - Root.layout.y - 8);
+            var foot = parent.layout.height - 8;
+            // Over the next stages only when that takes little off it (FloorTrim): with the Trueque high on the map they are at
+            // its top, and the plate would be left too small to use; it covers them then, as before.
+            if (Floor?.Invoke() is float floor && !float.IsNaN(floor) && floor < foot && bodyList != null)
+            {
+                var s = Root.resolvedStyle;
+                var natural = s.paddingTop + s.paddingBottom + s.borderTopWidth + s.borderBottomWidth;
+                foreach (var child in Root.Children())
+                    natural += child == bodyList ? bodyList.contentContainer.layout.height : child.layout.height + child.resolvedStyle.marginTop + child.resolvedStyle.marginBottom;
+                if (!float.IsNaN(natural) && Root.layout.y + natural - floor <= FloorTrim) foot = floor;
+            }
+            var room = Mathf.Round(foot - Root.layout.y);
             if (room <= 0 || Mathf.Abs(room - fitRoom) < 1) return;
             fitRoom = room;
             Root.style.maxHeight = room;
         }
 
         float fitRoom = -1;
+
+        /// <summary>The most the Trueque's plate gives up (scrolled) to stay over the next stages (Floor).</summary>
+        const float FloorTrim = 80;
+
+        /// <summary>Fitted again: the map laid out anew, its next stages elsewhere (Floor).</summary>
+        public void Refit() => FitHeight();
+
+        /// <summary>Where the Trueque's plate must end over (the map's next stages: RunMapScreen.NextRowTop), in its parent's pixels; NaN, nowhere.</summary>
+        public Func<float> Floor;
 
         public void Set(StopView v)
         {
@@ -173,7 +193,8 @@ namespace Bastion.UI.Strategy
 
             if (!string.IsNullOrEmpty(v.Leave))
             {
-                var foot = Ui.El("runstop__foot", into);
+                // (In the Trueque, «Seguir» under its words that scroll, always in sight: the 0.14.4's pass, 1920.)
+                var foot = Ui.El("runstop__foot", Root);
                 // An event not answered yet: no «Seguir» greyed under its two cards, which are what is pressed (Producto's
                 // review, 23/11, B19); why, in its place.
                 if (v.LeaveWhy != null && v.Options.Count > 0) Ui.Text(v.LeaveWhy, "runstop__waiting muted", foot);

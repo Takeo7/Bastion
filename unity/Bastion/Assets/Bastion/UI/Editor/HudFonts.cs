@@ -21,7 +21,8 @@ namespace Bastion.UI.EditorTools
     {
         const string Folder = "Assets/Bastion/UI/Fonts";
 
-        static readonly string[] Faces = { "Oswald-Medium", "Oswald-SemiBold", "Barlow-Medium", "Barlow-SemiBold", "Barlow-Bold" };
+        // (Oswald-Regular: the main menu's entries, thin as Arturo's picture; cuadro 150, its download his yes.)
+        static readonly string[] Faces = { "Oswald-Regular", "Oswald-Medium", "Oswald-SemiBold", "Barlow-Medium", "Barlow-SemiBold", "Barlow-Bold" };
 
         const string Supplies = "BastionSuministros";
         const char Section = '§';

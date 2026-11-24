@@ -63,14 +63,34 @@ namespace Bastion.EditorTools
                     await Awaitable.WaitForSecondsAsync(2.5f);
                     units.Sync(state);
                     Debug.Log($"[caso] {Time.time:0.00} mordisco");
+                    // (A Sync as its blow lands, and another a tenth of a second on, in its step back: the events behind a bite.)
                     for (int k = 0; k < soldiers.Count; k++) _ = units.Lunge(dead[k].Id, soldiers[k].Id, false, () => units.Sync(state));
-                    await Awaitable.WaitForSecondsAsync(2.0f);
+                    await Awaitable.WaitForSecondsAsync(0.45f);
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(0.1f);
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(1.5f);
                     units.Sync(state);
                     Debug.Log($"[caso] {Time.time:0.00} levanta");
                     foreach (var u in soldiers) u.Hunkered = true;
                     units.Sync(state);
                     await Awaitable.WaitForSecondsAsync(1.5f);
                     foreach (var u in soldiers) u.Hunkered = false;
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(1.5f);
+                    // (On watch and off it; and hunkered and on watch, both off at once, as a turn's beginning leaves them.)
+                    Debug.Log($"[caso] {Time.time:0.00} vigila");
+                    foreach (var u in soldiers) u.Overwatch = true;
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(1.5f);
+                    foreach (var u in soldiers) u.Overwatch = false;
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(1.5f);
+                    Debug.Log($"[caso] {Time.time:0.00} turno");
+                    foreach (var u in soldiers) { u.Hunkered = true; u.Overwatch = true; }
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(1.5f);
+                    foreach (var u in soldiers) { u.Hunkered = false; u.Overwatch = false; }
                     units.Sync(state);
                     await Awaitable.WaitForSecondsAsync(1.5f);
                     Debug.Log($"[combat] {Time.time:0.00} s: done");

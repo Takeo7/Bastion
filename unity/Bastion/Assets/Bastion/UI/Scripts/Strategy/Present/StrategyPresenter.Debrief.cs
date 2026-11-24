@@ -24,7 +24,10 @@ namespace Bastion.UI.Strategy
             // The reward first, as the crate with its figure; then what was found, each with Arte's picture.
             if (run.Reward is int reward && reward > 0)
             {
-                v.Haul.Add(new HaulView { Kind = GearKinds.Supplies, Icon = "store:parts", Figure = $"+{reward}", Big = true, Tip = StrategyText.Runs.RewardTip(reward) });
+                // What of it came into the packs (Pruebas, 0.14.4: «+45» with none of it in, red.log «§ netos 0»); none, no
+                // crate, only the line of what stayed there.
+                var kept = reward - (run.RewardLost ?? 0);
+                if (kept > 0) v.Haul.Add(new HaulView { Kind = GearKinds.Supplies, Icon = "store:parts", Figure = $"+{kept}", Big = true, Tip = StrategyText.Runs.RewardTip(kept) });
                 if ((run.RewardLost ?? 0) > 0) v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.RewardLost(run.RewardLost.Value) });
             }
             // The supplies found in one tile, however many piles they came in (the pass of 16/11: «9» and «10» side by side).

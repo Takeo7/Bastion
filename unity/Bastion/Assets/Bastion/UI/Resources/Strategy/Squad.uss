@@ -661,6 +661,16 @@
     flex-wrap: wrap;
 }
 
+/* Two rows at most (two of 74 + 8; with the big crate, 96 + 8 and one), the rest scrolled to: the plate no taller (0.14.4). */
+.debrief-haul-list {
+    max-height: 164px;
+    flex-shrink: 0;
+}
+
+.debrief-haul-list--big {
+    max-height: 186px;
+}
+
 .haul {
     width: 72px;
     height: 74px;

@@ -231,6 +231,8 @@ namespace Bastion.Client.Units
             public int movedIn = -9;
             /// <summary>Stepped out of its tile to fire from the one beside it (Slide), and till when (the battle's clock) Sync leaves it there: SteppedOut.</summary>
             public float outUntil;
+            /// <summary>Till when (the battle's clock) one of the dead is in its headbutt's step in and back (Lunging).</summary>
+            public float lungeUntil;
             public bool steppingHome;
             /// <summary>Each step out or home, counted: a newer one ends the older (StepHomeFrom).</summary>
             public int stepOut;
@@ -532,7 +534,11 @@ namespace Bastion.Client.Units
         /// takedown: each puts it where it goes every frame and home as it ends, whatever ends it): the same frame on its
         /// tile's middle and back out, 0.35 to 0.45 m, as a Sync fell in it (M11: one of the dead's blow as another's step settled).
         /// </summary>
-        static bool Lunging(View v) => !WayOff && Application.isPlaying && v.striking;
+        // (And one of the dead in its headbutt, at a soldier or at a siege's door (Lunge, Smash): no strike of the blade's, it
+        // steps in as the blow lands and back over LungeBack by itself; a Sync in that step back, the blow's own damage
+        // settling, had it on its tile's middle for a frame, 0.36 m, and back: SaltosLab, 0 to 2 in a game; CombatLab.Casos.)
+        static bool Lunging(View v) => !WayOff && Application.isPlaying && (v.striking || Time.time < v.lungeUntil);
+        const float LungeBack = 0.35f;
         /// <summary>
         /// Whether it is out of its tile to fire from the one beside it (UI's shot from cover: Slide out, and back 1.1 s after
         /// the shot): on the same tile as before, Sync leaves it where it is. The next event settled while it was out (the
@@ -2834,6 +2840,8 @@ namespace Bastion.Client.Units
                 var reach = t != null ? Reach(home, t.root.position, LungeShort, LungeMost) : Vector3.zero;
                 // (The arms with it, as lunge's pose: up as it winds up, closing on the blow, down as it goes back.)
                 _ = LungeArms(v, ct);
+                // (Off its tile's middle till it is back: Sync leaves it to its lunge. Lunging.)
+                v.lungeUntil = Time.time + WindUp + StrokeTime + LungeBack + 0.05f;
                 await Slide(v, home, home, WindUp, ct);
                 await Slide(v, home, home + reach, StrokeTime, ct);
                 onHit?.Invoke();
@@ -3475,6 +3483,8 @@ namespace Bastion.Client.Units
                 var home = v.root.position;
                 var reach = Reach(home, at, LungeShort, LungeMost);
                 _ = LungeArms(v, ct);
+                // (Off its tile's middle till it is back: Sync leaves it to its lunge. Lunging.)
+                v.lungeUntil = Time.time + WindUp + StrokeTime + LungeBack + 0.05f;
                 await Slide(v, home, home, WindUp, ct);
                 await Slide(v, home, home + reach, StrokeTime, ct);
                 onHit?.Invoke();

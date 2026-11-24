@@ -874,7 +874,12 @@ namespace Bastion.EditorTools
             {
                 if (inHand || art == "baton") continue;
                 UnitViews.ArtsForLab.Remove(u.Id);
-                u.Arms = new Arms { Primary = "assaultRifle", Melee = art == "knife" ? null : art };
+                // (BASTION_PRINCIPAL=huntingRifle,machineGun: each one's gun across its back, in the row's order, the assault
+                // rifle unless said; BASTION_TORSO=survivor10: an outfit with a rucksack, the gun over it. M13, 24/11.)
+                var guns = Environment.GetEnvironmentVariable("BASTION_PRINCIPAL")?.Split(',');
+                int place = row.FindIndex(r => r.u == u);
+                u.Arms = new Arms { Primary = guns != null && guns.Length > 0 ? guns[Math.Min(place, guns.Length - 1)] : "assaultRifle", Melee = art == "knife" ? null : art };
+                if (Environment.GetEnvironmentVariable("BASTION_TORSO") is string torso && u.Appearance != null) u.Appearance.Torso = torso;
             }
             var dead = Targets(row);
             Focus(row);

@@ -54,6 +54,11 @@ probar() {
     echo "La identidad «$sign» no está una sola vez en el llavero (security find-identity -v -p codesigning)."
     exit 2
   fi
+  # The measuring room's port (below), looked at first: taken, nothing is built (Producto's review of the 0.14.4, cuadro 148).
+  if lsof -nP -iTCP:${PUBLICAR_PUERTO:-3400} -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "El puerto ${PUBLICAR_PUERTO:-3400}, el de la sala de medida, está ocupado: «PUBLICAR_PUERTO=<otro> $0 …»."
+    exit 2
+  fi
   rm -f "$mark"
   # The version, in the project: it goes in the commit.
   sed -i '' "s/^  bundleVersion: .*$/  bundleVersion: $version/" "$settings"
@@ -122,7 +127,8 @@ probar() {
   prefsBefore=$(prefsMark)
   appFaults=0
   # The measuring room on a port of its own, on 127.0.0.1 alone (Red, 24/11): on the game's default one (41391) another
-  # session's app, joining «127.0.0.1» with no port, came into it (Pruebas, 05:28). PUBLICAR_PUERTO changes it; taken, stop.
+  # session's app, joining «127.0.0.1» with no port, came into it (Pruebas, 05:28). PUBLICAR_PUERTO changes it; taken, stop
+  # (looked at when «probar» starts too; here again, in case something took it while the apps were built).
   trialPort=${PUBLICAR_PUERTO:-3400}
   if lsof -nP -iTCP:$trialPort -sTCP:LISTEN >/dev/null 2>&1; then
     echo "El puerto $trialPort, el de la sala de medida, está ocupado: «PUBLICAR_PUERTO=<otro> $0 …»."

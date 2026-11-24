@@ -55,7 +55,16 @@ namespace Bastion.UI.Strategy
             Ui.Text(v.Result.ToUpperInvariant(), "debrief-result font-title", plate);
             Ui.Text(v.Mission.ToUpperInvariant(), "debrief-mission font-title", plate);
             Ui.El("debrief-rule", plate);
-            var haul = Ui.El("debrief-haul", plate);
+            // Two rows of tiles at most, the rest scrolled to (Pruebas, 0.14.4: with three the plate grew, the road's shot went up
+            // to stay over it and the screen's foot showed grey under it).
+            var haulList = new ScrollView(ScrollViewMode.Vertical);
+            haulList.AddToClassList("debrief-haul-list");
+            haulList.AddToClassList("settle-scroll");
+            // (Its two rows the crate's and one, or two of the small tiles.)
+            haulList.EnableInClassList("debrief-haul-list--big", v.Haul.Exists(h => h.Big));
+            haulList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            plate.Add(haulList);
+            var haul = Ui.El("debrief-haul", haulList.contentContainer);
             foreach (var h in v.Haul)
             {
                 var tile = Ui.El("haul well", haul);

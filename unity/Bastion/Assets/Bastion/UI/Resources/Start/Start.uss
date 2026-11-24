@@ -20,21 +20,124 @@
     bottom: 0;
 }
 
-/* The main menu's column: the title, then the keys under it, all to the left. */
+/* The main menu's column: the entries to the left, under the title's height (cuadro 149). */
+/* (The first entry's middle at 22.5 % of the height: CORRECCIONES-2; each entry 6.5 % high, StartScreen.SizeEntry.) */
 .start__side {
     position: absolute;
     left: 7%;
-    top: 10%;
+    top: 19.25%;
     bottom: 8%;
     align-items: flex-start;
 }
 
+/*
+   The title (cuadro 149, Arturo's picture): in the middle at the top, big, bone. Arte's worn picture of it when it is there
+   (start__title--art): 29 % of the width, its top at 5 % of the height. The boot's sheet puts it the same (LoadWindow).
+*/
 .start__title {
-    margin-bottom: 26px;
-    font-size: 92px;
-    letter-spacing: 3px;
-    color: #ffffff;
-    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.6);
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 5%;
+    margin: 0;
+    font-size: 104px;
+    letter-spacing: 8px;
+    -unity-text-align: upper-center;
+    color: #e6dccb;
+    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* (Placed by StartScreen.PlaceTitle: 29 % of the width, its letters from 5.9 % of the height.) */
+.start__title--art {
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* Arte's grain over the whole picture and its darker edges (cuadro 149), under the words. */
+/* The dark veil with the grain, on a slant over the top left (cuadro 150; drawn by StartScreen.DrawVeil). */
+.start__veil {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.start__edges {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+/*
+   An entry (cuadro 149): no plate, its words as written, bone; the chosen one (start__entry--chosen) on an amber brush
+   stroke wider than its words, the words dark. Its words start at the column's edge; the stroke a little before them.
+*/
+.start__entry {
+    margin: 0 0 0 -22px;
+    padding: 0 34px 0 22px;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    border-radius: 0;
+    align-items: flex-start;
+}
+
+.start__entry:hover,
+.start__entry:active,
+.start__entry:focus {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.start__entry:disabled {
+    opacity: 0.5;
+}
+
+/* A form's key as an entry (cuadro 151): its stroke round its words (StartLook), in a row. */
+.start__entry.start__entry--short {
+    margin: 0 4px 0 0;
+    padding: 6px 44px 6px 16px;
+}
+
+.start__entry--short > .start__entry-text {
+    font-size: 24px;
+}
+
+/* The family's Regular (cuadro 150: the picture's words are thin, not bold; its download, Arturo's yes). */
+.start__entry-text {
+    -unity-font-definition: url("../../Fonts/Oswald-Regular SDF.asset");
+    margin: 0;
+    padding: 0;
+    font-size: 32px;
+    letter-spacing: 0.5px;
+    color: #e6dccb;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.start__brush {
+    position: absolute;
+    left: 0;
+    top: 1px;
+    right: 0;
+    bottom: 1px;
+    display: none;
+    background-color: #db9a30;
+}
+
+.start__brush--art {
+    background-color: rgba(0, 0, 0, 0);
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+.start__entry--chosen > .start__brush {
+    display: flex;
+}
+
+.start__entry--chosen > .start__entry-text {
+    color: #1a1712;
+    text-shadow: none;
 }
 
 .start__menu {
@@ -263,10 +366,14 @@
 }
 
 /* Under «Continuar partida», the saved game's chapter and level (cuadro 125). */
+/* (Clear of the brush stroke over «Continuar partida», 5.4 % of the screen high.) */
+/* On «Continuar partida»'s line, past its brush stroke (StartScreen.SizeEntry). */
 .start__saved {
-    margin: -6px 0 10px 6px;
+    position: absolute;
+    margin: 0;
     font-size: 15px;
-    color: #c4c9c0;
+    color: #cfc6b4;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 /* The game's level, asked with the name for a new game and to host one (N9; cuadro 125, Arturo 23/11): in the middle,

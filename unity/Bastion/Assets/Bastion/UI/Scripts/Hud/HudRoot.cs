@@ -124,6 +124,9 @@ namespace Bastion.UI.Hud
             goalArrow = new GoalArrow(root.Q("goal-arrow"), tips);
             sight = new SightButton(root.Q("sight"), tips);
             sight.Toggled += () => SightToggled?.Invoke();
+            // The corner's buttons on the keys' line (the eye, the goal's arrow): the row never goes under them (PlaceActions).
+            foreach (var corner in new[] { root.Q(className: "sight__button"), root.Q("goal-arrow") })
+                corner?.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
             miniMap = new MiniMap(root.Q("mini-map"));
             banner = new Banner(root.Q("banner"), relay, s => Sound?.Invoke(s));
             notesHost = root.Q("notes");
@@ -200,19 +203,36 @@ namespace Bastion.UI.Hud
             // The plate's frame stands 8 px out of it (PlateFrame). With the finger the plate is up on the left, out of the keys' way.
             var plate = squadPlate.resolvedStyle.display == DisplayStyle.None || Bastion.Client.GameInput.Touch ? 0 : squadPlate.layout.xMax + 8 + 12;
             var middle = Mathf.Max(width / 2, plate + row / 2);
-            var left = Mathf.Round(middle - row / 2);
+            // Never under the eye nor the goal's arrow, on its line at the bottom right (Pruebas, 0.14.4: «Interfaz» at 130 % on
+            // 1280 × 800, eight keys and four busts, the eye over key 8 and the arrow over «→|»): left as far as the plate lets
+            // it, then the keys a little smaller, from the left.
+            var limit = CornerLimit(width);
+            var scale = 1f;
+            if (middle + row / 2 > limit)
+            {
+                middle = Mathf.Max(plate + row / 2, limit - row / 2);
+                if (middle + row / 2 > limit && row > 0)
+                {
+                    scale = Mathf.Clamp((limit - plate) / row, 0.6f, 1f);
+                    middle = plate + row * scale / 2;
+                }
+            }
+            var left = Mathf.Round(middle - row * scale / 2);
             // The row's width changes by a pixel with where it stands (its keys snapped to whole pixels): moved for that,
             // it was laid out again and again in the same frame, the left and the width taking turns («Layout update is
             // struggling», thousands a minute in every battle with the row pushed right, since before the 0.12.2; some
             // 0.4 ms a frame). Less than two pixels, it stays. (Its left edge now: a row grown is moved.)
             // (And its middle: pushed by the plate, the row grown keeps its left edge, and the notes over it must follow its
             // middle; the 0.14.3's independent review, 5.)
-            if (!float.IsNaN(actionsLeft) && Mathf.Abs(left - actionsLeft) < 2 && Mathf.Abs(middle - actionsMiddle) < 2) return;
+            if (!float.IsNaN(actionsLeft) && Mathf.Abs(left - actionsLeft) < 2 && Mathf.Abs(middle - actionsMiddle) < 2 && Mathf.Abs(scale - actionsScale) < 0.01f) return;
             actionsLeft = left;
             actionsMiddle = middle;
+            actionsScale = scale;
             actions.style.left = left;
+            actions.style.transformOrigin = new TransformOrigin(0, Length.Percent(100));
+            actions.style.scale = new Scale(new Vector3(scale, scale, 1));
             // (Each move said: the screen, the row, how far the squad's plate reaches, and where the row starts.)
-            Debug.Log(FormattableString.Invariant($"[barra] ancho {width:0}, fila {row:0}, bustos hasta {plate:0} → la fila de {left:0} a {left + row:0}"));
+            Debug.Log(FormattableString.Invariant($"[barra] ancho {width:0}, fila {row:0}, bustos hasta {plate:0}, esquina desde {limit:0} → la fila de {left:0} a {left + row * scale:0}{(scale < 1 ? $", al {scale * 100:0} %" : "")}"));
             // The notes over the keys' row, and no wider than the room either side of its middle (U27, Producto: the
             // evacuation's long warning ran the whole width over the busts): broken into lines on their plate.
             var notesWidth = Mathf.Max(240, Mathf.Min(NotesMax, 2 * Mathf.Min(middle - plate, width - middle - 24)));
@@ -224,6 +244,26 @@ namespace Bastion.UI.Hud
         const float NotesMax = 560;
 
         VisualElement notesHost;
+
+        /// <summary>
+        /// Where the bottom right corner's buttons begin (the eye, the goal's arrow) when they stand on the keys' line, 12 px
+        /// before them; the screen's width when none does (with the finger the eye is up the right side).
+        /// </summary>
+        float CornerLimit(float width)
+        {
+            var limit = width;
+            var line = actions.worldBound;
+            foreach (var corner in new[] { root.Q(className: "sight__button"), root.Q("goal-arrow") })
+            {
+                if (corner == null || corner.resolvedStyle.display == DisplayStyle.None || corner.panel == null) continue;
+                var b = corner.worldBound;
+                if (float.IsNaN(b.xMin) || b.width < 1 || b.yMax < line.yMin || b.yMin > line.yMax) continue;
+                limit = Mathf.Min(limit, b.xMin - 12);
+            }
+            return limit;
+        }
+
+        float actionsScale = 1;
 
         /// <summary>Where PlaceActions last put the keys' row (panel pixels); NaN, not yet.</summary>
         float actionsLeft = float.NaN;

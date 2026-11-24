@@ -54,6 +54,15 @@ namespace Bastion.UI.Start
         VisualElement fade, side, menu, cards, form, nameBox, addressBox, keyBox;
         TextField nameField, addressField, keyField;
         Button continueKey, goKey, backKey;
+        /// <summary>
+        /// The main menu's five entries (cuadro 149, Arturo's picture): words with no plates, the chosen one on an amber brush
+        /// stroke, dark; one chosen always, by the pointer over it, the finger on it or the arrows; Intro presses it.
+        /// </summary>
+        StartLook.Entries menuEntries, twoEntries, formEntries;
+        /// <summary>«Partida multijugador»'s column (cuadro 151: as the main menu's): Alojar, Unirse, Volver.</summary>
+        VisualElement twoMenu;
+        Button joinEntry;
+        Label title;
         Label status, joinLabel;
         GameMenu settings;
         readonly List<Button> buttons = new List<Button>();
@@ -82,6 +91,15 @@ namespace Bastion.UI.Start
         // (entering play reloads the scene: a plain field came back empty).
         [SerializeField, HideInInspector] string previewAsked;
         bool previewing;
+        string previewName;
+        /// <summary>The frame a form opened: its fields heed no Intro in it nor the next two (Go).</summary>
+        int formOpened = -10;
+
+        /// <summary>Labs (TeclasLab): what would be opened, hosted or joined only said in the log, nothing done.</summary>
+        public static bool DryRun;
+
+        /// <summary>The name last played with (a preview's own).</summary>
+        string KnownName => previewing && previewName != null ? previewName : link.LastName;
         SavedCampaign previewSaved;
         LanGame previewHeard;
 
@@ -124,7 +142,7 @@ namespace Bastion.UI.Start
             {
                 var asked = previewAsked.Split('|');
                 previewAsked = null;
-                Preview(asked[1] == "1", asked[2], asked[0]);
+                Preview(asked[1] == "1", asked[2], asked[0], asked.Length > 3 ? asked[3] : null);
             }
         }
 
@@ -141,15 +159,18 @@ namespace Bastion.UI.Start
         /// For the labs' captures (HudShots.Entry, BASTION_INICIO): `saved`, a game saved (8 outings, level 3); `heardOf`, a
         /// game on the network hosted by that name; then the page: menu, nombre, nueva, multijugador, direccion or ajustes.
         /// </summary>
-        public void Preview(bool saved, string heardOf, string open)
+        public void Preview(bool saved, string heardOf, string open, string name = null)
         {
+            // (A name played with before, or none: «nombre=Ana».)
+            previewName = name ?? "";
             if (root == null)
             {
-                previewAsked = $"{open}|{(saved ? 1 : 0)}|{heardOf}";
+                previewAsked = $"{open}|{(saved ? 1 : 0)}|{heardOf}|{name}";
                 return;
             }
             Debug.Log($"[inicio] vista previa: {open}, guardada {saved}, en la red {heardOf ?? "nadie"}");
             previewing = true;
+            nameField.value = previewName;
             previewSaved = saved ? new SavedCampaign { Chapter = 1, Row = 3, Soldiers = 4, Supplies = 245, NodesPlayed = 7, GameLevel = Bastion.Engine.LevelIds.Medium } : null;
             previewHeard = string.IsNullOrEmpty(heardOf) ? null : new LanGame { Name = heardOf, Address = "192.168.1.20:41391", Version = link.Version };
             Heard(heardList);
@@ -182,23 +203,65 @@ namespace Bastion.UI.Start
             nameBox = root.Q("name-box");
             addressBox = root.Q("address-box");
             keyBox = root.Q("key-box");
-            root.Q<Label>("title").text = StartText.Title;
-            continueKey = Key("continue", StartText.Continue, Continue);
+            // The title in the middle at the top (cuadro 149), out of the keys' column; Arte's worn picture of it when it is there.
+            title = root.Q<Label>("title");
+            title.text = StartText.Title;
+            var start = root.Q("start");
+            start.Insert(start.IndexOf(fade) + 1, title);
+            if (Resources.Load<Texture2D>(TitleArt) is Texture2D titleArt)
+            {
+                title.text = "";
+                title.style.backgroundImage = titleArt;
+                title.AddToClassList("start__title--art");
+                root.RegisterCallback<GeometryChangedEvent>(_ => PlaceTitle(title, titleArt, root.layout.width, root.layout.height));
+            }
+            // Arte's grain over the scene, under the words, and its darker edges (cuadro 149), when they are there.
+            // The dark veil with Arte's grain over the top left, its edge on a slant (cuadro 150, Arturo's picture), under the words.
+            start.Insert(start.IndexOf(fade) + 1, StartLook.Veil());
+            menuEntries = new StartLook.Entries(root);
+            twoEntries = new StartLook.Entries(root);
+            formEntries = new StartLook.Entries(root);
+            // «Capítulo 1 · Medio» past «Continuar partida»'s stroke, on its line (the entries keep the picture's steps).
+            menuEntries.Sized += (entry, left, width) =>
+            {
+                if (entry != continueKey || savedNote == null) return;
+                var words = entry.Q<Label>(className: "start__entry-text").layout;
+                savedNote.style.left = left + width + 6;
+                savedNote.style.top = Mathf.Round(words.y + words.height / 2 - 9);
+            };
+            if (Resources.Load<Texture2D>("Start/bordes") is Texture2D edges)
+            {
+                var e = new VisualElement { pickingMode = PickingMode.Ignore };
+                e.AddToClassList("start__edges");
+                e.style.backgroundImage = edges;
+                start.Insert(start.IndexOf(fade) + 1, e);
+            }
+            continueKey = Entry("continue", StartText.Continue, Continue);
             // Where it would be, the campaign from before the expeditions, set aside (Red, 16/11).
             oldNote = new Label();
             Ui.AddClasses(oldNote, "start__old");
             continueKey.parent.Insert(continueKey.parent.IndexOf(continueKey) + 1, oldNote);
             // Under «Continuar partida», the saved game's chapter and level (cuadro 125: seen there only).
-            savedNote = new Label();
+            // (On its line, past the brush stroke (menuEntries.Sized): the entries keep the picture's steps, CORRECCIONES-2.)
+            savedNote = new Label { pickingMode = PickingMode.Ignore };
             Ui.AddClasses(savedNote, "start__saved");
-            continueKey.parent.Insert(continueKey.parent.IndexOf(continueKey) + 1, savedNote);
-            Key("new", StartText.New, NewGame);
-            Key("two", StartText.Two, () => Go(Page.Two));
-            Key("settings", StartText.Settings, OpenSettings);
+            continueKey.Add(savedNote);
+            Entry("new", StartText.New, NewGame);
+            Entry("two", StartText.Two, () => Go(Page.Two));
+            Entry("settings", StartText.Settings, OpenSettings);
             // Not with the finger: iOS apps aren't closed from inside them (Apple; Application.Quit there looks like a crash. Red, 7/11;
             // Gameplay, 8/11: wherever the game is played with the finger, the lab's too).
-            Ui.Show(Key("quit", StartText.Quit, Quit), !Bastion.Client.GameInput.Touch);
-            backKey = Key("back", StartText.Back, () => Go(Page.Menu));
+            Ui.Show(Entry("quit", StartText.Quit, Quit), !Bastion.Client.GameInput.Touch);
+            backKey = root.Q<Button>("back");
+            Ui.Show(backKey, false);
+            // «Partida multijugador» as the main menu (cuadro 151): a column of entries where its cards were.
+            twoMenu = Ui.El("start__menu", side);
+            twoMenu.pickingMode = PickingMode.Ignore;
+            Button NewEntry() { var b = new Button(); twoMenu.Add(b); return b; }
+            buttons.Add(twoEntries.Make(NewEntry(), StartText.Host, Host));
+            joinEntry = twoEntries.Make(NewEntry(), StartText.ByAddress, JoinCard);
+            buttons.Add(joinEntry);
+            buttons.Add(twoEntries.Make(NewEntry(), StartText.Back, () => Go(Page.Menu)));
 
             var host = root.Q<Button>("host");
             host.clicked += Host;
@@ -222,12 +285,16 @@ namespace Bastion.UI.Start
             keyField = root.Q<TextField>("key");
             keyField.textEdition.placeholder = StartText.KeyPlaceholder;
             Levels();
-            goKey = Key("go", StartText.Start, FormGo);
-            Key("form-back", StartText.Back, FormBack);
+            // (The form's keys as entries too, their strokes round their words; the fields as they were, cuadro 151.)
+            goKey = formEntries.Make(root.Q<Button>("go"), StartText.Start, FormGo, false);
+            buttons.Add(goKey);
+            buttons.Add(formEntries.Make(root.Q<Button>("form-back"), StartText.Back, FormBack, false));
             // Intro in a field, as its key.
             foreach (var field in new[] { nameField, addressField, keyField })
                 field.RegisterCallback<KeyDownEvent>(e =>
                 {
+                    // (Not the Intro that opened the form, come to the field as it took the focus: the review.)
+                    if (Time.frameCount <= formOpened + 2) return;
                     if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter) FormGo();
                 });
 
@@ -260,6 +327,35 @@ namespace Bastion.UI.Start
             return b;
         }
 
+        /// <summary>Arte's worn «BASTIÓN» (cuadro 149); the boot's sheet takes it too (LoadWindow.StartTitle).</summary>
+        public const string TitleArt = "Start/titulo";
+
+        /// <summary>
+        /// Arte's title placed as Arturo's picture's (CORRECCIONES-2): 29 % of the screen's width, as high as its own shape
+        /// makes it, its letters (from TitleAccent of the picture down: the accent stands over them) from 5.9 % of the height.
+        /// </summary>
+        public static void PlaceTitle(VisualElement title, Texture2D art, float w, float h)
+        {
+            if (art == null || float.IsNaN(w) || w <= 0 || h <= 0) return;
+            var width = Mathf.Round(w * TitleWide);
+            var high = Mathf.Round(width * art.height / art.width);
+            title.style.left = Mathf.Round((w - width) / 2);
+            title.style.right = StyleKeyword.Auto;
+            title.style.width = width;
+            title.style.top = Mathf.Round(h * TitleLetters - TitleAccent * high);
+            title.style.height = high;
+        }
+
+        const float TitleWide = 0.29f, TitleLetters = 0.059f, TitleAccent = 0.242f;
+
+        /// <summary>A main menu's entry (cuadro 149; StartLook): the button of the layout by its name.</summary>
+        Button Entry(string name, string text, Action click)
+        {
+            var b = menuEntries.Make(root.Q<Button>(name), text, click);
+            buttons.Add(b);
+            return b;
+        }
+
         /// <summary>A card's red icon (Arte's: the flag, the two soldiers), when it is there.</summary>
         static void Icon(VisualElement e, string path)
         {
@@ -274,6 +370,12 @@ namespace Bastion.UI.Start
             // review, 23/11): they step out of sight while it is open, the band stays.
             var under = settings.Open ? Visibility.Hidden : Visibility.Visible;
             if (side.resolvedStyle.visibility != under) side.style.visibility = under;
+            if (title.resolvedStyle.visibility != under) title.style.visibility = under;
+            // One chosen always (the first to start with); the arrows and Intro, on a page of entries.
+            var entries = page == Page.Menu ? menuEntries : page == Page.Two ? twoEntries : formEntries;
+            entries.ChooseFirst();
+            // (Not under Ajustes nor its question, «¿Empezar de cero?», nor under a loading sheet: the review, 1 and 2.)
+            if (!busy && !settings.Open && !settings.Asking && !App.AppFlow.Veiled && (page == Page.Menu || page == Page.Two)) entries.Keys();
             // Esc: Ajustes or its question first, then a step back (the form, Partida multijugador).
             if (UnityEngine.InputSystem.Keyboard.current?.escapeKey.wasPressedThisFrame != true) return;
             if (settings.Back() || busy) return;
@@ -288,13 +390,18 @@ namespace Bastion.UI.Start
         /// </summary>
         void Go(Page to)
         {
+            if (DryRun) Debug.Log($"[inicio] página {to}");
+            if ((to == Page.Name || to == Page.Address) && page != to) formOpened = Time.frameCount;
             page = to;
             var two = to == Page.Two || to == Page.Address || (to == Page.Name && nameFrom == Page.Two);
-            Ui.Show(fade, !two);
-            Ui.Show(side, !two);
+            // The veil, never the dark band (cuadro 151); the title on every page; «Partida multijugador» a column as the menu.
+            Ui.Show(fade, false);
+            Ui.Show(side, true);
+            Ui.Show(title, true);
             Ui.Show(menu, to == Page.Menu);
-            Ui.Show(cards, to == Page.Two);
-            Ui.Show(backKey, to == Page.Two);
+            Ui.Show(twoMenu, to == Page.Two);
+            Ui.Show(cards, false);
+            Ui.Show(backKey, false);
             var asking = to == Page.Name || to == Page.Address;
             Ui.Show(form, asking);
             Ui.Show(nameBox, to == Page.Name || (to == Page.Address && NoName));
@@ -304,7 +411,7 @@ namespace Bastion.UI.Start
             Ui.Show(addressBox, to == Page.Address);
             Ui.Show(keyBox, to == Page.Address);
             if (asking) (two || (to == Page.Name && askingLevel) ? root.Q("center") : side).Add(form);
-            if (to == Page.Address) goKey.text = StartText.Join.ToUpperInvariant();
+            if (to == Page.Address) StartLook.Entries.SetText(goKey, StartText.Join);
             Say("", false);
             ShowScene(two ? "multijugador" : "menu");
             if (to == Page.Name) nameField.Focus();
@@ -344,7 +451,7 @@ namespace Bastion.UI.Start
             App.AppFlow.LiftVeil(raised);
         }
 
-        bool NoName => string.IsNullOrWhiteSpace(link.LastName);
+        bool NoName => string.IsNullOrWhiteSpace(KnownName);
 
         /// <summary>«Continuar partida» with a game saved; the menu's other keys close up when it goes.</summary>
         void ShowSaved()
@@ -420,7 +527,7 @@ namespace Bastion.UI.Start
         void WithName(Page from, Func<string, string> run, string waiting, string go)
         {
             if (NoName) AskName(from, run, waiting, go);
-            else Attempt(link.LastName.Trim(), run, waiting);
+            else Attempt(KnownName.Trim(), run, waiting);
         }
 
         void AskName(Page from, Func<string, string> run, string waiting, string go, bool levels = false)
@@ -430,7 +537,7 @@ namespace Bastion.UI.Start
             afterName = run;
             afterNameWaiting = waiting;
             Go(Page.Name);
-            goKey.text = go.ToUpperInvariant();
+            StartLook.Entries.SetText(goKey, go);
         }
 
         /// <summary>The form's key (or Intro in it): on with the name given, or into the game at the address.</summary>
@@ -451,7 +558,7 @@ namespace Bastion.UI.Start
             }
             var address = addressField.value;
             var key = keyField.value;
-            Attempt(NoName ? name : link.LastName.Trim(), who => link.Join(address, who, key), StartText.Looking);
+            Attempt(NoName ? name : KnownName.Trim(), who => link.Join(address, who, key), StartText.Looking);
         }
 
         void FormBack() => Go(page == Page.Name ? nameFrom : Page.Two);
@@ -460,6 +567,11 @@ namespace Bastion.UI.Start
         void Attempt(string name, Func<string, string> run, string waiting)
         {
             if (busy) return;
+            if (DryRun)
+            {
+                Debug.Log($"[inicio] haría: {waiting} (nombre «{name}»)");
+                return;
+            }
             SetBusy(true);
             Say(waiting, false);
             var problem = run(name);
@@ -501,6 +613,7 @@ namespace Bastion.UI.Start
             heardList = list ?? new LanGame[0];
             heard = previewing ? previewHeard : heardList.FirstOrDefault(g => g.Version == link.Version);
             joinLabel.text = (heard != null ? StartText.JoinOf(heard.Name) : StartText.ByAddress).ToUpperInvariant();
+            if (joinEntry != null) StartLook.Entries.SetText(joinEntry, heard != null ? StartText.JoinOf(heard.Name) : StartText.ByAddress);
         }
 
         /// <summary>

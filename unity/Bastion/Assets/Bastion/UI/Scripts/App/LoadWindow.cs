@@ -201,18 +201,26 @@ namespace Bastion.UI.App
             if (LineIcon.Has(id)) e.Add(new LineIcon(id) { pickingMode = PickingMode.Ignore });
         }
 
-        /// <summary>The title as the start screen's (AsStart): its column at 7 % and 10 %, the label in it as there.</summary>
+        /// <summary>
+        /// The title as the start screen's (AsStart; Start.uss .start__title, cuadro 149): in the middle at the top, its top at
+        /// 5 %, bone; Arte's worn picture of it when it is there, placed as the start screen's (StartScreen.PlaceTitle).
+        /// </summary>
         void StartTitle(string title)
         {
-            var side = new VisualElement { pickingMode = PickingMode.Ignore };
-            side.style.position = Position.Absolute;
-            side.style.left = Length.Percent(7);
-            side.style.top = Length.Percent(10);
-            side.style.alignItems = Align.FlexStart;
-            Root.Add(side);
-            var t = Text(side, title.ToUpperInvariant(), 92, Color.white, true);
-            t.style.letterSpacing = 3;
-            t.style.textShadow = new TextShadow { offset = new Vector2(0, 3), blurRadius = 0, color = new Color(0, 0, 0, 0.6f) };
+            var art = Resources.Load<Texture2D>(Bastion.UI.Start.StartScreen.TitleArt);
+            var t = Text(Root, art != null ? "" : title.ToUpperInvariant(), 104, new Color(0.902f, 0.863f, 0.796f), true);
+            t.style.position = Position.Absolute;
+            t.style.left = t.style.right = 0;
+            t.style.top = Length.Percent(5);
+            t.style.marginLeft = t.style.marginRight = t.style.marginTop = t.style.marginBottom = 0;
+            t.style.letterSpacing = 8;
+            t.style.unityTextAlign = TextAnchor.UpperCenter;
+            t.style.textShadow = new TextShadow { offset = new Vector2(0, 3), blurRadius = 0, color = new Color(0, 0, 0, 0.45f) };
+            if (art == null) return;
+            // Where the start screen puts it (StartScreen.PlaceTitle), so the sheet lifts with it still.
+            Root.RegisterCallback<GeometryChangedEvent>(_ => Bastion.UI.Start.StartScreen.PlaceTitle(t, art, Root.layout.width, Root.layout.height));
+            t.style.backgroundImage = art;
+            t.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
         }
 
         static Label Text(VisualElement into, string text, float size, Color color, bool title)

@@ -162,4 +162,8 @@ done
 # Unity imports what came in (if the scripts don't compile, it does so the next time they do).
 echo "== Unity"
 LOG="$project/Logs/import-synty.log" "$tools/unity.sh" || true
+# Synty's 4096 atlases at 2048 (TexturasImport, 24/11: 266 MB less in the build, nothing to see of it): a fresh import
+# brings them back at their own size, so again after each.
+echo "== texturas a 2048"
+LOG="$project/Logs/import-synty-texturas.log" "$tools/unity.sh" -executeMethod Bastion.EditorTools.TexturasImport.Atlas2048 -quit || true
 exit $failed

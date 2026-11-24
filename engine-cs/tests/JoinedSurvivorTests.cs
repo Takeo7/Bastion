@@ -289,6 +289,28 @@ namespace Bastion.Engine.Tests
             Assert.Equal(30, preview.Lost[1].Count);
         }
 
+        [Fact(DisplayName = "se une › at the cap, the reward's room is what they leave the packs (RewardRoom, cuadro 148)")]
+        public void RewardRoomAfterTheyLeaveTheirs()
+        {
+            var (c, s, vip) = AtTheCap();
+            var squad = Squad(s);
+            foreach (var u in squad)
+            {
+                u.Pack!.Items.Clear();
+                for (var y = 0; y < u.Pack.H; y++)
+                    if (u != squad[0] || y < u.Pack.H - 1) Assert.True(RunPack.Put(u.Pack, Gears.NewGear(c, GearKinds.Weapon, FoundWeaponIds.AssaultRifle), 0, y, false));
+            }
+            // One cell free in the squad's packs; the survivor's magazines will take it.
+            Assert.True(RunPack.Put(squad[0].Pack!, Gears.NewGear(c, GearKinds.Weapon, FoundWeaponIds.Bat), 0, squad[0].Pack!.H - 1, false));
+            Assert.True(RunPack.Put(vip.Pack!, Gears.NewGear(c, GearKinds.Mags, null), 0, 0, false));
+            Board(s, squad);
+            Assert.Equal(Content.PileOf(GearKinds.Supplies, null), Runs.RewardRoom(c, s));
+            Board(s, new[] { vip });
+            Assert.Equal(0, Runs.RewardRoom(c, s));
+            var run = EndFight(c, s, Outcomes.Victory, EndReasons.Objective).Run!;
+            Assert.Equal(run.Reward, run.RewardLost);
+        }
+
         [Fact(DisplayName = "se une › no preview of what they leave when they stay, or were never brought out")]
         public void NoHandOverPreviewWhenTheyStay()
         {

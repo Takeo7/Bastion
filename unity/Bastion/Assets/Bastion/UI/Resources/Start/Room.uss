@@ -8,13 +8,13 @@
     margin-bottom: 24px;
     font-size: 46px;
     letter-spacing: 2px;
-    color: #ffffff;
+    color: #e6dccb;
     text-shadow: 0 3px 0 rgba(0, 0, 0, 0.6);
 }
 
 /* Under a key: the game saved (its chapter and level, where it is), or why it can't be pressed. */
 .room__note {
-    margin: -6px 0 12px 6px;
+    margin: 0 0 8px 0;
     font-size: 15px;
     white-space: normal;
     max-width: 380px;
@@ -260,4 +260,11 @@
 
 .room__option--on .room__option-about {
     color: var(--t-text);
+}
+
+/* The plate in the middle (a new game, the skirmish) under the room's title, never over it (Producto, 24/11): centred in
+   what the title leaves below it. */
+.room .start__center {
+    top: 26%;
+    bottom: 3%;
 }

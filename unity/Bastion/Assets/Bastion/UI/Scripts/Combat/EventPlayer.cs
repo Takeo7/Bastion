@@ -3992,7 +3992,9 @@ namespace Bastion.UI.Combat
             // The reward too, where the stage gives one (as RunFights.ApplyFight: the boss's, a special's but an Élite's, La
             // llave's or Saqueadores'), won: its figure is drawn with the report, which says it.
             var kind = s.Run.NodeKind;
-            if (kind == NodeKinds.Boss || kind != NodeKinds.Elite && kind != NodeKinds.Key && kind != NodeKinds.Raiders && RunMap.Rewarded(kind)) list.Add(HudText.Mission.HaulReward);
+            var rewarded = kind == NodeKinds.Boss || kind != NodeKinds.Elite && kind != NodeKinds.Key && kind != NodeKinds.Raiders && RunMap.Rewarded(kind);
+            // Not when none of it would fit in the packs (Pruebas, 0.14.4: «y la recompensa» with all of it left there; Runs.RewardRoom).
+            if (rewarded && (campaign == null || Runs.RewardRoom(campaign, s) > 0)) list.Add(HudText.Mission.HaulReward);
             if (list.Count == 0) return HudText.Mission.NoHaul;
             return HudText.Mission.Haul + Ui.List(list);
         }

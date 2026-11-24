@@ -110,7 +110,7 @@ namespace Bastion.UI.Strategy
             Ui.AddClasses(back, "runmap-back font-title");
             foot.Add(back);
             homeNote = Ui.Text("", "runmap-home muted", foot);
-            stop = new StopPlate(plate, tips, icon, handlers);
+            stop = new StopPlate(plate, tips, icon, handlers) { Floor = NextRowTop };
             Sheet();
             // The right: the squad folded to its busts over the stage's card; «Equipo ▸» opens the kits in the card's place.
             side = Ui.El("runmap-side", view);
@@ -199,9 +199,23 @@ namespace Bastion.UI.Strategy
                 at[n.Id] = new Vector2(r.center.x + (n.Col - (n.Cols - 1) / 2f) * gap, r.yMax - 10 - dy * n.Row);
             }
             Draw(view);
+            stop?.Refit();
         }
 
         static float RadiusOf(RunNodeView n) => n.Boss ? BossR : NodeR;
+
+        /// <summary>
+        /// The top of the stages one may go to next (the row over the one here: its rings and their kind's marks), in the
+        /// plate's pixels; NaN, none. The Trueque's plate ends over it (Pruebas, 0.14.4: at 1920 it covered their top).
+        /// </summary>
+        float NextRowTop()
+        {
+            if (view == null || float.IsNaN(field.layout.y)) return float.NaN;
+            var here = view.AtStart ? 0 : view.Nodes.FirstOrDefault(n => n.At)?.Row ?? -1;
+            var next = here < 0 ? null : view.Nodes.Where(n => n.Row == here + 1 && at.ContainsKey(n.Id)).ToList();
+            if (next == null || next.Count == 0) return float.NaN;
+            return field.layout.y + next.Min(n => at[n.Id].y - Math.Max(RadiusOf(n), RadiusOf(n) * 0.45f + KindSide / 2f)) - 4;
+        }
 
         void Draw(RunMapView v)
         {
