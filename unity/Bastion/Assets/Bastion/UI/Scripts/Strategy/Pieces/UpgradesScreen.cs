@@ -42,17 +42,22 @@ namespace Bastion.UI.Strategy
             {
                 var row = Ui.El("upgrade", plate);
                 var text = Ui.El("upgrade__text", row);
-                Ui.Text(r.Name, "upgrade__name font-title", text);
-                Ui.Text(r.Line, "upgrade__line muted", text);
+                var name = Ui.Text(r.Name, "upgrade__name font-title", text);
+                // In figures (U3, cuadro 157), the sentence on hover.
+                var delta = Ui.Text(r.Delta ?? r.Line, "upgrade__delta", text);
+                tips.Attach(name, r.Line);
+                tips.Attach(delta, r.Line);
                 var marks = Ui.El("upgrade__marks", text);
                 for (var i = 0; i < r.Levels; i++) Ui.El(i < r.Level ? "upgrade__mark upgrade__mark--on" : "upgrade__mark", marks);
                 // Its level in words beside the marks (Producto's review, 23/11, B12: the marks alone read badly).
                 if (!string.IsNullOrEmpty(r.LevelText)) Ui.Text(r.LevelText, "upgrade__level", marks);
                 var side = Ui.El("upgrade__side", row);
-                if (!string.IsNullOrEmpty(r.Price)) SuppliesMark.Make(side, r.Price, "supplies-mark--small upgrade__price");
                 var id = r.Id;
-                var b = new Button(() => handlers.OnUpgrade(id)) { text = (r.Button ?? "").ToUpperInvariant() };
+                var b = new Button(() => handlers.OnUpgrade(id));
                 Ui.AddClasses(b, "upgrade__button font-title");
+                // Its price on the key itself (U3): «MEJORAR 150 [caja]», its word and the mark side by side.
+                Ui.Text((r.Button ?? "").ToUpperInvariant(), "upgrade__button-text", b).pickingMode = PickingMode.Ignore;
+                if (!string.IsNullOrEmpty(r.Price)) SuppliesMark.Make(b, r.Price, "supplies-mark--small upgrade__price").pickingMode = PickingMode.Ignore;
                 side.Add(b);
                 if (r.Why != null)
                 {

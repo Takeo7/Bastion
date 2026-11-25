@@ -32,6 +32,11 @@ namespace Bastion.UI.Gear
         public int Pile = 1;
         /// <summary>The words on hover when there is no card.</summary>
         public string Tip;
+        /// <summary>
+        /// In a line, what it changes against what is worn in its place (U4, a kit place's list): a weapon's damage and aim as
+        /// that soldier would have them, a vest's health and armour; green better, red worse (rich text); null, nothing to say.
+        /// </summary>
+        public string Brief;
         /// <summary>Its card on hover (name, figures, mods); null, `Tip`.</summary>
         [NonSerialized] public Func<VisualElement> Card;
     }

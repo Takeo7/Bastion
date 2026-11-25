@@ -128,7 +128,7 @@ namespace Bastion.UI.Strategy
             }
             squad.Show(false);
             debrief.Show(false);
-            gear = new GearBoard(root, tips, Icon, gearRelay) { PictureOf = (k, t) => GearPictureOf?.Invoke(k, t) };
+            gear = new GearBoard(root, tips, Icon, gearRelay) { PictureOf = (k, t) => GearPictureOf?.Invoke(k, t), PlaceLists = true };
             stash = new StashScreen(root.Q("view"), tips, Icon, relay, gear);
             runMap = new RunMapScreen(root.Q("view"), tips, Icon, relay, gear);
             // Almacén's and the map's soldiers by their busts (Arturo, 18/11 T5).

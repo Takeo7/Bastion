@@ -199,9 +199,11 @@ principal() {
   for folder in unity/Bastion/Builds/release packages/desktop/dist/release; do
     mkdir -p "$main/$folder" && cp "$out/Bastion-$version-mac.zip" "$out/Bastion-$version-win-x64.zip" "$main/$folder/" || exit 1
   done
-  rm -rf "$main/unity/Bastion/Builds/Mac/Bastion.app"
-  ditto unity/Bastion/Builds/Mac/Bastion.app "$main/unity/Bastion/Builds/Mac/Bastion.app" || exit 1
-  codesign -v --deep --strict "$main/unity/Bastion/Builds/Mac/Bastion.app" || echo "La firma de la app copiada no pasa."
+  # With the version in its name (cuadro 162), as in the zip: «Bastión 0.14.8.app»; the ones of before and Bastion.app out.
+  copy="$main/unity/Bastion/Builds/Mac/Bastión $version.app"
+  rm -rf "$main/unity/Bastion/Builds/Mac/Bastion.app" "$main/unity/Bastion/Builds/Mac/Bastión "*.app
+  ditto unity/Bastion/Builds/Mac/Bastion.app "$copy" || exit 1
+  codesign -v --deep --strict "$copy" || echo "La firma de la app copiada no pasa."
   # The main tree onto the published commit, keeping every working file as it is.
   git -C "$main" fetch -q origin && git -C "$main" reset -q origin/main || exit 1
   sed -i '' "s/^  bundleVersion: .*$/  bundleVersion: $version/" "$main/unity/Bastion/ProjectSettings/ProjectSettings.asset"

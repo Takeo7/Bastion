@@ -203,7 +203,7 @@ namespace Bastion.UI.Hud
                 TermIcon(m.Icon, term);
                 Ui.Text(own || i == 0 ? m.Value.ToString() : Signed(m.Value), "term__value font-title", term);
                 if (!string.IsNullOrEmpty(m.Note)) Ui.Text(m.Note, "term__note", term);
-                tips.Attach(term, HudText.Shot.TermTip(m.Label, m.Note));
+                tips.Attach(term, HudText.Shot.TermTip(m.Label, m.About ?? m.Note));
             }
         }
 

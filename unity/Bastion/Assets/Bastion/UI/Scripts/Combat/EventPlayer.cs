@@ -3902,10 +3902,10 @@ namespace Bastion.UI.Combat
                 case MissionKinds.Hack: success = "Equipo en marcha"; break;
                 // An expedition's Rescate is a Saqueo too (N2, 17/11): what was found; and first, if the survivor got out in La
                 // Lata, that they join (Lore's line). Left without a seat, or dead, the log has said so.
-                case MissionKinds.Rescue when s.Run != null: success = RunJoined(s, stays) + RunHaul(s, stays, campaign); break;
+                case MissionKinds.Rescue when s.Run != null: success = RunJoined(s, stays); break;
                 case MissionKinds.Rescue: success = vip != null ? $"{vip}, a salvo" : "La persona retenida, a salvo"; break;
                 // (On an expedition, every stage that is a Saqueo underneath: normal, Asedio, Travesía, Guarida, the boss's.)
-                case MissionKinds.Scavenge: success = s.Run != null ? RunJoined(s, stays) + RunHaul(s, stays, campaign) : loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
+                case MissionKinds.Scavenge: success = s.Run != null ? RunJoined(s, stays) : loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
                 default: success = "No queda ninguno en pie"; break;
             }
             string why;
@@ -3976,45 +3976,6 @@ namespace Bastion.UI.Combat
             return v;
         }
 
-        /// <summary>
-        /// What a stage that is a Saqueo underneath brings home (Lore, L5, 17/11): what was found out there (an id past
-        /// RunFight.FirstGear, as RunFights.ApplyFight's Found) on those still standing; the § first, then three things and
-        /// how many more. Not Looting.BroughtBack, the missions' of before (their backpacks, empty here: R4 said «Volvéis con
-        /// las mochilas vacías» with 13 § aboard).
-        /// </summary>
-        static string RunHaul(GameState s, bool stays, CampaignState campaign)
-        {
-            var found = new List<Bastion.Engine.Gear>();
-            // The one who joined too (a recruit coming home): what they carry comes home in the report (RunFights), so here
-            // (the 0.14.3's independent review, 6: «nada encontrado» on the card with the haul in their pack).
-            foreach (var u in s.Units.Where(u => u.Team == Teams.Xcom && (u.CampaignId != null || stays && Recruit(s, u)) && !Fell(u)))
-            {
-                if (u.Pack != null) found.AddRange(u.Pack.Items.Select(p => p.Gear));
-                if (u.Kit != null)
-                    foreach (var slot in KitSlots.All)
-                        if (Gears.InSlot(u.Kit, slot) is Bastion.Engine.Gear g) found.Add(g);
-            }
-            found = found.Where(g => g != null && GearNumber(g.Id) > s.Run.FirstGear).ToList();
-            // A survivor with no bed for them leaves in the squad's packs what fits there, found out there or not
-            // (Runs.HandOverPreview, as ApplyFight's HandOver): home too, as the report says (R23 B6: the card left it out);
-            // what finds no room, not (the 0.14.4's independent review, 4: it was counted all the same).
-            if (!stays && campaign != null && Runs.HandOverPreview(campaign, s) is RunNoBed handed) found.AddRange(handed.Gave);
-            var list = new List<string>();
-            var supplies = found.Where(g => g.Kind == GearKinds.Supplies).Sum(g => g.Count);
-            if (supplies > 0) list.Add(Lore.GearA(GearKinds.Supplies, null, supplies));
-            foreach (var same in found.Where(g => g.Kind != GearKinds.Supplies).GroupBy(g => (g.Kind, g.Type)))
-                list.Add(Lore.GearA(same.Key.Kind, same.Key.Type, same.Sum(g => Math.Max(1, g.Count))));
-            if (list.Count > 4) list = list.Take(3).Append(HudText.Mission.HaulMore(list.Count - 3)).ToList();
-            // The reward too, where the stage gives one (as RunFights.ApplyFight: the boss's, a special's but an Élite's, La
-            // llave's or Saqueadores'), won: its figure is drawn with the report, which says it.
-            var kind = s.Run.NodeKind;
-            var rewarded = kind == NodeKinds.Boss || kind != NodeKinds.Elite && kind != NodeKinds.Key && kind != NodeKinds.Raiders && RunMap.Rewarded(kind);
-            // Not when none of it would fit in the packs (Pruebas, 0.14.4: «y la recompensa» with all of it left there; Runs.RewardRoom).
-            if (rewarded && (campaign == null || Runs.RewardRoom(campaign, s) > 0)) list.Add(HudText.Mission.HaulReward);
-            if (list.Count == 0) return HudText.Mission.NoHaul;
-            return HudText.Mission.Haul + Ui.List(list);
-        }
-
         /// <summary>A run's survivor in this fight (N2): one loose on any map (MissionState.Survivor), or the Rescate's.</summary>
         static string SurvivorOf(GameState s) => s.Mission.Survivor ?? (s.Mission.Kind == MissionKinds.Rescue ? s.Mission.ObjectiveUnit : null);
 
@@ -4028,7 +3989,7 @@ namespace Bastion.UI.Combat
             var joined = id != null ? s.Units.FirstOrDefault(u => u.Id == id && u.Evacuated) : null;
             if (joined == null) return "";
             // No bed for them: they don't stay, as the log and the report say (what they carried, in the report: NoBed).
-            return (stays ? Lore.TalkText.Joined(joined.Name) : RunTexts.SurvivorNoRoom(joined.Name)).TrimEnd('.') + " · ";
+            return (stays ? Lore.TalkText.Joined(joined.Name) : RunTexts.SurvivorNoRoom(joined.Name)).TrimEnd('.');
         }
 
         /// <summary>Fallen out there, or left behind (RunFights.ApplyFight's Fell).</summary>
@@ -4037,7 +3998,5 @@ namespace Bastion.UI.Combat
 
         static bool Fell(Unit u) => (!u.Alive && !u.Evacuated && u.Hp <= 0) || u.Lost == true;
 
-        /// <summary>The number of a gear's id («g17»: 17), or 0 (RunFights.GearNumber).</summary>
-        static int GearNumber(string id) => id != null && id.Length > 1 && int.TryParse(id.Substring(1), out var n) ? n : 0;
     }
 }

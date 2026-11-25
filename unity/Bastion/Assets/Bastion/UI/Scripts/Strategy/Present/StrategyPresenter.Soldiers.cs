@@ -132,7 +132,8 @@ namespace Bastion.UI.Strategy
             if (soldier != null && pick.Draft != null && pick.Draft.Soldier == soldier.Id) v.Customizer = Customizer(soldier, pick.Draft);
             else if (soldier != null) v.Sheet = Sheet(c, soldier);
             // The runs: the kit is Almacén's, and nobody is recruited (the free one comes alone). Round the figure what they
-            // carry, to look at, not to change here (Arturo, 18/11 T3: «en soldados quiero saber qué equipamiento llevan»).
+            // carry (Arturo, 18/11 T3: «en soldados quiero saber qué equipamiento llevan»); one's own places, a click opens
+            // what can go there (U4, 25/11).
             if (c.Stash != null)
             {
                 v.Recruit = null;
@@ -144,11 +145,12 @@ namespace Bastion.UI.Strategy
                     v.Sheet.Care = null;
                     if (soldier?.Kit is Kit kit)
                     {
-                        // Its weapons as it has them (O7).
+                        // Its weapons as it has them (O7); one's own places open a list of what can go there (U4).
                         var who = Against(c, soldier);
-                        foreach (var slot in new[] { KitSlots.Primary, KitSlots.Melee, KitSlots.Pistol }) v.Sheet.Arms.Add(KitPick(kit, slot, who));
-                        v.Sheet.Belt.Add(KitPick(kit, KitSlots.Vest));
-                        foreach (var slot in new[] { KitSlots.Belt0, KitSlots.Belt1 }) v.Sheet.Belt.Add(KitPick(kit, slot));
+                        var ownPlaces = Runs.Controls(c, Slot, Connected, soldier);
+                        foreach (var slot in new[] { KitSlots.Primary, KitSlots.Melee, KitSlots.Pistol }) v.Sheet.Arms.Add(KitPick(kit, slot, who, ownPlaces ? PlaceOptions(c, soldier, slot, who) : null));
+                        v.Sheet.Belt.Add(KitPick(kit, KitSlots.Vest, who, ownPlaces ? PlaceOptions(c, soldier, KitSlots.Vest, who) : null));
+                        foreach (var slot in new[] { KitSlots.Belt0, KitSlots.Belt1 }) v.Sheet.Belt.Add(KitPick(kit, slot, who, ownPlaces ? PlaceOptions(c, soldier, slot, who) : null));
                     }
                 }
             }
@@ -156,14 +158,43 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>A place of a run's kit round the figure (T3): its name, what is in it with its picture and its help; empty, «Nada».</summary>
-        static PickView KitPick(Kit kit, string slot, Wielder who = null)
+        static PickView KitPick(Kit kit, string slot, Wielder who = null, List<PickOptionView> options = null)
         {
             var g = Gears.InSlot(kit, slot);
             var item = g != null ? Item(g, who) : null;
             var label = Bastion.UI.Gear.GearText.SlotLabel(slot);
-            var v = new PickView { Id = slot, Label = label != "" ? label : Bastion.UI.Gear.GearText.Belt, Value = item != null ? (item.Count > 1 ? $"{item.Name} ×{item.Count}" : item.Name) : StrategyText.Stash.Nothing, Icon = item?.Icon, Editable = false };
+            var v = new PickView { Id = slot, Label = label != "" ? label : Bastion.UI.Gear.GearText.Belt, Value = item != null ? (item.Count > 1 ? $"{item.Name} ×{item.Count}" : item.Name) : StrategyText.Stash.Nothing, Icon = item?.Icon, Editable = options != null };
             if (!string.IsNullOrEmpty(item?.Tip)) v.Lines.Add(item.Tip);
+            if (options != null)
+            {
+                v.Options = options;
+                if (!options.Any(o => o.Id != "none")) v.Empty = Bastion.UI.Gear.GearText.NothingFits;
+            }
             return v;
+        }
+
+        /// <summary>
+        /// A run soldier's kit place's list (U4, Arturo 25/11): what can go there from the stash and its pack (the engine's
+        /// MoveRefusal, the drag's own), each its name and what it changes against what is there (BriefOf); last, Quitar,
+        /// back to the stash where it first fits (BaseController.OnPick, «none»).
+        /// </summary>
+        List<PickOptionView> PlaceOptions(CampaignState c, CampaignSoldier s, string slot, Wielder who)
+        {
+            var list = new List<PickOptionView>();
+            var pool = (c.Stash?.Items ?? new List<Placed>()).Concat(s.Kit?.Pack?.Items ?? new List<Placed>()).Select(p => p.Gear);
+            foreach (var g in pool)
+            {
+                if (Gears.MoveRefusal(c, Slot, Connected, new MoveGearCommand { Gear = g.Id, To = s.Id, Slot = slot }) != null) continue;
+                var item = Item(g, who);
+                list.Add(new PickOptionView { Id = g.Id, Name = g.Count > 1 ? $"{item.Name} ×{g.Count}" : item.Name, Icon = item.Icon, Note = item.Brief, Tip = item.Tip });
+            }
+            var now = s.Kit != null ? Gears.InSlot(s.Kit, slot) : null;
+            if (now != null)
+            {
+                var room = c.Stash != null && Gears.FirstFit(c.Stash, now) != null;
+                list.Add(new PickOptionView { Id = "none", Name = Bastion.UI.Gear.GearText.TakeOff, Enabled = room, Tip = room ? null : Bastion.UI.Gear.GearText.NoRoomOff });
+            }
+            return list;
         }
 
         /// <summary>

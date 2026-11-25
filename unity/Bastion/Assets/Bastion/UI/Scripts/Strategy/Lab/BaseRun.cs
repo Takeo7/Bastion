@@ -248,6 +248,14 @@ namespace Bastion.UI.Strategy
                 // The grids (M3, M9, M12, M13): «equipo», every place drawn and what lies in it, in the log; «mayus:g44», Mayús and a
                 // click on it; «arrastra:g44>s2@0;1» dragged over a place (owner/slot: stash, s1/pack, s1/primary…, s2 for a
                 // bust) and held there (a «!» at the end: let go; «~»: turned).
+                // «hueco:c1/primary» (U4): that soldier's kit place opened, its list by it, as a click on it.
+                case "hueco":
+                {
+                    var at = S(1).Split('/');
+                    var opened = at.Length == 2 && FindFirstObjectByType<StrategyRoot>()?.Gear?.TestOpen(at[0], at[1]) == true;
+                    Debug.Log($"[base-run] hueco {S(1)}: {(opened ? "abierto" : "no está")}");
+                    return false;
+                }
                 case "equipo":
                     Debug.Log($"[base-run] equipo (retratos {StrategyRoot.PictureStamp}, cuadro {Time.frameCount}): {FindFirstObjectByType<StrategyRoot>()?.Gear?.TestList()}");
                     return false;

@@ -25,7 +25,8 @@ namespace Bastion.UI.Strategy
             var v = new RunMapView
             {
                 Head = StrategyText.Runs.Head(run.Chapter),
-                Line = choosing ? (choices.Count > 0 ? StrategyText.Runs.Choose : StrategyText.Runs.NoWay) : null,
+                // (U2, cuadro 157: «Elige la siguiente etapa» went; the open stages say it. With none, why.)
+                Line = choosing && choices.Count == 0 ? StrategyText.Runs.NoWay : null,
                 Start = StrategyText.Runs.Start,
                 AtStart = run.At == null,
                 // G22 (Arturo, 18/11, cuadro 72; U21): home only from a Refugio, its own plate's button, or after the boss,
@@ -232,7 +233,8 @@ namespace Bastion.UI.Strategy
                 Kind = node.Kind,
                 Kicker = StrategyText.Runs.NodeName(node.Kind),
                 Title = StrategyText.Runs.NodeName(node.Kind),
-                Text = StrategyText.Runs.NodeLine(node.Kind),
+                // (U2: a Trueque's line said what its title does; a Refugio's, what its outcome and its key do.)
+                Text = node.Kind == NodeKinds.Trade || node.Kind == NodeKinds.Refuge ? null : StrategyText.Runs.NodeLine(node.Kind),
                 Leave = StrategyText.Runs.Leave,
                 LeaveWhy = Runs.LeaveStopRefusal(c),
             };
@@ -248,14 +250,21 @@ namespace Bastion.UI.Strategy
             {
                 case NodeKinds.Trade:
                     v.Purse = mine.Sum(s => Gears.Supplies(s.Kit.Pack)).ToString();
-                    if (buyer != null) v.For = StrategyText.Runs.For(FirstName(buyer));
+                    if (buyer != null)
+                    {
+                        v.For = StrategyText.Runs.For(FirstName(buyer));
+                        v.ForName = FirstName(buyer);
+                    }
                     v.PurseNote = StrategyText.Runs.PurseOnly;
+                    var purse = mine.Sum(s => Gears.Supplies(s.Kit.Pack));
                     foreach (var w in stop.Wares ?? new List<Ware>())
                         v.Wares.Add(new WareView
                         {
                             Gear = Ware(c, w.Gear, buyer),
                             Price = w.Price.ToString(),
                             Why = Gears.BuyWareRefusal(c, Slot, Connected, new BuyWareCommand { Ware = w.Gear.Id, Soldier = buyer?.Id ?? "" }),
+                            // (U2: short of supplies, said by the price in red.)
+                            Short = w.Price > purse,
                         });
                     // The other side (M10, cuadro 141): what the same soldier wears and carries, at what the trader pays (the
                     // engine's price, «Buen trato» in it) and why not; never what has no price (the knife, §, the key).

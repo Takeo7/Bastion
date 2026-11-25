@@ -30,6 +30,7 @@ namespace Bastion.UI.Strategy
                     Id = id,
                     Name = StrategyText.Runs.UpgradeName(id),
                     Line = StrategyText.Runs.UpgradeLine(id, Runs.SeatsOf(c), level + 1 < Runs.Seats.Count ? Runs.Seats[level + 1] : Runs.SeatsOf(c)),
+                    Delta = StrategyText.Runs.UpgradeDelta(id, Runs.SeatsOf(c), level + 1 < Runs.Seats.Count ? Runs.Seats[level + 1] : Runs.SeatsOf(c)),
                     Level = level,
                     Levels = prices.Count,
                     LevelText = StrategyText.Runs.UpgradeLevel(level, prices.Count),

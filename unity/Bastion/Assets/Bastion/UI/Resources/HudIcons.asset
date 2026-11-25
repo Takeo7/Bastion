@@ -339,3 +339,9 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 1b5debe2e542c7d468796221fe421e1c, type: 3}
   - Id: aim:reaction
     Sprite: {fileID: 21300000, guid: a8d702d679318b44ca69b4f867c1b332, type: 3}
+  - Id: level:dead
+    Sprite: {fileID: 21300000, guid: ca292955d9929dd48b658eb22b7e89b4, type: 3}
+  - Id: level:wounds
+    Sprite: {fileID: 21300000, guid: 5578bb950be17234cbc81fe9c6ffe72f, type: 3}
+  - Id: lock
+    Sprite: {fileID: 21300000, guid: 7538757770cc97349a573d6f410ec12e, type: 3}

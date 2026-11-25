@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Bastion.UI.Gear;
 using Bastion.UI.Hud;
 using UnityEngine;
@@ -142,21 +143,31 @@ namespace Bastion.UI.Strategy
                 Ui.Text(StrategyText.Runs.PurseBefore, "runstop__purse-text font-title", line);
                 SuppliesMark.Make(line, v.Purse, "supplies-mark--small runstop__purse-amount" + (tail.Length > 0 && char.IsPunctuation(tail[0]) ? " runstop__purse-amount--end" : ""));
                 Ui.Text(StrategyText.Runs.PurseAfter, "runstop__purse-text font-title", line);
-                if (!string.IsNullOrEmpty(v.For)) Ui.Text(v.For, "runstop__for muted", purse);
-                if (!string.IsNullOrEmpty(v.PurseNote)) Ui.Text(v.PurseNote, "runstop__for muted", purse);
+                // (U2: that only what they carry counts, on hover; whose pack it goes to, by the wares' head.)
+                if (!string.IsNullOrEmpty(v.PurseNote)) tips.Attach(line, v.PurseNote);
                 // The Trueque's two sides (M10): what the trader has, and what the chosen soldier has for him; side by side
                 // where they fit, the second under the first where not.
                 var sides = v.Offers != null ? Ui.El("runstop__sides", into) : into;
                 var has = v.Offers != null ? Ui.El("runstop__side", sides) : into;
-                if (v.Offers != null) Ui.Text(StrategyText.Runs.Wares.ToUpperInvariant(), "runstop__side-head font-title", has);
+                if (v.Offers != null)
+                {
+                    var wares = Ui.El("runstop__side-heads", has);
+                    Ui.Text(StrategyText.Runs.Wares.ToUpperInvariant(), "runstop__side-head font-title", wares);
+                    if (!string.IsNullOrEmpty(v.ForName)) tips.Attach(Ui.Text("→ " + v.ForName, "runstop__side-for font-title", wares), v.For);
+                }
                 var list = Ui.El("runstop__wares", has);
                 foreach (var w in v.Wares) Ware(list, w, false);
                 if (v.Offers != null)
                 {
                     var offer = Ui.El("runstop__side", sides);
-                    Ui.Text(StrategyText.Runs.Offers.ToUpperInvariant(), "runstop__side-head font-title", offer);
-                    if (!string.IsNullOrEmpty(v.OffersFrom)) Ui.Text(v.OffersFrom, "runstop__for muted", offer);
-                    if (!string.IsNullOrEmpty(v.OffersOther)) Ui.Text(v.OffersOther, "runstop__for muted", offer);
+                    var offersHead = Ui.Text(StrategyText.Runs.Offers.ToUpperInvariant(), "runstop__side-head font-title", offer);
+                    // (U2: whose things and how to offer another's, on hover; with nothing to offer, said.)
+                    if (v.Offers.Count == 0 && !string.IsNullOrEmpty(v.OffersFrom)) Ui.Text(v.OffersFrom, "runstop__for muted", offer);
+                    else
+                    {
+                        var about = string.Join(" ", new[] { v.OffersFrom, v.OffersOther }.Where(x => !string.IsNullOrEmpty(x)));
+                        if (about.Length > 0) tips.Attach(offersHead, about);
+                    }
                     var offered = new ScrollView(ScrollViewMode.Vertical);
                     // The game's thin and faint bar (the sides' and the settlement's), not Unity's.
                     offered.AddToClassList("runstop__offers");
@@ -257,11 +268,15 @@ namespace Bastion.UI.Strategy
             // the greyed key's help.
             var words = Ui.El("runstop__ware-words", row);
             var asking = offered && confirming == w.Gear.Id;
-            var name = Ui.Text(w.Gear.Name, "runstop__ware-name", words);
+            var nameRow = Ui.El("runstop__ware-name-row", words);
+            var name = Ui.Text(w.Gear.Name, "runstop__ware-name", nameRow);
             tips.Attach(name, w.Gear.Tip);
-            if (w.Why != null) Ui.Text(w.Why, "runstop__ware-why", words);
-            else if (w.Note != null) Ui.Text(w.Note, "runstop__ware-note muted", words);
-            SuppliesMark.Make(row, w.Price, "supplies-mark--small runstop__price" + (offered ? " runstop__price--gain" : ""));
+            // Worn (U2): a mark by its name, «Lo lleva puesto» on hover.
+            if (w.Note != null) tips.Attach(Ui.Text(StrategyText.Runs.WornTag, "runstop__worn font-title", nameRow), w.Note);
+            // Short of supplies (U2): its price red, the reason on hover; another reason stays written (B18).
+            if (w.Why != null && !w.Short) Ui.Text(w.Why, "runstop__ware-why", words);
+            var price = SuppliesMark.Make(row, w.Price, "supplies-mark--small runstop__price" + (offered ? " runstop__price--gain" : "") + (w.Short ? " runstop__price--short" : ""));
+            if (w.Short && w.Why != null) tips.Attach(price, w.Why);
             var ware = w.Gear.Id;
             var worn = offered && w.Note != null;
             var b = new Button(() =>

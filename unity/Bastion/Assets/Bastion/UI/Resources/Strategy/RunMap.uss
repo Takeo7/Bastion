@@ -432,6 +432,18 @@
     margin: 2px 0 6px 0;
 }
 
+/* The wares' head and whose pack they go to (U2: «→ Anja», «Lo que cambies va a la mochila de Anja» on hover). */
+.runstop__side-heads {
+    flex-direction: row;
+    align-items: baseline;
+}
+
+.runstop__side-for {
+    margin: 2px 0 6px 8px;
+    font-size: 13px;
+    color: #eef0ea;
+}
+
 /* What is offered: the soldier's whole kit and pack can be long; it scrolls past five rows. */
 .runstop__offers {
     max-height: 272px;
@@ -493,6 +505,11 @@
 /* What the trader pays, in the «se puede» green. */
 .runstop__price--gain .supplies-mark__value {
     color: #8fd05a;
+}
+
+/* Short of supplies for it (U2): the price red, why on hover. */
+.runstop__price--short .supplies-mark__value {
+    color: #f0503c;
 }
 
 .runstop__kicker {
@@ -577,8 +594,24 @@
     justify-content: center;
 }
 
+.runstop__ware-name-row {
+    flex-direction: row;
+    align-items: center;
+}
+
 .runstop__ware-name {
     font-size: 15px;
+}
+
+/* Worn (U2): a small mark by its name, «Lo lleva puesto» on hover. */
+.runstop__worn {
+    margin-left: 6px;
+    padding: 0 4px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: #c4c9c0;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
 /* Why it can't be had now (B18), amber and small under its name, as «Sin plaza libre» on the map. */

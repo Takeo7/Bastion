@@ -1831,21 +1831,22 @@
   "katana": {
    "fbx": "apocalypse:SM_Wep_Katana_01",
    "melee": true,
-   "trail": 0.15,
-   "fist": 0.03,
+   "trail": 0.19,
+   "fist": 0.04,
    "size": 1.3,
    "slung": true,
    "grip": [
     0.0,
     0.0,
     -0.116
-   ]
+   ],
+   "hiltUp": true
   },
   "longsword": {
    "fbx": "gang:SM_Wep_Sword_02",
    "melee": true,
-   "trail": 0.15,
-   "fist": 0.03,
+   "trail": 0.19,
+   "fist": 0.04,
    "size": 1.15,
    "grip": [
     0.0,
@@ -1857,7 +1858,8 @@
     1,
     0
    ],
-   "slung": true
+   "slung": true,
+   "hiltUp": true
   },
   "rake": {
    "fbx": "farm:SM_Prop_Tool_Rake_01",

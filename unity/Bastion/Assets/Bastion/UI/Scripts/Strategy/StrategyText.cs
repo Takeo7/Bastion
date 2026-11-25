@@ -171,14 +171,36 @@ namespace Bastion.UI.Strategy
             // Mejoras (Lore, NOMBRES.md §5: «Mejorar», never «comprar»; «Se gastan 120 § del almacén.»).
             public const string UpgradesHead = "Mejoras";
             public const string Upgrade = "Mejorar";
+            /// <summary>By a worn thing's name on the Trueque's side offered (U2; Lore to confirm): «Lo lleva puesto» on hover.</summary>
+            public const string WornTag = "PUESTO";
             public const string UpgradeTop = "Al máximo";
             /// <summary>An upgrade's level in words beside its marks (Producto's review, 23/11, B12; Lore's yes).</summary>
-            public static string UpgradeLevel(int level, int levels) => level <= 0 ? "Sin mejorar" : level >= levels ? $"Nivel {level} de {levels}: al máximo" : $"Nivel {level} de {levels}";
+            /// <remarks>U3 (cuadro 157): a figure, «0 de 3», where it said «Sin mejorar» or «Nivel 1 de 3: al máximo».</remarks>
+            public static string UpgradeLevel(int level, int levels) => $"{System.Math.Max(0, level)} de {levels}";
             /// <summary>Under the Trueque's purse (B18): only what the soldiers carry counts out there (Lore, 23/11).</summary>
             public const string PurseOnly = "En una expedición solo cuenta lo que llevan encima: lo del almacén se queda en la base.";
             public static string UpgradeTip(int price) => $"Se gastan {price} § del almacén.";
 
             public static string UpgradeName(string id) => Lore.UpgradeNames.TryGetValue(id, out var n) ? n : id;
+
+            /// <summary>
+            /// What the next level does in figures (U3, cuadro 157; Lore to confirm): `seats`, how many go out now, `next`
+            /// after it (Más plazas).
+            /// </summary>
+            public static string UpgradeDelta(string id, int seats, int next)
+            {
+                switch (id)
+                {
+                    case Bastion.Engine.UpgradeIds.Squad: return $"{seats} → {next} plazas";
+                    case Bastion.Engine.UpgradeIds.Stash: return "+2 filas en el almacén";
+                    case Bastion.Engine.UpgradeIds.Pack: return "+1 fila en cada mochila";
+                    case Bastion.Engine.UpgradeIds.Mend: return $"+{Bastion.Engine.Runs.MendHeal} de salud tras cada etapa";
+                    case Bastion.Engine.UpgradeIds.Sight: return "+1 etapa a la vista";
+                    // (Lore, 25/11: the Trueque's verbs are «cambiar» and «ofrecer», never «comprar» nor «vender».)
+                    case Bastion.Engine.UpgradeIds.Haggle: return $"Precios −{Bastion.Engine.Content.HaggleDiscount} % · Lo que ofreces +{Bastion.Engine.Content.HaggleSale} %";
+                    default: return null;
+                }
+            }
 
             /// <summary>What the next level does; `seats`, how many go out now, `next` after it (Más plazas).</summary>
             public static string UpgradeLine(string id, int seats, int next) => Lore.UpgradeLine(id, seats, next, Bastion.Engine.Runs.MendHeal);
@@ -306,6 +328,9 @@ namespace Bastion.UI.Strategy
             public const string Head = "Almacén";
             /// <summary>Right over a weapon's figures weighed against a soldier's (T4; Lore's words): «Frente al fusil de cerrojo de Anja (verde, mejor; rojo, peor):».</summary>
             public static string Against(string the, string who) => $"Frente {(the.StartsWith("el ") ? "al " + the.Substring(3) : "a " + the)} de {who} (verde, mejor; rojo, peor):";
+            /// <summary>A vest's two figures in a kit place's list (U4; Lore to confirm).</summary>
+            public const string HealthWord = "Salud";
+            public const string ArmorWord = "Blindaje";
             /// <summary>A soldier's bonus on a weapon whose source has no name (O7: a fight's mods the sources don't explain).</summary>
             public const string Others = "otros";
             /// <summary>Under a gun's whole aim (cuadro 156; Lore's words).</summary>

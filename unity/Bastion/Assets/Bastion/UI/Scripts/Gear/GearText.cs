@@ -27,6 +27,10 @@ namespace Bastion.UI.Gear
         public const string Throw = "Tirar";
         /// <summary>Not to (Partir, Tirar): «Cancelar», not «No» (Lore, 16/11).</summary>
         public const string No = "Cancelar";
+        /// <summary>A kit place's list (U4; Lore to confirm): empty it, nothing that goes there, no room to take it off to.</summary>
+        public const string TakeOff = "Quitar";
+        public const string NothingFits = "Nada que poner aquí";
+        public const string NoRoomOff = "No queda sitio donde dejarlo";
 
         /// <summary>The bin, while nothing is dragged over it.</summary>
         public const string Bin = "TIRAR";
@@ -43,5 +47,7 @@ namespace Bastion.UI.Gear
         public const string Hint = "Arrastra para mover. Mientras arrastras, R o clic derecho gira. Arrastrar con Mayús mueve la mitad de la pila. Mayús + clic lo pasa entero al otro lado.";
         /// <summary>Mayús + clic with nowhere shown to send it to.</summary>
         public const string NowhereToSend = "No hay adónde pasarlo";
+        /// <summary>Where the hint's sentence was (U2, cuadro 157; Lore to confirm): «ⓘ Cómo mover», the sentence on hover.</summary>
+        public const string HintShort = "ⓘ Cómo mover";
     }
 }

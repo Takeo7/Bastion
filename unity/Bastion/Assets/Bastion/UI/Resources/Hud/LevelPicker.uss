@@ -49,6 +49,72 @@
     color: var(--t-text);
 }
 
+/* Over the cards (U3): «DIFICULTAD», its lock and «se elige una vez». */
+.level-pick__head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 3px;
+}
+
+.level-pick__head .level-pick__label {
+    margin-bottom: 0;
+}
+
+.level-pick__lock {
+    width: 13px;
+    height: 13px;
+    margin-left: 8px;
+    margin-right: 4px;
+    -unity-background-image-tint-color: var(--t-muted);
+}
+
+.level-pick__fixed {
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+/* A level's figures (U3, cuadro 157): icon, word and its share of Difícil's, green where it helps, red where it doesn't. */
+.level-pick__row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.level-pick__icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--t-text);
+}
+
+.level-pick__word {
+    flex-grow: 1;
+    font-size: 13px;
+    color: var(--t-muted);
+}
+
+.level-pick__pct {
+    font-size: 16px;
+    color: var(--t-text);
+}
+
+.level-pick__row--better .level-pick__pct {
+    color: var(--t-good);
+}
+
+.level-pick__row--worse .level-pick__pct,
+.level-pick__wounds {
+    color: #e0634f;
+}
+
+.level-pick__wounds {
+    flex-shrink: 1;
+    font-size: 12px;
+    white-space: normal;
+}
+
 .level-pick__line {
     font-size: 13px;
     white-space: normal;

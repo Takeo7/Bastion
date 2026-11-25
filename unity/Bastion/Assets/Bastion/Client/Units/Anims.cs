@@ -69,6 +69,11 @@ namespace Bastion.Client.Units
         public float[] two;
         public bool slung;
         /// <summary>
+        /// Slung across the back, its hilt up over the shoulder and its blade down (a sword's: the katana, the long sword),
+        /// not as a gun's barrel goes, up: Arturo, 25/11, «la katana está girada»: it hung by the hip, its blade up past the head.
+        /// </summary>
+        public bool hiltUp;
+        /// <summary>
         /// A blade's (A1, 18/11): how far on along it from its grip the middle of the fist closes (metres, unscaled; AgarreLab's
         /// Mangos): the bat's knob and the crowbar's hook out of the fist under the little finger, the fingers inside the
         /// machete's bow, the hand by the guard of the swords. Its grip is still where it hangs from at the belt.

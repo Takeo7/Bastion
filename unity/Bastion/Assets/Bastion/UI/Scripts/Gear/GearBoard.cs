@@ -36,6 +36,8 @@ namespace Bastion.UI.Gear
         public Func<string, string, Texture> PictureOf;
         /// <summary>Things can be thrown away (the base's bin, Tirar); not in combat, where Soltar leaves them on the floor.</summary>
         public bool CanThrow = true;
+        /// <summary>A kit place's click opens its list (U4: the base and the expedition's map, not the battle's pack).</summary>
+        public bool PlaceLists;
         /// <summary>
         /// Where a thing sent from a soldier's pack goes when no other side is drawn (Send): combat's floor, whose grid shows
         /// only with something on it. Null: none (the base's soldier alone on the map: between its places and its pack).
@@ -60,6 +62,10 @@ namespace Bastion.UI.Gear
         Press press;
         /// <summary>The thing picked by a click: its orders show under it.</summary>
         string picked;
+        /// <summary>A kit place opened by a click (U4): whose and which; its list shows by it. Null, none.</summary>
+        string openOwner, openSlot;
+        /// <summary>That place's box, the list placed by it (PlaceOpen).</summary>
+        VisualElement openBox;
         /// <summary>Partir open for the picked thing: how many go.</summary>
         int splitting;
         /// <summary>The thing asked about at the bin.</summary>
@@ -96,10 +102,12 @@ namespace Bastion.UI.Gear
             Ui.Show(why, false);
             orders = Ui.El("gear-orders panel", layer);
             Ui.Show(orders, false);
-            // A press anywhere else closes the picked thing's orders.
+            // An open place's list, kept inside the screen once laid out (U4: before that it has no size).
+            orders.RegisterCallback<GeometryChangedEvent>(_ => PlaceOpen());
+            // A press anywhere else closes the picked thing's orders, or an open place's list.
             root.RegisterCallback<PointerDownEvent>(e =>
             {
-                if (picked == null || press != null) return;
+                if ((picked == null && openOwner == null) || press != null) return;
                 for (var t = e.target as VisualElement; t != null; t = t.parent)
                     if (t == orders) return;
                 Unpick();
@@ -129,7 +137,7 @@ namespace Bastion.UI.Gear
                 Ask(null);
                 return true;
             }
-            if (picked != null)
+            if (picked != null || openOwner != null)
             {
                 Unpick();
                 return true;
@@ -209,6 +217,11 @@ namespace Bastion.UI.Gear
             {
                 var label = Ui.Text(v.Label ?? GearText.SlotLabel(v.Slot), "gear-slot__label font-title", box);
                 label.pickingMode = PickingMode.Ignore;
+                // An empty place's click opens its list (U4); a full one's, its thing's (Pick).
+                box.RegisterCallback<PointerUpEvent>(e =>
+                {
+                    if (PlaceLists && press == null && (e.button == 0 || GameInput.Touch)) Open(t);
+                });
             }
             else
             {
@@ -716,7 +729,8 @@ namespace Bastion.UI.Gear
         /// <summary>A grid or place drawn anew: the picked thing's orders follow it.</summary>
         void Redrawn()
         {
-            if (picked != null) Pick(picked);
+            if (openOwner != null) Fill();
+            else if (picked != null) Pick(picked);
         }
 
         /// <summary>The order given; its thing hidden where it was until the state comes, unless it came at once.</summary>
@@ -837,6 +851,12 @@ namespace Bastion.UI.Gear
         void Pick(GearItemView g, Target from)
         {
             if (!from.Mine) return;
+            // In a kit place: that place's list, its thing's orders at its head (U4).
+            if (from.Kind == TargetKind.Slot && PlaceLists)
+            {
+                Open(from);
+                return;
+            }
             if (picked == g.Id)
             {
                 Unpick();
@@ -994,6 +1014,13 @@ namespace Bastion.UI.Gear
 
         void Unpick()
         {
+            if (openOwner != null)
+            {
+                openOwner = openSlot = null;
+                orders.RemoveFromClassList("gear-orders--place");
+                orders.Clear();
+                Ui.Show(orders, false);
+            }
             if (picked == null) return;
             var id = picked;
             picked = null;
@@ -1013,6 +1040,137 @@ namespace Bastion.UI.Gear
             throwing = g;
             foreach (var t in targets.ToArray())
                 if (t.Kind == TargetKind.Bin && t.Holder.panel != null) SetBin(t.Holder);
+        }
+
+        // ------------------------------------------------------------------ a kit place's list (U4)
+
+        /// <summary>
+        /// A kit place clicked (U4, Arturo 25/11: «al darle a los huecos… aparezcan los objetos que puedo equiparle del
+        /// almacén o que lleve encima»): by it, its thing's own orders, then what can go there from the stash and its
+        /// soldier's pack (on an expedition, the pack: the stash isn't drawn there), each with what it changes, a click
+        /// puts it (the engine's same order as a drag: what was there goes where the other came from); last, Quitar.
+        /// </summary>
+        void Open(Target t)
+        {
+            if (!t.Mine || press != null) return;
+            Unpick();
+            openOwner = t.Owner;
+            openSlot = t.Slot;
+            Fill();
+        }
+
+        /// <summary>The open place's list, again (after a grid is drawn anew); gone with its place.</summary>
+        void Fill()
+        {
+            var t = targets.Find(x => x.Kind == TargetKind.Slot && x.Owner == openOwner && x.Slot == openSlot && x.Element?.panel != null);
+            if (t == null)
+            {
+                Unpick();
+                return;
+            }
+            orders.Clear();
+            orders.AddToClassList("gear-orders--place");
+            Ui.Show(orders, true);
+            layer.BringToFront();
+            var label = GearText.SlotLabel(t.Slot);
+            Ui.Text(string.IsNullOrEmpty(label) ? GearText.Belt : label, "gear-orders__title font-title", orders);
+            if (t.Gear != null)
+            {
+                var row = Ui.El("gear-orders__own", orders);
+                var now = t.Gear.Id;
+                foreach (var a in handlers.GearActions(now) ?? Array.Empty<GearActionView>())
+                {
+                    var action = a.Id;
+                    Button(row, a.Label, null, () =>
+                    {
+                        Unpick();
+                        handlers.GearAction(now, action);
+                    }, a.Why);
+                }
+            }
+            // From the stash and this soldier's pack, whatever the engine lets go there.
+            var any = false;
+            foreach (var from in targets.FindAll(x => x.Kind == TargetKind.Grid && x.Mine && x.Element?.panel != null && x.Items != null && (x.Owner == Bastion.Engine.GearPlaces.Stash || (x.Owner == t.Owner && x.Slot == Bastion.Engine.KitSlots.Pack))))
+                foreach (var p in from.Items)
+                {
+                    var m = new GearMove { Gear = p.Gear.Id, To = t.Owner, Slot = t.Slot };
+                    if (handlers.GearRefusal(m) != null) continue;
+                    any = true;
+                    var id = p.Gear.Id;
+                    Candidate(p.Gear, () =>
+                    {
+                        Unpick();
+                        Give(id, () => handlers.GearMoved(m));
+                    });
+                }
+            if (!any) Ui.Text(GearText.NothingFits, "gear-orders__none", orders);
+            // Quitar: to the stash at the base, else back into its soldier's pack, where it first fits.
+            if (t.Gear != null)
+            {
+                var home = targets.Find(x => x.Kind == TargetKind.Grid && x.Mine && x.Element?.panel != null && x.Owner == Bastion.Engine.GearPlaces.Stash)
+                    ?? targets.Find(x => x.Kind == TargetKind.Grid && x.Mine && x.Element?.panel != null && x.Owner == t.Owner && x.Slot == Bastion.Engine.KitSlots.Pack);
+                var off = home != null ? Room(home, t.Gear, 0) : null;
+                var gone = t.Gear.Id;
+                Button(orders, GearText.TakeOff, "gear-order--off-place", () =>
+                {
+                    Unpick();
+                    Give(gone, () => handlers.GearMoved(off));
+                }, off == null ? GearText.NoRoomOff : null);
+            }
+            // By its place, kept inside the screen once its size is known (PlaceOpen, on its geometry's change too).
+            openBox = t.Element;
+            orders.style.left = openBox.worldBound.xMin;
+            orders.style.top = openBox.worldBound.yMax + 4;
+            orders.schedule.Execute(PlaceOpen);
+        }
+
+        /// <summary>
+        /// The open place's list inside the screen (the panel's, in its own units), not before it has a size: to the left of
+        /// the panel it is in (an ancestor of class `gear-anchor`: Almacén's soldier, the map's side with the stage's card),
+        /// over the scene, level with its place (Arturo, cuadro 163: «sin tapar la mochila»); with none, under its place.
+        /// </summary>
+        void PlaceOpen()
+        {
+            var box = openBox;
+            if (openOwner == null || box?.panel == null || orders.panel == null) return;
+            var w = orders.layout.width;
+            var h = orders.layout.height;
+            if (float.IsNaN(w) || w <= 0 || float.IsNaN(h) || h <= 0) return;
+            var root = orders.panel.visualTree.worldBound;
+            var anchor = box.parent;
+            while (anchor != null && !anchor.ClassListContains("gear-anchor")) anchor = anchor.parent;
+            float x, y;
+            if (anchor != null && anchor.worldBound.xMin - w - 8 >= root.xMin + 8)
+            {
+                x = anchor.worldBound.xMin - w - 8;
+                y = Mathf.Clamp(box.worldBound.yMin, root.yMin + 8, root.yMax - h - 8);
+            }
+            else
+            {
+                x = Mathf.Clamp(box.worldBound.xMin, root.xMin + 8, root.xMax - w - 8);
+                y = box.worldBound.yMax + 4;
+                if (y + h > root.yMax - 8) y = Mathf.Max(root.yMin + 8, box.worldBound.yMin - h - 4);
+            }
+            if (Mathf.Abs(orders.resolvedStyle.left - x) > 0.5f) orders.style.left = x;
+            if (Mathf.Abs(orders.resolvedStyle.top - y) > 0.5f) orders.style.top = y;
+        }
+
+        /// <summary>One that can go in the open place: its picture small, its name, what it changes (Brief); a click puts it.</summary>
+        void Candidate(GearItemView g, Action put)
+        {
+            var row = new Button(put);
+            Ui.AddClasses(row, "gear-pick");
+            orders.Add(row);
+            var frame = Ui.El("gear-pick__pic", row);
+            frame.pickingMode = PickingMode.Ignore;
+            const float W = 52, H = 26;
+            var k = Mathf.Min(W / (g.W * Cell), H / (g.H * Cell));
+            Picture(frame, g, W, H, g.W * Cell * k, g.H * Cell * k, false);
+            var words = Ui.El("gear-pick__words", row);
+            words.pickingMode = PickingMode.Ignore;
+            Ui.Text(g.Count > 1 ? $"{g.Name} ×{g.Count}" : g.Name, "gear-pick__name font-title", words).pickingMode = PickingMode.Ignore;
+            if (!string.IsNullOrEmpty(g.Brief)) Ui.Text(g.Brief, "gear-pick__brief", words).pickingMode = PickingMode.Ignore;
+            if (!string.IsNullOrEmpty(g.Tip)) tips.Attach(row, g.Tip);
         }
 
         /// <summary>An order's button; with `why`, off, and why on hover (empty: off, no words).</summary>
@@ -1083,6 +1241,15 @@ namespace Bastion.UI.Gear
         }
 
         /// <summary>Tests: Mayús and a click on `id`'s tile (M3), as Up takes a press let go where it was; whether it went.</summary>
+        /// <summary>Tests (the lab, U4): `owner`'s kit place `slot` opened, as its click would; whether it is drawn.</summary>
+        public bool TestOpen(string owner, string slot)
+        {
+            var t = targets.Find(x => x.Kind == TargetKind.Slot && x.Owner == owner && x.Slot == slot && x.Element?.panel != null);
+            if (t == null || !PlaceLists) return false;
+            Open(t);
+            return openOwner != null;
+        }
+
         public bool TestSend(string id)
         {
             foreach (var t in targets)

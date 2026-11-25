@@ -391,6 +391,8 @@ namespace Bastion.Client.Units
                 var grip = slung.grip != null && slung.grip.Length >= 3 ? new Vector3(slung.grip[0], slung.grip[1], slung.grip[2]) : Vector3.zero;
                 model.position -= mount.forward * (Vector3.Dot(CentreOf(model) - grip, along) * model.lossyScale.x * SlungBy);
             }
+            // (A sword's hilt up over the shoulder, its blade down: turned about there, flat against the back as it was. WeaponArt.hiltUp.)
+            if (ride == SlungCarry && v.arts[key].hiltUp) model.RotateAround(mount.position, mount.up, 180);
         }
 
         /// <summary>Whether its outfit has a holster of its own with a pistol in it (SoldierMarks.holster: F-08).</summary>
@@ -823,15 +825,20 @@ namespace Bastion.Client.Units
         /// grip's middle (PistolGripMiddle) into the closed fist, not its origin on the palm, which left the grip out behind
         /// the heel of the hand.
         /// </summary>
-        public static void HoldPistolAtRest(Animator a, Transform pistol, Transform root, ref Quaternion? grip)
+        public static void HoldPistolAtRest(Animator a, Transform pistol, Transform root, ref Quaternion? grip) => HoldPistol(a, pistol, root, 0, ref grip, null);
+
+        /// <summary>
+        /// The pistol's grip into the closed fist, and the hand turned at the wrist onto it: the knuckles along the barrel,
+        /// the palm against the grip's right side, the grip's middle (PistolGripMiddle) in the fist's. Its origin on the palm
+        /// left the grip out behind the heel of the hand: at rest in the base (T22, 18/11) and, till 25/11, in the battle
+        /// too, aimed and fired (Arturo: «al disparar la pistola atraviesa la palma de la mano»; CombatLab.Agarres).
+        /// </summary>
+        static void PistolIntoFist(Animator a, Transform pistol)
         {
-            HoldPistol(a, pistol, root, 0, ref grip, null);
-            if (a == null || pistol == null || !a.isHuman) return;
+            if (PistolFistOff || a == null || pistol == null || !a.isHuman) return;
             Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal),
                 little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
             if (hand == null || index == null || little == null || middle == null) return;
-            // The hand turned at the wrist onto its grip: the knuckles along the barrel, the palm against the grip's right side
-            // (the rest's clip has the palm turned out, and the pistol lay on the back of the hand).
             var along = middle.position - hand.position;
             var palm = Vector3.Cross(along, index.position - little.position);
             if (along.sqrMagnitude < 1e-8f || palm.sqrMagnitude < 1e-8f) return;
@@ -841,9 +848,14 @@ namespace Bastion.Client.Units
             pistol.position = inFist - pistol.TransformVector(PistolGripMiddle);
         }
 
+        /// <summary>BASTION_PISTOLA_ANTES=1: the pistol by its origin on the palm in the battle, for the labs' «before» (25/11).</summary>
+        static readonly bool PistolFistOff = Environment.GetEnvironmentVariable("BASTION_PISTOLA_ANTES") == "1";
+
         /// <summary>The middle of the pistol's grip in its own frame (metres, unscaled: AgarreLab.Perfil), and how far in from the palm the fist's middle is (metres of a figure at scale 1).</summary>
         static readonly Vector3 PistolGripMiddle = LabVector("BASTION_PISTOLA") ?? new Vector3(0, -0.05f, -0.02f);
         static readonly float PistolInFist = 0.02f;
+        /// <summary>Where the left hand's wrist goes under the pistol aimed, from its grip's middle, in its own frame (metres, unscaled).</summary>
+        static readonly Vector3 PistolUnder = new Vector3(-0.035f, -0.075f, -0.04f);
 
         static Vector3? LabVector(string name) => Tried(name);
 
@@ -873,6 +885,16 @@ namespace Bastion.Client.Units
                 if (level.sqrMagnitude > 1e-6f) turn = Quaternion.LookRotation(level, Vector3.ProjectOnPlane(Vector3.up, level));
             }
             pistol.SetPositionAndRotation(palm, turn);
+            PistolIntoFist(a, pistol);
+            // (Aimed, the left hand under its butt, closed: «Pistol Aim» left it open and flat under the pistol, its fingers
+            // out ahead. Producto, 25/11. Eased in with the aim, from where the clip has it.)
+            if (aim > 0 && !PistolFistOff && a.isHuman && a.GetBoneTransform(HumanBodyBones.LeftHand) is Transform left)
+            {
+                var under = pistol.TransformPoint(PistolGripMiddle + PistolUnder);
+                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, Vector3.Lerp(left.position, under, Mathf.SmoothStep(0, 1, aim)),
+                    root.TransformDirection(new Vector3(-1, -0.7f, 0)), 0.02f);
+                if (aim > 0.5f) Fist(a, true);
+            }
         }
 
         /// <summary>
@@ -1066,7 +1088,10 @@ namespace Bastion.Client.Units
             var art = v.arts.TryGetValue(v.drawn, out var a2) ? a2 : null;
             // (How far it is carried at the trail: all the way at rest, none on guard or through a stroke.)
             // (A sword crouched, by its pommel's end as it fights: by the guard, the handle behind the fist lay against the wrist.)
-            bool rest = !v.striking && !Guarding(v) && !(v.crouched && art?.two == null);
+            // (A sword on guard too, by its guard: Arturo's cuadro 159 of 25/11, «más cerca del final del mango hacia la hoja»; on
+            // guard it was held by its pommel. Through a stroke, back to the pommel: the handle behind the fist went into the forearm.)
+            bool sword = GuardOf(v) == "sword";
+            bool rest = !v.striking && (sword || !Guarding(v)) && !(v.crouched && art?.two == null);
             v.trail = dt > 0 ? Mathf.MoveTowards(v.trail, rest ? 1 : 0, dt / TrailEase) : rest ? 1 : 0;
             // On guard low across the body (the rake, the chainsaw: GuardOf "low"), held as a rifle between the hands: its
             // grip in the right palm, its second grip towards the left (the left hand reached onto it below).

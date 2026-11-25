@@ -100,7 +100,11 @@ namespace Bastion.UI.Combat
         static Bastion.UI.Hud.ModView OddsMod(Modifier m, ShotPreview shot, Unit target, bool crit)
         {
             var v = new Bastion.UI.Hud.ModView { Label = crit ? CritLabel(target, m.Label) : m.Label, Value = m.Value, Icon = OddsIcon(m.Label, crit) };
-            if (!crit && m.Label == "Alcance") v.Note = Bastion.UI.Hud.HudText.Shot.Tiles(shot.Tiles);
+            if (!crit && m.Label == "Alcance")
+            {
+                v.Note = Bastion.UI.Hud.HudText.Shot.Tiles(shot.Tiles);
+                v.About = Bastion.UI.Hud.HudText.Shot.TilesLong(shot.Tiles);
+            }
             // What covers it (Gameplay's P5: «Cobertura alta −40» and the shelf it is).
             if (!crit && m.Label.StartsWith("Cobertura")) v.Note = Bastion.UI.Hud.HudText.Shot.CoverPiece(shot.CoverPiece);
             if (!crit && m.Label == "Defensa" && m.Value > 0) v.Label = Bastion.UI.Hud.HudText.Shot.WeakDefense;

@@ -201,6 +201,8 @@ namespace Bastion.UI.Strategy
         public string Purse;
         /// <summary>Whose pack a ware goes into («Va a la mochila de Rafael»: the soldier chosen on the right).</summary>
         public string For;
+        /// <summary>The same, by its name only, by the wares' head (U2: «→ Rafael»); `For` on hover.</summary>
+        public string ForName;
         /// <summary>That only what the soldiers carry counts on an expedition, not the stash (B18).</summary>
         public string PurseNote;
         /// <summary>
@@ -243,6 +245,8 @@ namespace Bastion.UI.Strategy
         public string Why;
         /// <summary>On the side offered (M10): that it is worn, not in the pack («Lo lleva puesto»); null, in the pack.</summary>
         public string Note;
+        /// <summary>Short of supplies for it (U2): its price red, the reason on hover rather than under its name.</summary>
+        public bool Short;
     }
 
     /// <summary>Mejoras (H2): the base's six, each with its level, what the next costs and «Mejorar» (a vote with two).</summary>
@@ -260,8 +264,10 @@ namespace Bastion.UI.Strategy
     {
         public string Id;
         public string Name;
-        /// <summary>What the next level does (or, at the top, what it does now).</summary>
+        /// <summary>What the next level does (or, at the top, what it does now): its sentence, on hover since U3.</summary>
         public string Line;
+        /// <summary>The same in figures (U3, cuadro 157): «4 → 6 plazas», «+2 filas».</summary>
+        public string Delta;
         public int Level, Levels;
         /// <summary>The level in words beside its marks (B12): «Sin mejorar», «Nivel 1 de 3», «Nivel 3 de 3: al máximo».</summary>
         public string LevelText;

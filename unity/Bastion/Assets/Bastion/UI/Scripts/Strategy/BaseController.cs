@@ -629,6 +629,14 @@ namespace Bastion.UI.Strategy
             var c = p.State;
             var s = c?.Soldiers.FirstOrDefault(x => x.Id == soldiers.Soldier);
             if (s == null) return;
+            // A run's kit place (U4): what goes there, the drag's own order; «none», back to the stash where it first fits.
+            if (c.Stash != null && s.Kit != null && KitSlots.All.Contains(pick))
+            {
+                if (option != "none") Order(new MoveGearCommand { Gear = option, To = s.Id, Slot = pick });
+                else if (Gears.InSlot(s.Kit, pick) is Bastion.Engine.Gear worn && Gears.FirstFit(c.Stash, worn) is Placed at)
+                    Order(new MoveGearCommand { Gear = worn.Id, To = GearPlaces.Stash, Slot = KitSlots.Pack, X = at.X, Y = at.Y, Turned = at.Turned });
+                return;
+            }
             // The hand, the belt, and the side's pistol where the Armería counts them (Arturo, 01/11 #10): one weapon each.
             if (pick == "hand" || pick == "belt" || pick == "side")
             {

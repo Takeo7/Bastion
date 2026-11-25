@@ -114,7 +114,8 @@ namespace Bastion.UI.Strategy
             Sheet();
             // The right: the stage's card beside the map, and the chosen one's kit open always (Arturo, 25/11, O1: «no quiero
             // botón, que salga directamente»): its places, its pack and its board with the points to spend, no «Equipo ▸».
-            side = Ui.El("runmap-side", view);
+            // (gear-anchor: a kit place's list opens to its left, over the map, the stage's card not covered; U4, cuadro 163.)
+            side = Ui.El("runmap-side gear-anchor", view);
             card = Ui.El("panel runmap-card", side);
             squad = new KitPanel(side, "panel runmap-squad", tips, handlers, board) { Icon = icon };
             Show(false);
@@ -447,7 +448,7 @@ namespace Bastion.UI.Strategy
             // Only the one marked goes (cuadro 135): under the pointer, another says how to mark it.
             if (n.Id != picked)
             {
-                if (n.Why == null) Ui.Text(StrategyText.Runs.ToPick(Bastion.Client.GameInput.Touch), "rcard__body rcard__hint", card);
+                // (U2: «Haz clic en ella para elegirla» went: its key under it says as much.)
                 return;
             }
             var id = n.Id;

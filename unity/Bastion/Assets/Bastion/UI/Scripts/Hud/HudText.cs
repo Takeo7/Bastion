@@ -142,6 +142,8 @@ namespace Bastion.UI.Hud
             public static string Damage(string hit, string crit) => string.IsNullOrEmpty(crit) ? $"DAÑO {hit}" : $"DAÑO {hit} · crít. {crit}";
             /// <summary>How far, by the reach's figure (U1, 25/11; Lore to confirm): «4 c.», whole tiles as the range table reads them.</summary>
             public static string Tiles(int n) => n + " c.";
+            /// <summary>The same in its help, in full (Lore, 25/11: «Alcance · a 2 casillas»).</summary>
+            public static string TilesLong(int n) => n == 1 ? "a 1 casilla" : $"a {n} casillas";
             /// <summary>
             /// What gives the target its cover, by its kind (U1; ShotPreview.CoverPiece, Gameplay's P5: a DecorKinds or a
             /// TileKinds), in a word for the cover's figure («−40 estantería»; Lore's words). A step in the ground (the floor or
@@ -333,15 +335,6 @@ namespace Bastion.UI.Hud
             public const string SquadLost = "ESCUADRA PERDIDA";
             public const string SquadLostLine = "Lo que llevaban se pierde, y la expedición acaba.";
             public const string StageAbandoned = "Etapa abandonada";
-            /// <summary>What a stage that is a Saqueo underneath brings home: found there and aboard La Lata.</summary>
-            public const string Haul = "Botín a salvo: ";
-            public const string NoHaul = "No habéis encontrado nada";
-            public static string HaulMore(int n) => $"{n} más";
-            /// <summary>
-            /// The stage's reward, last on the haul (R23 B6; Lore to confirm): drawn as the report is made (RunFights.ApplyFight),
-            /// so the card can't say how much; the report does.
-            /// </summary>
-            public const string HaulReward = "la recompensa";
             public const string RunToBase = "VOLVER A LA BASE";
             public const string RunReturning = "VOLVIENDO A LA BASE…";
             public const string RunGoOn = "SEGUIR LA EXPEDICIÓN";
@@ -438,6 +431,21 @@ namespace Bastion.UI.Hud
         /// The weather (GameState.weather, Campaign.OfferWeather; Arturo, 01/11): its name, and what it changes, from the
         /// engine's figures (Content.Weather), for the mission's card and the objective's in the fight.
         /// </summary>
+        /// <summary>The game's level in figures (U3, cuadro 157; Lore to confirm): the cards' words, short.</summary>
+        public static class GameLevel
+        {
+            /// <summary>By the lock, after «DIFICULTAD»: it isn't changed after (Lore's GameLevelText.Fixed, in three words).</summary>
+            public const string Fixed = "se elige una vez";
+            public const string Dead = "Muertos";
+            public const string Horde = "Horda";
+            public const string Supplies = "Suministros";
+            /// <summary>Supervivencia's own: wounds carried home (Levels' Wounds).</summary>
+            /// <remarks>Lore, 25/11: they heal at a Refugio, with medicines and «Curas en el camino»; not at the base.</remarks>
+            public const string Wounds = "Heridas: no se curan en la base";
+            /// <summary>Under the cards, for all (Lore's GameLevelText.AllLose, shorter).</summary>
+            public const string AllLose = "Sin soldados vivos, la partida se pierde.";
+        }
+
         public static class Weather
         {
             public static readonly System.Collections.Generic.Dictionary<string, string> Names = new System.Collections.Generic.Dictionary<string, string>

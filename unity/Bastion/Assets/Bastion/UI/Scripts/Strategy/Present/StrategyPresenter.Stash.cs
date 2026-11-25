@@ -119,7 +119,7 @@ namespace Bastion.UI.Strategy
             return new GearItemView
             {
                 Id = g.Id, Kind = g.Kind, Type = g.Type, Name = GearName(g), The = Lore.GearThe(g.Kind, g.Type, g.Count), Icon = GearIcon(g),
-                W = w, H = h, Count = g.Count, Pile = Content.PileOf(g.Kind, g.Type), Tip = GearTip(g, against),
+                W = w, H = h, Count = g.Count, Pile = Content.PileOf(g.Kind, g.Type), Tip = GearTip(g, against), Brief = BriefOf(g, against),
                 Mods = g.Mods != null && g.Mods.Count > 0 ? g.Mods.ToList() : null,
             };
         }
@@ -161,6 +161,39 @@ namespace Bastion.UI.Strategy
                 default: return null;
             }
         }
+
+        /// <summary>
+        /// What a thing changes against what `against`'s soldier wears in its place, in a line (U4, a kit place's list): a
+        /// weapon's damage and aim as that soldier would have them (O7, cuadro 156), a vest's health and armour; each green
+        /// when better, red when worse, with by how much; null with nothing to weigh or say.
+        /// </summary>
+        static string BriefOf(Engine.Gear g, Wielder against)
+        {
+            string Fig(string label, string value, double mine, double theirs, double by, bool weighed) =>
+                !weighed || mine == theirs ? $"{label} {value}" : $"{label} <color={(mine > theirs ? Better : Worse)}>{value} ({SignedFigure(by)})</color>";
+            if (g.Kind == GearKinds.Weapon && Content.GearWeapon(g) is FoundWeaponDef d)
+            {
+                var theirs = against?.At?.Invoke(Aim.SlotOf(d));
+                var vs = theirs != null && theirs.Id != g.Id ? Content.GearWeapon(theirs) : null;
+                var hand = against?.Hand?.Invoke(g);
+                var vsHand = vs != null ? against.Hand?.Invoke(theirs) : null;
+                if (vs != null && (hand == null) != (vsHand == null)) hand = vsHand = null;
+                var a = FiguresOf(d, g.Mods, hand);
+                var b = vs != null ? FiguresOf(vs, theirs.Mods, vsHand) : (WeaponFigures?)null;
+                var damage = Fig(Lore.WeaponLabels.Damage, SpanOf(a.Min, a.Max), a.Min + a.Max, (b?.Min ?? 0) + (b?.Max ?? 0), b == null ? 0 : (a.Min + a.Max - b.Value.Min - b.Value.Max) / 2.0, b != null);
+                var aim = Fig(Lore.WeaponLabels.Aim, hand != null ? a.Aim.ToString() : SignedFigure(a.Aim), a.Aim, b?.Aim ?? 0, a.Aim - (b?.Aim ?? 0), b != null);
+                return $"{damage} · {aim}";
+            }
+            if (g.Kind == GearKinds.Vest && g.Type != null && Content.Vests.TryGetValue(g.Type, out var v))
+            {
+                var worn = against?.At?.Invoke(KitSlots.Vest);
+                var w = worn != null && worn.Id != g.Id && worn.Type != null && Content.Vests.TryGetValue(worn.Type, out var wv) ? wv : null;
+                return $"{Fig(StrategyText.Stash.HealthWord, v.Hp.ToString(), v.Hp, w?.Hp ?? 0, v.Hp - (w?.Hp ?? 0), w != null)} · {Fig(StrategyText.Stash.ArmorWord, v.Armor.ToString(), v.Armor, w?.Armor ?? 0, v.Armor - (w?.Armor ?? 0), w != null)}";
+            }
+            return null;
+        }
+
+        static string SpanOf(int min, int max) => min == max ? min.ToString() : $"{min}–{max}";
 
         /// <summary>On hover: its name (and how many of how many), what it is, what is mounted on it.</summary>
         static string GearTip(Engine.Gear g, Wielder against)

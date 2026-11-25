@@ -306,6 +306,82 @@
     font-size: 14px;
 }
 
+/* A kit place's list (U4): by its place, in a column; its title, its thing's own orders, what can go there, Quitar. */
+.gear-orders--place {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: 320px;
+    max-width: 320px;
+    padding: 8px;
+    background-color: rgba(18, 20, 21, 0.97);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+.gear-orders__title {
+    margin-bottom: 6px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: #a1a79d;
+}
+
+.gear-orders__own {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.gear-orders__none {
+    margin: 2px 0 8px;
+    font-size: 12px;
+    color: #a1a79d;
+}
+
+.gear-pick {
+    flex-direction: row;
+    align-items: center;
+    height: auto;
+    min-height: 38px;
+    margin: 0 0 4px 0;
+    padding: 4px 8px 4px 4px;
+    background-color: #2b2f31;
+    border-width: 1px;
+    border-color: #060708;
+    border-radius: 0;
+    -unity-text-align: middle-left;
+}
+
+.gear-pick:hover {
+    background-color: #3d4346;
+}
+
+.gear-pick__pic {
+    width: 52px;
+    height: 26px;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.gear-pick__words {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.gear-pick__name {
+    font-size: 13px;
+    color: #eef0ea;
+}
+
+.gear-pick__brief {
+    font-size: 11px;
+    white-space: normal;
+    color: #c4c9c0;
+}
+
+.gear-orders--place .gear-order {
+    align-self: flex-start;
+}
+
 /* ================================================================ the bin */
 
 .gear-bin {

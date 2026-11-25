@@ -33,6 +33,9 @@ namespace Bastion.Client.Net.EditorTools
         /// <summary>The name the player sees; the files go without the accent (productName «Bastion»).</summary>
         private const string Shown = "Bastión";
 
+        /// <summary>«Bastión 0.14.8»: the name with the version the build carries (bundleVersion, publicar.sh sets it).</summary>
+        private static string Versioned() => $"{Shown} {PlayerSettings.bundleVersion}".Trim();
+
         /// <summary>
         /// Builds/Mac/Bastion.app, signed (ad hoc unless BASTION_FIRMA says an identity: Signer) and checked, and
         /// Builds/Bastion-Mac.zip to hand it on. Its executable is «Bastion»: with the accent, codesign can't seal it («a
@@ -50,10 +53,15 @@ namespace Bastion.Client.Net.EditorTools
             var plist = Path.Combine(app, "Contents", "Info.plist");
             var zip = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(app)!)!, "Bastion-Mac.zip");
             var signer = Signer();
+            // The version in its name (Arturo, cuadro 162: «en el archivo y en el Dock»): «Bastión 0.14.8» in the menu bar
+            // (CFBundleName, CFBundleDisplayName) and as the bundle inside the zip, the one copied to Applications and kept in
+            // the Dock. The identifier and productName stay: Arturo's preferences and his saves (persistentDataPath comes
+            // from companyName/productName, «Bastion-Unity/Bastion», not from the bundle's name: «Bastión» already differs).
+            var shown = Versioned();
             var steps = new[]
             {
-                ("plutil", $"-replace CFBundleName -string {Shown} \"{plist}\""),
-                ("plutil", $"-replace CFBundleDisplayName -string {Shown} \"{plist}\""),
+                ("plutil", $"-replace CFBundleName -string \"{shown}\" \"{plist}\""),
+                ("plutil", $"-replace CFBundleDisplayName -string \"{shown}\" \"{plist}\""),
                 ("codesign", signer == null ? $"--force --deep --sign - \"{app}\"" : $"--force --deep --timestamp --sign \"{signer}\" \"{app}\""),
                 ("codesign", $"--verify --deep --strict --verbose=2 \"{app}\""),
             };
@@ -61,8 +69,20 @@ namespace Bastion.Client.Net.EditorTools
                 if (!Ran(tool, arguments)) return;
             if (!AppIcon.Checked(app, icon)) return;
             if (File.Exists(zip)) File.Delete(zip);
-            if (!Ran("ditto", $"-c -k --sequesterRsrc --keepParent \"{app}\" \"{zip}\"")) return;
-            Debug.Log($"[red] firma {(signer == null ? "ad hoc" : $"de {signer}")} comprobada (codesign --verify --deep --strict) · {new FileInfo(zip).Length / (1024 * 1024)} MB → {zip}");
+            // Builds/Mac/Bastion.app keeps its name (publicar.sh, the test copies and Pruebas know it by it); for the zip it is
+            // renamed «Bastión 0.14.8.app» beside it and back after (the signature doesn't seal the bundle's own name).
+            var named = Path.Combine(Path.GetDirectoryName(app)!, shown + ".app");
+            if (Directory.Exists(named)) Directory.Delete(named, true);
+            Directory.Move(app, named);
+            try
+            {
+                if (!Ran("ditto", $"-c -k --sequesterRsrc --keepParent \"{named}\" \"{zip}\"")) return;
+            }
+            finally
+            {
+                Directory.Move(named, app);
+            }
+            Debug.Log($"[red] firma {(signer == null ? "ad hoc" : $"de {signer}")} comprobada (codesign --verify --deep --strict) · «{shown}.app» en el zip · {new FileInfo(zip).Length / (1024 * 1024)} MB → {zip}");
         }
 
         /// <summary>
@@ -96,8 +116,22 @@ namespace Bastion.Client.Net.EditorTools
             var parent = Path.GetDirectoryName(folder)!;
             var zip = Path.Combine(parent, "Bastion-Windows.zip");
             if (File.Exists(zip)) File.Delete(zip);
-            if (!Ran("zip", $"-r -X -q \"{zip}\" \"{Path.GetFileName(folder)}\" -x \"*DoNotShip*\"", parent)) return;
-            Debug.Log($"[red] app de Windows con medir.bat · {new FileInfo(zip).Length / (1024 * 1024)} MB → {zip}");
+            // The version in the folder's name inside the zip (cuadro 162), «Bastion 0.14.8», without the accent: a name with
+            // «ó» in a zip made here may come out garbled in Windows' own unzipping. Bastion.exe keeps its name (its
+            // Bastion_Data beside it must match it), and the window's title is productName's (changing it moves the saves).
+            var inside = Versioned().Replace("ó", "o");
+            var named = Path.Combine(parent, inside);
+            if (Directory.Exists(named)) Directory.Delete(named, true);
+            Directory.Move(folder, named);
+            try
+            {
+                if (!Ran("zip", $"-r -X -q \"{zip}\" \"{inside}\" -x \"*DoNotShip*\"", parent)) return;
+            }
+            finally
+            {
+                Directory.Move(named, folder);
+            }
+            Debug.Log($"[red] app de Windows con medir.bat · «{inside}» en el zip · {new FileInfo(zip).Length / (1024 * 1024)} MB → {zip}");
         }
 
         /// <summary>

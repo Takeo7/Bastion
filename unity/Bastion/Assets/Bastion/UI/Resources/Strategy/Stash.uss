@@ -239,9 +239,11 @@
     font-size: 17px;
 }
 
-.upgrade__line {
-    font-size: 13px;
+/* What the next level does, in figures (U3, cuadro 157); the sentence on hover. */
+.upgrade__delta {
+    font-size: 14px;
     white-space: normal;
+    color: var(--t-text);
 }
 
 /* The level in words after the marks (B12). */
@@ -272,12 +274,29 @@
     margin-left: 12px;
 }
 
+/* The price on the key (U3): after its word, in the key's ink. */
 .upgrade__price {
-    font-size: 16px;
-    margin-bottom: 4px;
+    margin-left: 10px;
+    margin-bottom: 0;
+}
+
+.upgrade__button-text,
+.upgrade__button .supplies-mark__value {
+    color: #15181a;
+}
+
+.upgrade__button-text {
+    font-size: 13px;
+}
+
+.upgrade__button:disabled .upgrade__button-text,
+.upgrade__button:disabled .supplies-mark__value {
+    color: #6f756c;
 }
 
 .upgrade__button {
+    flex-direction: row;
+    align-items: center;
     height: 30px;
     margin: 0;
     padding: 0 12px;

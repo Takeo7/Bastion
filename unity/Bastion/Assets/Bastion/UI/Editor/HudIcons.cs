@@ -194,6 +194,8 @@ namespace Bastion.UI.EditorTools
             // No two terms with one icon (Producto, cuadro 158): those that shared «aim:other», the packs' own.
             ("aim:marked", "ICON_DarkFantasy_Status_Targeted_01_Clean"), ("aim:luck", "ICON_DarkFantasy_Stat_Luck_01_Clean"),
             ("aim:dizzy", "ICON_DarkFantasy_Status_Shocked_01_Clean"), ("aim:suppress", Bullets), ("aim:reaction", Target),
+            // The game's level in figures (U3, cuadro 157): the dead, Supervivencia's wounds, and its lock (chosen once).
+            ("level:dead", Skull), ("level:wounds", "ICON_DarkFantasy_Status_Wounded_01_Clean"), ("lock", "ICON_DarkFantasy_Map_Lock_01_Clean"),
         };
 
         public static void Make()

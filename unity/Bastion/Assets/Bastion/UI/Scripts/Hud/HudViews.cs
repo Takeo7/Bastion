@@ -464,6 +464,8 @@ namespace Bastion.UI.Hud
         /// <summary>Its icon (LineIcon's «aim:…», U1 of 25/11) and a short note by its figure: how far for the reach, what covers.</summary>
         public string Icon;
         public string Note;
+        /// <summary>The note in full words for its help, where the figure's is short («a 2 casillas» for «2 c.»; Lore, 25/11).</summary>
+        public string About;
     }
 
     /// <summary>What the aimed ability takes off (hud.ts DamageView).</summary>

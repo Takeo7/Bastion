@@ -39,7 +39,8 @@ namespace Bastion.UI.Strategy
             stash = Ui.El("stash-grid", left);
             hint = Ui.Text("", "stash-hint muted", left);
             bin = Ui.El("stash-bin", left);
-            right = new KitPanel(view, "strat-side strat-side--right panel stash-right", tips, handlers, board) { Icon = icon };
+            // (gear-anchor: a kit place's list opens to its left, over the scene; U4, cuadro 163.)
+            right = new KitPanel(view, "strat-side strat-side--right panel stash-right gear-anchor", tips, handlers, board) { Icon = icon };
             Show(false);
         }
 
@@ -66,7 +67,9 @@ namespace Bastion.UI.Strategy
                 tips.Attach(supplies, v.SuppliesTip);
             }
             if (v.Stash != null) board.SetGrid(stash, v.Stash);
-            hint.text = v.Hint ?? "";
+            // (U2: four words, the sentence on hover.)
+            hint.text = string.IsNullOrEmpty(v.Hint) ? "" : GearText.HintShort;
+            tips.Attach(hint, v.Hint);
             Ui.Show(hint, !string.IsNullOrEmpty(v.Hint));
             board.SetBin(bin);
             right.Set(v.Soldiers, v.Kit);
