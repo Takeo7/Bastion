@@ -301,3 +301,41 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 8a65f66b8fbcf4248a5b819cb71edfeb, type: 3}
   - Id: tab:upgrades
     Sprite: {fileID: 21300000, guid: 7b3113d60f1f0e94590c6c914257370e, type: 3}
+  - Id: aim:soldier
+    Sprite: {fileID: 21300000, guid: dd5e3aa34f84a40d6960a6bb7cee4542, type: 3}
+  - Id: aim:weapon
+    Sprite: {fileID: 21300000, guid: b87302accfbc54453b61fab6baaf960b, type: 3}
+  - Id: aim:scope
+    Sprite: {fileID: 21300000, guid: a1bf795b473294fd1bf1ffb0b261ddc8, type: 3}
+  - Id: aim:range
+    Sprite: {fileID: 21300000, guid: 0eb4944b2f2ec45a5a40ecc450ee685a, type: 3}
+  - Id: aim:close
+    Sprite: {fileID: 21300000, guid: 1e95d33f5bbc64acf90c45edbb578985, type: 3}
+  - Id: aim:height
+    Sprite: {fileID: 21300000, guid: a1438364976474bcdbc3404962dbaead, type: 3}
+  - Id: aim:coverLow
+    Sprite: {fileID: 21300000, guid: 3bbd978675daa40e48c5020beec45501, type: 3}
+  - Id: aim:coverHigh
+    Sprite: {fileID: 21300000, guid: 8c5c4c20bd9c94cb3b5136b1a10ad3ea, type: 3}
+  - Id: aim:defense
+    Sprite: {fileID: 21300000, guid: ce6c44903c8aa4f609b868365af610e1, type: 3}
+  - Id: aim:smoke
+    Sprite: {fileID: 21300000, guid: 1a16caadb9afe4af599a9d541035858c, type: 3}
+  - Id: aim:flank
+    Sprite: {fileID: 21300000, guid: 88d734b2856374a20b3b67ff2227bd7c, type: 3}
+  - Id: aim:skill
+    Sprite: {fileID: 21300000, guid: 60ecca0f819f94c2d9df0f6f5a17e75d, type: 3}
+  - Id: aim:partner
+    Sprite: {fileID: 21300000, guid: 1eed74a65b56b41b6a86757e15958e76, type: 3}
+  - Id: aim:other
+    Sprite: {fileID: 21300000, guid: c60e269b7a0824117aa7b4fbc536753a, type: 3}
+  - Id: aim:marked
+    Sprite: {fileID: 21300000, guid: e09ec7bf0570c644fb87287216340b0b, type: 3}
+  - Id: aim:luck
+    Sprite: {fileID: 21300000, guid: 226a8ee102e7044498fa4b448f8ce4e2, type: 3}
+  - Id: aim:dizzy
+    Sprite: {fileID: 21300000, guid: f27e951ec4f22744db9c454ee2941117, type: 3}
+  - Id: aim:suppress
+    Sprite: {fileID: 21300000, guid: 1b5debe2e542c7d468796221fe421e1c, type: 3}
+  - Id: aim:reaction
+    Sprite: {fileID: 21300000, guid: a8d702d679318b44ca69b4f867c1b332, type: 3}

@@ -185,8 +185,9 @@ namespace Bastion.Engine
         public int PatrolIndex { get; set; }
         /// <summary>
         /// Woken by something not of the squad, with the squad hidden (a bite or a blast of the dead, N3: PodActivatedEvent
-        /// attacked with no unit): its living don't know where the squad is, and go only for the soldiers they see (Ai).
-        /// Producto's review of 23/11: a group awake from the start (Despiertos) goes for the squad as before. Missing: no.
+        /// attacked with no unit). Since cuadro 157 (P4) every one of the living knows only the soldiers it sees, so this no
+        /// longer changes what they do (Ai); kept for the games saved with it. A group awake from the start (Despiertos)
+        /// knows where the squad comes in (Setup.AwakeHeard). Missing: no.
         /// </summary>
         public bool? WokenBlind { get; set; }
     }

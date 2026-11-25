@@ -95,7 +95,7 @@ namespace Bastion.UI.Hud
             tips.KeepClear.Add(() => sheet);
             abilitiesHost = root.Q("abilities");
             bar = new ActionBar(abilitiesHost, relay, tips, Icon);
-            shot = new ShotPanel(root.Q("shot-panel"), relay, tips);
+            shot = new ShotPanel(root.Q("shot-panel"), relay, tips, Icon);
             turnActions = new TurnActions(root.Q("end-slot"), root.Q("clocks"), relay, tips, Icon);
             // With the finger, what only a key did has its button (docs/IOS.md, phase 2); the desktop has none.
             if (Bastion.Client.GameInput.Touch) touchButtons = new TouchButtons(root, root.Q("end-slot"), relay, tips, Icon);

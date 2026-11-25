@@ -175,6 +175,14 @@
     color: var(--t-danger);
 }
 
+/* What takes most off another target's odds, by them (U1; cuadro 158: the icon alone), in red. */
+.uflag__hover-icon {
+    width: 13px;
+    height: 13px;
+    margin-left: 1px;
+    -unity-background-image-tint-color: var(--t-danger);
+}
+
 /*
    An enemy's one gauge (Ana, 7/11 #1): Synty INTERFACE Fantasy Menus' SPR_FantasyMenus_Menu_Button_08_Background in black,
    as the torn plates, stretched whole (its sprite's 500 px slices would not fit); its health in the long part, its eye in

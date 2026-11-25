@@ -250,7 +250,8 @@ namespace Bastion.Engine
 
         /// <summary>
         /// How tall what stands on ground tile `i` is for sight: its kind's height, but for full cover lower than the eyes,
-        /// the object's own (decor.ts decorSightHeight: Arturo, 22/10). Cover goes by the kind alone.
+        /// the object's own (decor.ts decorSightHeight: Arturo, 22/10). Cover too since cuadro 157 (P6, GroundCoverHeight:
+        /// half cover); peeking and what the dead see by the kind (CoverAt's byKind).
         /// </summary>
         public static double GroundSightHeight(GameState s, int i)
         {
@@ -330,11 +331,48 @@ namespace Bastion.Engine
         }
 
         /// <summary>Cover offered by the tile `side` to a unit standing at elevation `standElev`.</summary>
-        public static int CoverFrom(GameState s, double standElev, Vec2 side)
+        public static int CoverFrom(GameState s, double standElev, Vec2 side, bool byKind = false)
         {
             if (!InBounds(s, side.X, side.Y)) return 2;
-            var kind = TileAt(s, side.X, side.Y);
-            return CoverLevel(ElevAt(s, side.X, side.Y) + CoverHeights[kind] - standElev);
+            var i = TileIndex(s, side.X, side.Y);
+            return CoverLevel(ElevAt(s, side.X, side.Y) + (byKind ? CoverHeights[s.Tiles[i]] : GroundCoverHeight(s, i)) - standElev);
+        }
+
+        /// <summary>
+        /// How tall what stands on ground tile `i` is for cover: its kind's, but full cover lower than the eyes (a drinks
+        /// fridge, crates, drums: Decor's sight heights, Arturo 22/10) only as tall as the object: half cover, what one sees
+        /// over covers by half (Arturo, cuadro 157, P6).
+        /// </summary>
+        private static double GroundCoverHeight(GameState s, int i)
+        {
+            var kind = s.Tiles[i];
+            return (kind == TileKinds.High ? Decor.DecorSightHeight(s.Decor, s.Width, i) : null) ?? CoverHeights[kind];
+        }
+
+        /// <summary>
+        /// What gives the cover of CoverAt (cuadro 157, P5: «que se vea»): the object dressing the tile `side` (a DecorKinds:
+        /// a shelf, a counter) where it is furniture, else the tile's kind (a wall, a door, a window), or the storey's above
+        /// where that stands taller. Off the map, a wall.
+        /// </summary>
+        public static string CoverPiece(GameState s, Pos stand, Vec2 side)
+        {
+            if (!InBounds(s, side.X, side.Y)) return TileKinds.Wall;
+            var i = TileIndex(s, side.X, side.Y);
+            var kind = s.Tiles[i];
+            var piece = (kind == TileKinds.High || kind == TileKinds.Low ? Decor.KindOf(s.Decor, s.Width, i) : null) ?? kind;
+            if (s.Levels == null) return piece;
+            var h = HeightAt(s, stand);
+            var top = ElevAt(s, side.X, side.Y) + GroundCoverHeight(s, i);
+            for (var k = 1; k <= s.Levels.Count; k++)
+            {
+                var up = LevelTile(s.Levels[k - 1], i);
+                if (up != null && k <= h + 1e-6 && k + CoverHeights[up] > top)
+                {
+                    top = k + CoverHeights[up];
+                    piece = up;
+                }
+            }
+            return piece;
         }
 
         private static int CoverLevel(double rel)
@@ -351,11 +389,16 @@ namespace Bastion.Engine
         /// and windows full, furniture as on the ground, a roof's parapet half. Open
         /// air beside (a roof's edge) gives nothing. Without storeys, coverFrom.
         /// </summary>
-        public static int CoverAt(GameState s, Pos stand, Vec2 side)
+        /// <remarks>
+        /// `byKind`: what the tile's kind gives, all furniture as tall as its kind (before cuadro 157, P6): where one steps out
+        /// to look from (Los.PeekOrigins), so that what is seen doesn't change.
+        /// </remarks>
+        public static int CoverAt(GameState s, Pos stand, Vec2 side, bool byKind = false)
         {
             var h = HeightAt(s, stand);
-            if (s.Levels == null || !InBounds(s, side.X, side.Y)) return CoverFrom(s, h, side);
-            var top = ElevAt(s, side.X, side.Y) + CoverHeights[TileAt(s, side.X, side.Y)];
+            if (s.Levels == null || !InBounds(s, side.X, side.Y)) return CoverFrom(s, h, side, byKind);
+            var i = TileIndex(s, side.X, side.Y);
+            var top = ElevAt(s, side.X, side.Y) + (byKind ? CoverHeights[s.Tiles[i]] : GroundCoverHeight(s, i));
             for (var k = 1; k <= s.Levels.Count; k++)
             {
                 var kind = LevelTile(s.Levels[k - 1], TileIndex(s, side.X, side.Y));

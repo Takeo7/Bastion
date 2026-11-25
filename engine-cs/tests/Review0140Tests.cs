@@ -115,15 +115,32 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void AwakeFromTheStartTheLivingGoForAHiddenSquad()
         {
-            // As before N3 (a Rescate with Cuervos «Despiertos»): the group awake, the squad hidden and out of its sight.
+            // A Rescate with Cuervos «Despiertos»: the group awake, the squad hidden and out of its sight. Since cuadro 157 (P4,
+            // «solo lo que ve cada uno») it knows of the squad only where it comes in, as a noise heard there (Setup, Despiertos;
+            // Producto's review of 0.14.7): it goes there.
             var s = StateFrom(Enumerable.Repeat(new string('.', 40), 5).ToArray());
             AddUnit(s, "s1", TemplateIds.Rookie, 1, 2);
-            var raider = AddUnit(s, "a1", TemplateIds.Trooper, 38, 2, extra: (u) => u.PodId = "p1");
+            var raider = AddUnit(s, "a1", TemplateIds.Trooper, 38, 2, extra: (u) => { u.PodId = "p1"; u.Heard = P(1, 2); });
             s.Pods = new List<Pod> { new Pod { Id = "p1", Active = true, UnitIds = new List<string> { "a1" } } };
             s.Concealed = true;
             Assert.False(Los.CanSee(s, raider, s.Units[0]));
             Assert.True(Exec(s, new EndTurnCommand { Ready = true }).Ok);
             Assert.True(raider.Pos.X < 38, $"{raider.Pos.X}");
+        }
+
+        [Fact]
+        public void AwakeKnowingNothingTheLivingKeepWatch()
+        {
+            // Awake with nothing heard and the squad out of its sight (cuadro 157, P4): it stays. The squad hidden, not on watch
+            // either: it knows of no one to watch for (Producto's review of 0.14.7).
+            var s = StateFrom(Enumerable.Repeat(new string('.', 40), 5).ToArray());
+            AddUnit(s, "s1", TemplateIds.Rookie, 1, 2);
+            var raider = AddUnit(s, "a1", TemplateIds.Trooper, 38, 2, extra: (u) => u.PodId = "p1");
+            s.Pods = new List<Pod> { new Pod { Id = "p1", Active = true, UnitIds = new List<string> { "a1" } } };
+            s.Concealed = true;
+            Assert.True(Exec(s, new EndTurnCommand { Ready = true }).Ok);
+            Assert.Equal(38, raider.Pos.X);
+            Assert.False(raider.Overwatch);
         }
 
         // ---------------------------------------------------------------------- 7. the trickle by level

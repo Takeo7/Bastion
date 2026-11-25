@@ -80,15 +80,25 @@ namespace Bastion.Engine
             var bestShot = 0;
             foreach (var e in enemies)
             {
-                if (Los.SightOrigin(s, e.Pos, pos, Los.SightTo(s, e, pos), Los.WindowReachOf(e.Team)) != null)
+                // The dead bite, they don't shoot (cuadro 157, P1): no cover from them, but never beside one.
+                if (Content.Templates[e.Template].Undead)
                 {
+                    if (Aim.InMeleeReach(s, pos, e.Pos)) score -= BesideDead;
+                }
+                else if (Los.SightOrigin(s, e.Pos, pos, Los.SightTo(s, e, pos), Los.WindowReachOf(e.Team)) != null)
+                {
+                    // Bare before a soldier that sees it, more than it was (cuadro 157: «que se cubran de nosotros»; the dead
+                    // pushed to cover too while they counted as shooters).
                     var cover = Cover.CoverAgainst(s, pos, e.Pos);
-                    score += cover == 2 ? 25 : cover == 1 ? 10 : -30;
+                    score += cover == 2 ? 25 : cover == 1 ? 10 : -BareLoss;
                 }
                 var shot = Aim.PreviewShot(s, u, e, new ShotOptions { From = pos });
                 if (shot != null) bestShot = Math.Max(bestShot, shot.Hit + (shot.Flanked ? 15 : 0));
             }
             score += bestShot * shotWeight;
+            // Out of the squad's way with no shot at all, it gives up the fight (Producto's review of 0.14.7: bare in the open,
+            // hiding came before a good shot).
+            if (bestShot == 0 && enemies.Any((e) => !Content.Templates[e.Template].Undead)) score -= HideLoss;
             // The high ground (storeys over the nearest soldier, on a map with them).
             if (s.Levels != null)
             {
@@ -128,8 +138,10 @@ namespace Bastion.Engine
         /// <summary>Where a freshly activated alien runs to: cover first, shots barely matter.</summary>
         public static Pos? ChooseScamperTile(GameState s, Unit u)
         {
-            var enemies = Grid.Combatants(s, Teams.Xcom);
-            if (enemies.Count == 0) return null;
+            // Only from the soldiers it sees (cuadro 157, P4); seeing none, it stays where it is.
+            var seen = SeenSoldiers(s, u);
+            if (seen.Count == 0) return null;
+            var enemies = seen.Concat(KnownOthers(s, u, true)).ToList();
             // A free move, whatever movement it spent last turn: its whole turn's (Arturo, 5/11 #14).
             var reach = Paths.ComputeReach(s, u, Paths.FullMoves(u));
             var best = BestCandidate(s, u, reach, (p) => TileScore(s, u, p, enemies, 0.1));
@@ -140,9 +152,8 @@ namespace Bastion.Engine
         /// Best impact point for an explosive: as many soldiers as possible, never an
         /// ally. Soldiers well protected from bullets count extra.
         /// </summary>
-        private static (Pos tile, double score)? BestBlast(GameState s, Unit u, string ability)
+        private static (Pos tile, double score)? BestBlast(GameState s, Unit u, string ability, IReadOnlyList<Unit> soldiers)
         {
-            var soldiers = Grid.Combatants(s, Teams.Xcom);
             var candidates = new List<Pos>();
             foreach (var soldier in soldiers)
             {
@@ -173,8 +184,8 @@ namespace Bastion.Engine
             return best;
         }
 
-        /// <summary>One action toward the nearest of `goals`, ending in cover if it can.</summary>
-        private static bool MoveToward(Sim sim, Unit u, List<Pos> goals)
+        /// <summary>One action toward the nearest of `goals`, ending in cover if it can; never beside one of `dead` (P1).</summary>
+        private static bool MoveToward(Sim sim, Unit u, List<Pos> goals, IReadOnlyList<Unit>? dead = null)
         {
             var s = sim.S;
             double Nearest(Pos p) => MinOf(goals.Select((g) => Farness(s, p, g)));
@@ -184,7 +195,7 @@ namespace Bastion.Engine
             var target = sorted.Count > 0 ? sorted[0] : null;
             if (target != null && Grid.StoreysApart(s, u.Pos, target) > 0) return Walk(sim, u, target, 1);
             var reach = Paths.ComputeReach(s, u, Paths.CostPerAp(u));
-            var cand = BestCandidate(s, u, reach, (p) => -Nearest(p) * 4 + (Cover.HasAnyCover(s, p) ? 6 : 0));
+            var cand = BestCandidate(s, u, reach, (p) => -Nearest(p) * 4 + (Cover.HasAnyCover(s, p) ? 6 : 0) - (dead != null && dead.Any((d) => Aim.InMeleeReach(s, p, d.Pos)) ? BesideDead : 0));
             if (cand == null || Grid.SamePos(cand.Pos, u.Pos)) return false;
             var path = Paths.BuildPath(s, u, reach, cand.Pos);
             if (path == null) return false;
@@ -457,21 +468,6 @@ namespace Bastion.Engine
             }
         }
 
-        /// <summary>
-        /// Where a living enemy heads when it has nothing to shoot: the soldiers, or
-        /// the last noise it heard while it sees none of them (reached, it forgets it).
-        /// </summary>
-        private static List<Pos> HeadFor(Sim sim, Unit u, List<Unit> enemies)
-        {
-            var s = sim.S;
-            if (u.Heard != null && !enemies.Any((e) => Los.CanSee(s, u, e)))
-            {
-                if (!Arrived(s, u.Pos, u.Heard, 1.5)) return new List<Pos> { u.Heard };
-                sim.Emit(new ForgotEvent { Unit = u.Id });
-            }
-            return enemies.Select((e) => e.Pos).ToList();
-        }
-
         /// <summary>Whom `u` fights (content.ts hostileTo), able to be fought.</summary>
         private static List<Unit> Foes(GameState s, Unit u)
         {
@@ -484,7 +480,8 @@ namespace Bastion.Engine
         /// <summary>
         /// N3 (Arturo, 22/11: «Los zombies atacan a los saqueadores y el resto de humanos y el resto de humanos les atacan a
         /// ellos»): one of the living still unaware of the squad (its group asleep, a camp's guard at its post) and one of the
-        /// dead it sees ZombieThreat or nearer: it reloads if it must, and shoots the nearest it has a shot at, once, from
+        /// dead it sees ZombieThreat or nearer, or hears HearDead or nearer (cuadro 157, P2): it reloads if it must, and
+        /// shoots the nearest it has a shot at, once, from
         /// where it stands. Its group stays asleep: it fights the dead, it doesn't go looking for the squad (Rules.Attack wakes
         /// the one shot at, never the squad's concealment: the attacker isn't of the squad).
         /// </summary>
@@ -494,7 +491,7 @@ namespace Bastion.Engine
             if (!u.Alive || u.Ap <= 0 || sim.Over || Content.Templates[u.Template].Undead) return;
             var abilities = Abilities.AbilitiesOf(u);
             bool Usable(string a) => abilities.Contains(a) && Abilities.AbilityBlocker(s, u, a) == null;
-            var dead = Foes(s, u).Where((e) => e.Team != Teams.Xcom && Content.Templates[e.Template].Undead && Farness(s, u.Pos, e.Pos) <= ZombieThreat && Los.CanSee(s, u, e)).ToList();
+            var dead = KnownOthers(s, u, false).Where((e) => Content.Templates[e.Template].Undead).ToList();
             if (dead.Count == 0) return;
             if (Aim.WeaponOf(u).Clip > 0 && u.Ammo <= 0)
             {
@@ -523,6 +520,102 @@ namespace Bastion.Engine
                 TakeZombieTurn(sim, u);
                 return;
             }
+            var saw = new HashSet<string>();
+            LivingTurn(sim, u, saw);
+            if (u.Alive && !sim.Over) Remember(sim, u, saw, sim.Remembered.Add(u.Id));
+        }
+
+        /// <summary>How near one of the dead one of the living notices without looking its way: it hears it (cuadro 157, P2).</summary>
+        public const int HearDead = 3;
+
+        /// <summary>
+        /// What a tile beside one of the dead it knows is worth less to one of the living (cuadro 157, P1): more than a good
+        /// shot from full cover is worth (TileScore), so that it goes there only with nowhere else.
+        /// </summary>
+        private const double BesideDead = 500;
+
+        /// <summary>What a tile bare before a soldier that sees it is worth less to one of the living (TileScore; −30 till cuadro 157).</summary>
+        private const double BareLoss = 45;
+
+        /// <summary>What a tile with no shot at anybody, the squad known, is worth less to one of the living (TileScore).</summary>
+        private const double HideLoss = 15;
+
+        /// <summary>
+        /// The soldiers one of the living sees, looking round on its turn (Los.SeesAround): all it knows of the squad (cuadro
+        /// 157, P4: «solo lo que ve cada uno»). With `saw`, those it has seen in its turn too (where it stood), noted in it.
+        /// </summary>
+        /// <remarks>
+        /// The squad hidden, only those it notices as a group does (Rules.Notices: its cone, its detection; Producto's review
+        /// of 0.14.7): LivingTurn gives the squad away then.
+        /// </remarks>
+        private static List<Unit> SeenSoldiers(GameState s, Unit u, HashSet<string>? saw = null)
+        {
+            bool Sees(Unit e) => s.Concealed ? Rules.Notices(s, u, e, e.Pos) : Los.SeesAround(s, u, e);
+            var seen = Grid.Combatants(s, Teams.Xcom).Where((e) => (saw != null && saw.Contains(e.Id)) || Sees(e)).ToList();
+            if (saw != null) foreach (var e in seen) saw.Add(e.Id);
+            return seen;
+        }
+
+        /// <summary>
+        /// Its foes that aren't of the squad that one of the living knows of (18/10 #47: a zombie at hand is a threat too): those
+        /// it sees ZombieThreat or nearer, and the dead HearDead or nearer, seen or not (P2).
+        /// </summary>
+        /// <remarks>
+        /// `around`: awake, on its turn, it looks round (Los.SeesAround); unaware (FendOff), what is before it. With `knew`,
+        /// those it has known in its turn too while ZombieThreat or nearer, noted in it.
+        /// </remarks>
+        private static List<Unit> KnownOthers(GameState s, Unit u, bool around, HashSet<string>? knew = null)
+        {
+            bool Sees(Unit e) => around ? Los.SeesAround(s, u, e) : Los.CanSee(s, u, e);
+            var known = Foes(s, u).Where((e) => e.Team != Teams.Xcom && ((Content.Templates[e.Template].Undead && Farness(s, u.Pos, e.Pos) <= HearDead) || (Farness(s, u.Pos, e.Pos) <= ZombieThreat && ((knew != null && knew.Contains(e.Id)) || Sees(e))))).ToList();
+            if (knew != null) foreach (var e in known) knew.Add(e.Id);
+            return known;
+        }
+
+        /// <summary>
+        /// Where one of the living goes seeing none of the squad (P4, as the dead do): after the soldier it saw last, while it
+        /// still follows them (Unit.hunting); else to what it heard, and having found nobody there, it forgets it. Empty: it
+        /// knows of nobody.
+        /// </summary>
+        private static List<Pos> Trail(Sim sim, Unit u)
+        {
+            var s = sim.S;
+            var hunted = u.Hunting != null ? Grid.Combatants(s, Teams.Xcom).Find((e) => e.Id == u.Hunting.Id) : null;
+            if (hunted != null) return new List<Pos> { hunted.Pos };
+            if (u.Heard != null)
+            {
+                if (!Arrived(s, u.Pos, u.Heard, 1.5)) return new List<Pos> { u.Heard };
+                sim.Emit(new ForgotEvent { Unit = u.Id });
+            }
+            return new List<Pos>();
+        }
+
+        /// <summary>
+        /// One of the living's turn over, whom it follows next (P4, as the dead: TakeZombieTurn): the nearest soldier it saw in
+        /// its turn (`saw`) or sees now; seeing none, the one it followed, a turn more (`count`: once an enemy turn, a jammed
+        /// second go doesn't count again), till it forgets them (HuntTurns) or they are gone.
+        /// </summary>
+        private static void Remember(Sim sim, Unit u, HashSet<string> saw, bool count)
+        {
+            var s = sim.S;
+            var seen = SeenSoldiers(s, u, saw);
+            Js.Sort(seen, (a, b) => Order(Farness(s, u.Pos, a.Pos) - Farness(s, u.Pos, b.Pos)) != 0 ? Order(Farness(s, u.Pos, a.Pos) - Farness(s, u.Pos, b.Pos)) : IdOrder(a.Id, b.Id));
+            var was = u.Hunting;
+            if (seen.Count > 0)
+            {
+                if (was?.Id != seen[0].Id || was.Missed != 0) sim.Emit(new HuntingEvent { Unit = u.Id, Target = seen[0].Id, Missed = 0 });
+            }
+            else if (was != null && count)
+            {
+                var missed = was.Missed + 1;
+                var there = Grid.Combatants(s, Teams.Xcom).Any((e) => e.Id == was.Id);
+                sim.Emit(new HuntingEvent { Unit = u.Id, Target = there && missed < HuntTurns ? was.Id : null, Missed = missed });
+            }
+        }
+
+        /// <summary>One of the living's actions (TakeAlienTurn): cover and shots at what it knows; the soldiers it sees, in `saw`.</summary>
+        private static void LivingTurn(Sim sim, Unit u, HashSet<string> saw)
+        {
             var s = sim.S;
             var abilities = Abilities.AbilitiesOf(u);
             bool Usable(string a) => abilities.Contains(a) && Abilities.AbilityBlocker(s, u, a) == null;
@@ -531,14 +624,44 @@ namespace Bastion.Engine
             // walking there and back, then firing from afar).
             var moved = false;
             int Acts() => u.Ap - (moved ? 1 : 0);
+            var knew = new HashSet<string>();
             for (var guard = 0; guard < 6 && u.Alive && u.Ap > 0 && !sim.Over; guard++)
             {
-                // The squad, and the dead it sees close by (18/10 #47): a zombie at hand is a threat too. Woken by the dead with
-                // the squad still hidden (N3, Pod.WokenBlind), only the soldiers it sees: it doesn't know where the rest are.
-                var blind = s.Concealed && s.Pods.Any((p) => p.WokenBlind == true && p.UnitIds.Contains(u.Id));
-                var squad = Grid.Combatants(s, Teams.Xcom).Where((e) => !blind || Los.CanSee(s, u, e));
-                var enemies = squad.Concat(Foes(s, u).Where((e) => e.Team != Teams.Xcom && Farness(s, u.Pos, e.Pos) <= ZombieThreat && Los.CanSee(s, u, e))).ToList();
-                if (enemies.Count == 0) return;
+                // The soldiers it sees (P4: no more of the squad than that; Pod.WokenBlind was this for one woken by the dead),
+                // and the others it knows of (P2). Seeing none of the squad, the trail it follows (Trail); never the dead (P1).
+                var seen = SeenSoldiers(s, u, saw);
+                // One of the squad noticed while it was hidden: it is seen (as a group noticing it, Sim.ActivatePods).
+                if (s.Concealed && seen.Count > 0) sim.BreakConcealment(ConcealReasons.Spotted, seen[0].Id, u.Id, Rules.NoticeRange(s, u, seen[0].Pos, seen[0]));
+                var others = KnownOthers(s, u, true, knew);
+                var dead = others.Where((e) => Content.Templates[e.Template].Undead).ToList();
+                var enemies = seen.Concat(others).ToList();
+                var goals = seen.Count > 0 ? seen.Select((e) => e.Pos).ToList() : Trail(sim, u);
+                if (enemies.Count == 0)
+                {
+                    // Knowing of nobody, on its guard where it stands (the squad hidden, not: it knows of no one to watch for);
+                    // else after what it follows.
+                    if (goals.Count == 0 || moved || !MoveToward(sim, u, goals, dead))
+                    {
+                        if (!s.Concealed && Usable(AbilityIds.Overwatch)) sim.Perform(u, AbilityIds.Overwatch);
+                        return;
+                    }
+                    moved = true;
+                    continue;
+                }
+
+                // One of the dead beside it, and both actions: away from it first, then the shot or the reload (cuadro 157, P3).
+                if (Acts() >= 2 && !moved && dead.Any((d) => Aim.InMeleeReach(s, u.Pos, d.Pos)))
+                {
+                    var reach = Paths.ComputeReach(s, u, Paths.CostPerAp(u));
+                    var away = BestCandidate(s, u, reach, (p) => dead.Any((d) => Aim.InMeleeReach(s, p, d.Pos)) ? double.NegativeInfinity : TileScore(s, u, p, enemies, 0.5));
+                    var path = away != null && away.Score > double.NegativeInfinity && !Grid.SamePos(away.Pos, u.Pos) ? Paths.BuildPath(s, u, reach, away.Pos) : null;
+                    if (path != null)
+                    {
+                        sim.MoveAlong(u, path, 1);
+                        moved = true;
+                        continue;
+                    }
+                }
 
                 if (Aim.WeaponOf(u).Clip > 0 && u.Ammo <= 0 && Usable(AbilityIds.Reload))
                 {
@@ -550,7 +673,7 @@ namespace Bastion.Engine
                 foreach (var ability in new[] { AbilityIds.Missiles, AbilityIds.Grenade, AbilityIds.Launch })
                 {
                     if (!Usable(ability) || sim.AlienBudget.Explosives <= 0) continue;
-                    var blast = BestBlast(s, u, ability);
+                    var blast = BestBlast(s, u, ability, seen);
                     if (blast != null && blast.Value.score >= 2)
                     {
                         sim.AlienBudget.Explosives--;
@@ -571,7 +694,7 @@ namespace Bastion.Engine
                         sim.Perform(u, melee, melee: options[0]);
                         return;
                     }
-                    if ((Acts() >= 2 || !shoots) && !moved && MoveToward(sim, u, HeadFor(sim, u, enemies)))
+                    if ((Acts() >= 2 || !shoots) && !moved && goals.Count > 0 && MoveToward(sim, u, goals, dead))
                     {
                         moved = true;
                         continue;
@@ -631,7 +754,7 @@ namespace Bastion.Engine
                             moved = true;
                             continue;
                         }
-                        if (MoveToward(sim, u, HeadFor(sim, u, enemies)))
+                        if (goals.Count > 0 && MoveToward(sim, u, goals, dead))
                         {
                             moved = true;
                             continue;

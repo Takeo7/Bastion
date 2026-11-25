@@ -814,7 +814,7 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ sight over what is lower than the eyes (Arturo, 22/10)
 
-        [Fact(DisplayName = "sight over what is lower than the eyes (Arturo, 22/10) › a stack of crates is full cover but is seen over; a container is not")]
+        [Fact(DisplayName = "sight over what is lower than the eyes (Arturo, 22/10) › a stack of crates is seen over and covers by half (cuadro 157); a container is not")]
         public void AStackOfCratesIsFullCoverButIsSeenOver()
         {
             var s = StateFrom(new[] { "..........", "....H.....", ".........." });
@@ -824,10 +824,13 @@ namespace Bastion.Engine.Tests
             s.Decor = Enumerable.Repeat(0, s.Width * s.Height).ToList();
             s.Decor[at] = Decor.DecorCode(DecorKinds.Crates);
             Assert.True(Los.CanSee(s, soldier, zombie));
-            // Still full cover for whoever crouches behind it.
-            Assert.Equal(2, Grid.CoverFrom(s, 0, new Vec2 { X = 4, Y = 1 }));
+            // Half cover for whoever crouches behind it (Arturo, cuadro 157, P6: what one sees over covers by half); one still
+            // steps out from beside it to look, as from full cover (what is seen doesn't change).
+            Assert.Equal(1, Grid.CoverFrom(s, 0, new Vec2 { X = 4, Y = 1 }));
+            Assert.Equal(2, Grid.CoverFrom(s, 0, new Vec2 { X = 4, Y = 1 }, byKind: true));
             s.Decor[at] = Decor.DecorCode(DecorKinds.Container);
             Assert.False(Los.CanSee(s, soldier, zombie));
+            Assert.Equal(2, Grid.CoverFrom(s, 0, new Vec2 { X = 4, Y = 1 }));
         }
     }
 }

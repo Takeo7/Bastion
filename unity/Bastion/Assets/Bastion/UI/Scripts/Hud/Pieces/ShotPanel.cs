@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -20,11 +21,14 @@ namespace Bastion.UI.Hud
         /// <summary>The key a self ability's panel sits over, while armed.</summary>
         VisualElement anchorKey;
 
-        public ShotPanel(VisualElement host, IHudHandlers handlers, TooltipLayer tips)
+        readonly System.Func<string, Sprite> icon;
+
+        public ShotPanel(VisualElement host, IHudHandlers handlers, TooltipLayer tips, System.Func<string, Sprite> icon = null)
         {
             this.host = host;
             this.handlers = handlers;
             this.tips = tips;
+            this.icon = icon;
             Ui.CloneInto("ShotPanel", host);
             // mixta.css: a big plate in its frame, and Disparar slanted (.hud button.fire).
             PlateFrame.Dress(host);
@@ -98,8 +102,9 @@ namespace Bastion.UI.Hud
             Text("cost", self ? Join(v.Cost, v.Limits, v.Noise) : null);
             Text("effect", support || self ? v.Effect : null);
             Text("detail", self ? v.Detail : null);
-            Mods(host.Q("mods"), attack ? v.Mods : null);
-            Mods(host.Q("crit-mods"), attack ? v.CritMods : null);
+            Mods(host.Q("mods"), attack ? v.Mods : null, HudText.Shot.Impact);
+            // (The crit at 0 said why, under its empty bar: cuadro 158.)
+            Mods(host.Q("crit-mods"), attack ? v.CritMods : null, HudText.Shot.Crit, attack && v.Crit == 0 ? v.CritNote : null);
             Text("graze", attack && v.Graze > 0 ? HudText.Shot.Graze(v.Graze, v.Damage.Graze) : null);
             Text("note", attack ? v.Note : null);
             Text("noise", self ? null : v.Noise);
@@ -163,17 +168,72 @@ namespace Bastion.UI.Hud
             kill.text = d.Kill ?? "";
         }
 
-        static void Mods(VisualElement list, List<ModView> mods)
+        /// <summary>
+        /// The terms under their number's title (IMPACTO, CRÍTICO; U1, Arturo's cuadro 158: «la barra»): a bar from 0 to 100,
+        /// the soldier's own grey from 0, what adds green on from it and what takes away red back over it, a mark where it
+        /// ends; under it each term an icon and its figure, its words on hover. None, only `none` (the crit at 0, and why).
+        /// </summary>
+        void Mods(VisualElement list, List<ModView> mods, string title, string none = null)
         {
             list.Clear();
-            Ui.Show(list, mods != null && mods.Count > 0);
-            if (mods == null) return;
-            foreach (var m in mods)
+            var any = mods != null && mods.Count > 0;
+            Ui.Show(list, any || none != null);
+            if (!any && none == null) return;
+            Ui.Text(title, "mods__title muted", list);
+            // No two figures under one icon (Producto, cuadro 158): those that share one go together, their words in its help.
+            mods = (mods ?? new List<ModView>()).GroupBy(m => m.Icon).Select(g => g.Count() == 1 ? g.First() : new ModView
             {
-                var row = Ui.El("mod", list);
-                Ui.Text(m.Label, null, row);
-                Ui.Text((m.Value > 0 ? "+" : "") + m.Value, m.Value >= 0 ? "mod__pos" : "mod__neg", row);
+                Icon = g.Key,
+                Value = g.Sum(m => m.Value),
+                Label = string.Join(" · ", g.Select(m => $"{m.Label} {Signed(m.Value)}")),
+                Note = g.Select(m => m.Note).FirstOrDefault(n => !string.IsNullOrEmpty(n)),
+            }).ToList();
+            // The soldier's own first (its aim, its base crit), what adds, then what takes away: the red reads as what was
+            // lost from where it got to.
+            var ordered = mods.Where(IsOwn).Concat(mods.Where(m => !IsOwn(m) && m.Value >= 0).OrderByDescending(m => m.Value)).Concat(mods.Where(m => !IsOwn(m) && m.Value < 0).OrderBy(m => m.Value)).ToList();
+            Bar(list, ordered, Mathf.Clamp(mods.Sum(m => m.Value), 0, 100));
+            if (none != null) Ui.Text(none, "mods__none muted", list);
+            if (!any) return;
+            var row = Ui.El("terms", list);
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                var m = ordered[i];
+                var own = IsOwn(m);
+                var term = Ui.El("term " + (own ? "term--own" : m.Value >= 0 ? "term--pos" : "term--neg"), row);
+                TermIcon(m.Icon, term);
+                Ui.Text(own || i == 0 ? m.Value.ToString() : Signed(m.Value), "term__value font-title", term);
+                if (!string.IsNullOrEmpty(m.Note)) Ui.Text(m.Note, "term__note", term);
+                tips.Attach(term, HudText.Shot.TermTip(m.Label, m.Note));
             }
+        }
+
+        /// <summary>A term's icon, Arte's (HudIcons' «aim:…»), tinted by `.term__icon`.</summary>
+        void TermIcon(string id, VisualElement parent) => Ui.Icon(icon, id, "term__icon", parent);
+
+        /// <summary>The soldier's own term, its starting point: its aim, its base crit (Aim.PreviewShot's labels).</summary>
+        static bool IsOwn(ModView m) => m.Icon == "aim:soldier";
+
+        static string Signed(int n) => n < 0 ? "−" + (-n) : "+" + n;
+
+        /// <summary>
+        /// 0 to 100, the soldier's own grey from 0, then each term on from where the last left it, green forward and red back
+        /// (over what it takes away), and a mark where it ends.
+        /// </summary>
+        static void Bar(VisualElement list, List<ModView> ordered, int total)
+        {
+            var bar = Ui.El("odds-bar", list);
+            var at = 0;
+            foreach (var m in ordered)
+            {
+                var from = Mathf.Clamp(at, 0, 100);
+                var to = Mathf.Clamp(at + m.Value, 0, 100);
+                at += m.Value;
+                if (from == to) continue;
+                var piece = Ui.El("odds-bar__piece " + (IsOwn(m) ? "odds-bar__piece--own" : m.Value >= 0 ? "odds-bar__piece--pos" : "odds-bar__piece--neg"), bar);
+                piece.style.left = Length.Percent(Mathf.Min(from, to));
+                piece.style.width = Length.Percent(Mathf.Abs(to - from));
+            }
+            Ui.El("odds-bar__end", bar).style.left = Length.Percent(total);
         }
 
         void Text(string name, string text)

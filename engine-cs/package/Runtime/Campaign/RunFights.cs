@@ -326,6 +326,8 @@ namespace Bastion.Engine
             // Nobody left in a pit, wherever they were put (Producto's review of 23/11: one of the dead there could never be
             // reached with a blade, and a Limpieza never won).
             Setup.OutOfPits(state);
+            // Despiertos: its living know where the squad comes in, all now in their places (Setup.AwakeHeard).
+            Setup.AwakeHeard(state);
             return (state, name);
         }
 

@@ -400,7 +400,7 @@ namespace Bastion.Engine.Tests
             SamePlace(P(9, 2), z.Pos);
         }
 
-        [Fact(DisplayName = "the dead › the living keep their ways, but seeing nobody they too go where they heard something")]
+        [Fact(DisplayName = "the dead › the living seeing nobody go where they heard something; having heard nothing, they keep watch (cuadro 157)")]
         public void TheLivingKeepTheirWays()
         {
             GameState Street()
@@ -410,12 +410,14 @@ namespace Bastion.Engine.Tests
                 AddUnit(st, "s1", TemplateIds.Rookie, 0, 2);
                 return st;
             }
-            // Without a noise, a Saqueador hunts the squad as ever...
+            // Without a noise, and the squad out of its sight, a Saqueador doesn't know where it is (cuadro 157, P4: «solo lo
+            // que ve cada uno»): it keeps watch where it stands...
             var s = Street();
             var hunter = AddUnit(s, "a1", TemplateIds.Trooper, 10, 2);
             PodOf(s, "p1", true, hunter);
             NewSim(s).RunAlienTurn();
-            Assert.True(hunter.Pos.X < 10);
+            Assert.Equal(10, hunter.Pos.X);
+            Assert.True(hunter.Overwatch);
             // ...with one, and nobody in sight, it goes to look.
             var t = Street();
             var raider = AddUnit(t, "a1", TemplateIds.Trooper, 10, 2, extra: (u) => u.Heard = P(19, 0));

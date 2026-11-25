@@ -239,7 +239,8 @@ namespace Bastion.Engine
             var h = Grid.HeightAt(s, p);
             foreach (var d in Grid.Dirs4)
             {
-                if (Grid.CoverAt(s, p, new Vec2 { X = p.X + d.X, Y = p.Y + d.Y }) != 2) continue;
+                // Full cover by its kind: a stack of crates lower than the eyes too, though it covers by half (cuadro 157, P6).
+                if (Grid.CoverAt(s, p, new Vec2 { X = p.X + d.X, Y = p.Y + d.Y }, byKind: true) != 2) continue;
                 foreach (var side in new[] { (x: d.Y, y: -d.X), (x: -d.Y, y: d.X) })
                 {
                     var q = new Pos { X = p.X + side.x, Y = p.Y + side.y, Z = p.Z };
@@ -364,6 +365,16 @@ namespace Bastion.Engine
             return InViewCone(viewer, target.Pos, from) && SightOrigin(s, from, target.Pos, SightTo(s, viewer, target.Pos) * ConcealShare(s, viewer, target, null, from), WindowReachOf(viewer.Team)) != null;
         }
 
+        /// <summary>
+        /// CanSee all round: whom one of the enemies sees turning its head, on its own turn (cuadro 157, P4: «solo lo que ve
+        /// cada uno», and it looks round): the same line and reach, hiding and concealment as CanSee, no view cone. The cone
+        /// is for noticing on the squad's turn (pods, Perceivers).
+        /// </summary>
+        public static bool SeesAround(GameState s, Unit viewer, Unit target)
+        {
+            return SightOrigin(s, viewer.Pos, target.Pos, SightTo(s, viewer, target.Pos) * ConcealShare(s, viewer, target, null, viewer.Pos), WindowReachOf(viewer.Team)) != null;
+        }
+
         /// <summary>How much of its sight `viewer` has on `target`: HIDE_SIGHT on an enemy hiding (Esconderse; Ana's #1 of 1/11).</summary>
         public static double HiddenShare(Unit viewer, Unit target)
         {
@@ -380,7 +391,8 @@ namespace Bastion.Engine
         {
             if (viewer.Team == targetTeam || !Content.Templates[viewer.Template].Undead) return 1;
             var v = from ?? viewer.Pos;
-            var cover = Cover.CoverAgainst(s, at, new Vec2 { X = v.X, Y = v.Y });
+            // By the tiles' kinds: what one sees over covers shots by half since cuadro 157 (P6), but hides as before.
+            var cover = Cover.CoverAgainst(s, at, new Vec2 { X = v.X, Y = v.Y }, byKind: true);
             return cover >= 2 ? Content.CoverSight.Full : cover == 1 ? Content.CoverSight.Half : 1;
         }
 

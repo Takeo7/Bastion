@@ -30,7 +30,8 @@ namespace Bastion.Client.Map
 
         /// <summary>How wide a line is (m), how far over the floor (m: over the soot and the embers, 0.02 and 0.03), and how strong.</summary>
         const float Width = 0.085f, Lift = 0.04f;
-        static readonly Color Tone = new Color(1, 1, 1, 0.36f), NightTone = new Color(0.75f, 0.8f, 0.95f, 0.17f);
+        static readonly Color Tone = new Color(1, 1, 1, 0.36f), NightTone = new Color(0.75f, 0.8f, 0.95f, 0.17f),
+            SnowTone = new Color(0.07f, 0.11f, 0.26f, 0.6f);
         /// <summary>Drawn before the marks (3000 on) and after the soot (2990).</summary>
         const int Queue = 2994;
 
@@ -81,7 +82,9 @@ namespace Bastion.Client.Map
                 r.receiveShadows = false;
             }
             // (Unlit, it glowed in a night's dark: fainter there.)
-            material.SetColor("_BaseColor", s.Mission?.Night == true ? NightTone : Tone);
+            // (And dark on the snow, by day and by night: pale on pale it was hardly seen, Pruebas' pass of the 0.14.6.)
+            bool snow = view.GetComponentInChildren<SnowCover>() != null || s.Weather == Weathers.Snowfall || s.Weather == Weathers.Blizzard;
+            material.SetColor("_BaseColor", snow ? SnowTone : s.Mission?.Night == true ? NightTone : Tone);
             (drawn, drawnLevel, drawnOn) = (s, view.Level, view);
             int floor = view.Level >= view.Levels ? 0 : view.Level;
             var levels = Los.FloorLevels(s, floor);

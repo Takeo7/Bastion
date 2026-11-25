@@ -29,6 +29,17 @@ namespace Bastion.Engine
         public bool Squadsight { get; set; }
         public List<Modifier> Mods { get; set; } = new List<Modifier>();
         public List<Modifier> CritMods { get; set; } = new List<Modifier>();
+        /// <summary>
+        /// What gives the target its cover against this shot (cuadro 157, P5: «como hoy, y que se vea»), the «Cobertura»
+        /// line's: the tile beside it, and what stands there (Grid.CoverPiece: a DecorKinds such as «shelf», or a TileKinds
+        /// such as «wall», «door», «window»). Null with no cover (and on a blow).
+        /// </summary>
+        public Pos? CoverTile { get; set; }
+        public string? CoverPiece { get; set; }
+        /// <summary>The distance in whole tiles, as the range table reads it (the «Alcance» line's).</summary>
+        public int Tiles { get; set; }
+        /// <summary>Fired from Origin, a tile beside the shooter's, stepping out from beside high cover (Los.PeekOrigins).</summary>
+        public bool Peeked { get; set; }
     }
 
     public sealed class ShotOptions
@@ -351,7 +362,13 @@ namespace Bastion.Engine
             var serene = primary && !weapon.Melee && Content.HasPerk(shooter, PerkIds.Serenity);
             var graze = hit < 100 && !serene ? (int)Js.Round((dodge / 100.0) * hit) : 0;
 
-            return new ShotPreview { Origin = origin, Hit = hit, Crit = crit, Graze = graze, Flanked = flanked, Cover = cover, Distance = dist, Squadsight = squadsight, Mods = mods, CritMods = critMods };
+            var coverTile = cover > 0 ? Cover.CoverTileAgainst(s, target.Pos, origin) : null;
+            return new ShotPreview
+            {
+                Origin = origin, Hit = hit, Crit = crit, Graze = graze, Flanked = flanked, Cover = cover, Distance = dist, Squadsight = squadsight, Mods = mods, CritMods = critMods,
+                CoverTile = coverTile, CoverPiece = coverTile != null ? Grid.CoverPiece(s, target.Pos, coverTile) : null,
+                Tiles = (int)Math.Floor(dist), Peeked = !Grid.SamePos(origin, from),
+            };
         }
 
         /// <summary>Single d100 roll; crit and graze bands sit inside the hit band.</summary>

@@ -434,6 +434,8 @@ namespace Bastion.UI.Combat
                     f.Other = true;
                     f.HoverKind = "aim";
                     f.HoverText = attack ? $"{other.Hit} %" : takedown ? HudText.Takedown.Kills : u.Name;
+                    // What takes most off it, by its % (U1, 25/11: «dentro 34 %, fuera 72 %» read at a glance).
+                    if (attack && other.Worst != null) f.HoverIcon = other.Worst.Icon;
                 }
                 else if (me != null && f.Enemy && !f.Target && UnitById(State, u.Id) is Unit them && Aim.InMeleeReach(State, me.Pos, them.Pos) && Abilities.TakedownRefusal(State, me, them) is string no)
                 {
@@ -1535,8 +1537,10 @@ namespace Bastion.UI.Combat
                 Hit = shot.Hit,
                 Crit = Math.Min(shot.Crit, shot.Hit),
                 Graze = shot.Graze,
-                Mods = shot.Mods.Select(m => new ModView { Label = m.Label, Value = m.Value }).ToList(),
-                CritMods = shot.CritMods.Select(m => new ModView { Label = CritLabel(target, m.Label), Value = m.Value }).ToList(),
+                Mods = shot.Mods.Select(m => OddsMod(m, shot, target, false)).ToList(),
+                CritMods = shot.CritMods.Select(m => OddsMod(m, shot, target, true)).ToList(),
+                // Why no crit (cuadro 158): behind cover, nothing gives it; else none of the soldier's does.
+                CritNote = shot.Cover > 0 ? HudText.Shot.NoCritCovered : HudText.Shot.NoCrit,
                 Index = index,
                 Total = list.Count,
                 Note = AbilityTexts.AttackNotes.TryGetValue(ability, out var note) ? note : AbilityTexts.BladeNote(u, ability),

@@ -264,7 +264,8 @@ namespace Bastion.Engine
         /// <summary>
         /// How tall the objects that are full cover but lower than a soldier's eyes stand, for sight (Arturo, 22/10: «los
         /// campos de visión han de ser reales… no puede ser que ese objeto bajo tape la visión como si fuese una columna
-        /// gigante»): sight goes over them (grid.ts groundSightHeight). Cover is the same. The rest stand a whole full
+        /// gigante»): sight goes over them (grid.ts groundSightHeight), and since cuadro 157 (P6) they cover shots by half
+        /// (Grid.GroundCoverHeight); one still steps out beside them, and the dead see behind them, as full cover. The rest stand a whole full
         /// cover's height, taller than the eyes. Measured on what is drawn (Arte, 22/10) and put on the rules' scale: a
         /// drawn soldier's eyes are at 1.24 world units, the rules' at EYE_HEIGHT (0.7 storeys, 1.61), so each drawn height
         /// counts 1.3 times, and whatever is below a drawn soldier's eyes is below the rules' too. In storeys.
@@ -283,6 +284,14 @@ namespace Bastion.Engine
             [DecorKinds.Rack] = 0.69,
             [DecorKinds.WaterDispenser] = 0.68,
         };
+
+        /// <summary>The kind of the object tile `i` is part of (DecorKinds: «shelf», «counter»), or null if it isn't dressed (cuadro 157, P5).</summary>
+        public static string? KindOf(IReadOnlyList<int>? decor, int width, int i)
+        {
+            if (decor == null) return null;
+            var a = AnchorOf(decor, width, i);
+            return a >= 0 ? DecorOf(CodeAt(decor, a))?.Kind : null;
+        }
 
         /// <summary>For sight, the height of the object tile `i` is part of, when it is one of SIGHT_HEIGHT's; null for any other.</summary>
         public static double? DecorSightHeight(IReadOnlyList<int>? decor, int width, int i)

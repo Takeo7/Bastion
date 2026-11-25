@@ -13,6 +13,8 @@ namespace Bastion.UI.Combat
         public Unit Unit;
         public Pos Tile;
         public int Hit;
+        /// <summary>What takes most off its odds (U1, 25/11: its icon by the % over it); null, nothing does.</summary>
+        public Bastion.UI.Hud.ModView Worst;
     }
 
     public sealed partial class CombatController
@@ -90,6 +92,77 @@ namespace Bastion.UI.Combat
         // ------------------------------------------------------- targets
 
         /// <summary>Valid targets for a targeted ability, best first (game.ts targetOptions).</summary>
+        /// <summary>
+        /// An odds' term as the aim's panel shows it (U1, 25/11): its icon by the engine's label (Aim.PreviewShot's), how far
+        /// for the reach's, and the target's defence the right way round: a target with less than none adds, and said so
+        /// («Defensa +11» read as its own defence; A3).
+        /// </summary>
+        static Bastion.UI.Hud.ModView OddsMod(Modifier m, ShotPreview shot, Unit target, bool crit)
+        {
+            var v = new Bastion.UI.Hud.ModView { Label = crit ? CritLabel(target, m.Label) : m.Label, Value = m.Value, Icon = OddsIcon(m.Label, crit) };
+            if (!crit && m.Label == "Alcance") v.Note = Bastion.UI.Hud.HudText.Shot.Tiles(shot.Tiles);
+            // What covers it (Gameplay's P5: «Cobertura alta −40» and the shelf it is).
+            if (!crit && m.Label.StartsWith("Cobertura")) v.Note = Bastion.UI.Hud.HudText.Shot.CoverPiece(shot.CoverPiece);
+            if (!crit && m.Label == "Defensa" && m.Value > 0) v.Label = Bastion.UI.Hud.HudText.Shot.WeakDefense;
+            return v;
+        }
+
+        /// <summary>The term that takes most off a shot's odds, if one does (U1: by the other targets' %).</summary>
+        static Bastion.UI.Hud.ModView WorstOf(ShotPreview shot, Unit target) =>
+            shot?.Mods.Where(m => m.Value < 0).OrderBy(m => m.Value).Select(m => OddsMod(m, shot, target, false)).FirstOrDefault();
+
+        /// <summary>An odds' term's icon (HudIcons' «aim:…», Arte's), by Aim.PreviewShot's label (U1).</summary>
+        static string OddsIcon(string label, bool crit)
+        {
+            switch (label)
+            {
+                case "Puntería":
+                case "Base":
+                    return "aim:soldier";
+                case "Arma":
+                case "Arma cuerpo a cuerpo":
+                case "Gastada":
+                case "Culata":
+                    return "aim:weapon";
+                case "Mira": return "aim:scope";
+                case "Alcance":
+                case "Visión de escuadra":
+                    return "aim:range";
+                case "Quemarropa": return "aim:close";
+                case "Ventaja de altura": return "aim:height";
+                case "Cobertura baja": return "aim:coverLow";
+                case "Cobertura alta": return "aim:coverHigh";
+                case "Humo": return "aim:smoke";
+                case "Defensa":
+                case "Puesto fijo":
+                case "Parapeto":
+                case "Cubriéndose":
+                case "Tumbado":
+                case "Atendido":
+                case "Reflejos":
+                    return "aim:defense";
+                case "Flanqueo": return "aim:flank";
+                case "Codo con codo":
+                case "Fuego cruzado":
+                    return "aim:partner";
+                case "Habilidad":
+                case "Golpe certero":
+                case "Tiro":
+                case "Cuerpo a cuerpo":
+                case "Pistolero":
+                case "Gatillo fino":
+                case "Tejado":
+                    return "aim:skill";
+                // (Each its own, cuadro 158: they shared «lo demás».)
+                case "Marcado": return "aim:marked";
+                case "Mala racha": return "aim:luck";
+                case "Desorientación": return "aim:dizzy";
+                case "Supresión": return "aim:suppress";
+                case "Fuego de reacción": return "aim:reaction";
+                default: return "aim:other";
+            }
+        }
+
         List<TargetOption> TargetOptions(string ability)
         {
             var u = Unit();
@@ -101,10 +174,14 @@ namespace Bastion.UI.Combat
                 return Abilities.TakedownTargets(s, u).Select(t => new TargetOption { Unit = t, Hit = 100 }).ToList();
             if (def.Target == AbilityTargets.Melee && Content.IsAttack(ability))
                 return Abilities.MeleeTargets(s, u, ability)
-                    .Select(o => new TargetOption { Unit = o.Target, Tile = o.Tile, Hit = Aim.PreviewShot(s, u, o.Target, new ShotOptions { Ability = ability, From = o.Tile })?.Hit ?? 0 })
+                    .Select(o =>
+                    {
+                        var p = Aim.PreviewShot(s, u, o.Target, new ShotOptions { Ability = ability, From = o.Tile });
+                        return new TargetOption { Unit = o.Target, Tile = o.Tile, Hit = p?.Hit ?? 0, Worst = WorstOf(p, o.Target) };
+                    })
                     .OrderByDescending(o => o.Hit).ToList();
             if (def.Target == AbilityTargets.Enemy && Content.IsAttack(ability))
-                return VisibleShots(u, ability).Select(x => new TargetOption { Unit = x.t, Hit = x.shot.Hit }).OrderByDescending(o => o.Hit).ToList();
+                return VisibleShots(u, ability).Select(x => new TargetOption { Unit = x.t, Hit = x.shot.Hit, Worst = WorstOf(x.shot, x.t) }).OrderByDescending(o => o.Hit).ToList();
             if (def.Target == AbilityTargets.Enemy) return Abilities.AbilityTargets(s, u, ability).Where(Visible).Select(t => new TargetOption { Unit = t }).ToList();
             if (def.Target == AbilityTargets.Ally)
                 return Abilities.AbilityTargets(s, u, ability).OrderBy(a => (double)a.Hp / a.MaxHp).Select(t => new TargetOption { Unit = t }).ToList();
@@ -561,7 +638,10 @@ namespace Bastion.UI.Combat
             var friendly = Content.Abilities[modeAbility].Target == AbilityTargets.Ally;
             var attack = Content.IsAttack(modeAbility) && !friendly;
             var shot = attack ? Aim.PreviewShot(State, u, option.Unit, new ShotOptions { Ability = modeAbility, From = option.Tile }) : null;
-            AimMarks.ShowAim(State, shot?.Origin ?? u.Pos, option.Unit.Pos, friendly, attack);
+            // Leaning out (U1, 25/11; Gameplay's P5): the tile it fires from, if not its own, and the line from there; and the
+            // tile of what covers the target from it.
+            var cover = shot?.CoverTile;
+            AimMarks.ShowAim(State, shot?.Origin ?? u.Pos, option.Unit.Pos, friendly, attack, shot != null && shot.Peeked ? shot.Origin : null, cover);
         }
 
         /// <summary>

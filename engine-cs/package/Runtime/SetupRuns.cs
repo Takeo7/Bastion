@@ -1249,6 +1249,22 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// A mission «Despiertos» (MissionState.Awake): its living know where the squad comes in (Producto's review of 0.14.7,
+        /// after cuadro 157's P4), as a noise heard there (Unit.heard): the place of the soldier nearest each, that it goes to
+        /// look at; of the squad, each knows what it sees. Once all are placed (a run's stage: RunFights.Launch, after La Lata's
+        /// seats and the Cuervos).
+        /// </summary>
+        public static void AwakeHeard(GameState s)
+        {
+            if (s.Mission?.Awake != true) return;
+            // The squad's soldiers, not a Rescate's prisoner (one of the squad's side, held by them).
+            var entry = Grid.Combatants(s, Teams.Xcom).Select((x) => x.Pos).ToList();
+            if (entry.Count == 0) return;
+            foreach (var u in s.Units.Where((x) => x.Alive && x.Team == Teams.Alien && !Content.Templates[x.Template].Undead && !x.Captive && !x.Objective))
+                u.Heard = Events.CopyPos(entry.OrderBy((p) => Grid.Distance(p, u.Pos)).ThenBy((p) => p.Y).ThenBy((p) => p.X).First());
+        }
+
+        /// <summary>
         /// Producto's review of 23/11: nobody but the squad in a pit once the fight is set out (one of the dead there could never
         /// be reached with a blade, and a Limpieza never won): to the nearest free place the squad can walk to, its own level
         /// first; a survivor's circle goes with them.

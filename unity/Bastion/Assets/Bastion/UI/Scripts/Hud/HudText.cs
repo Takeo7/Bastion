@@ -140,6 +140,164 @@ namespace Bastion.UI.Hud
 
             public static string Graze(int odds, string damage) => string.IsNullOrEmpty(damage) ? $"Rozadura posible: {odds}%" : $"Rozadura posible: {odds}% (daño {damage})";
             public static string Damage(string hit, string crit) => string.IsNullOrEmpty(crit) ? $"DAÑO {hit}" : $"DAÑO {hit} · crít. {crit}";
+            /// <summary>How far, by the reach's figure (U1, 25/11; Lore to confirm): «4 c.», whole tiles as the range table reads them.</summary>
+            public static string Tiles(int n) => n + " c.";
+            /// <summary>
+            /// What gives the target its cover, by its kind (U1; ShotPreview.CoverPiece, Gameplay's P5: a DecorKinds or a
+            /// TileKinds), in a word for the cover's figure («−40 estantería»; Lore's words). A step in the ground (the floor or
+            /// a roof a storey up) «desnivel»; anything else unnamed, «cobertura» (the review of 0.14.7, #6).
+            /// </summary>
+            public static string CoverPiece(string kind)
+            {
+                switch (kind)
+                {
+                    case null:
+                    case "stairs":
+                    case "breach":
+                        return null;
+                    case "floor":
+                    case "roof":
+                        return "desnivel";
+                    case "wall": return "pared";
+                    case "high": return "muro";
+                    case "low": return "murete";
+                    case "door":
+                    case "doorOpen":
+                        return "puerta";
+                    case "window":
+                    case "windowBroken":
+                        return "ventana";
+                    case "bars": return "barrotes";
+                    case "shelf":
+                    case "medicalShelf":
+                        return "estantería";
+                    // (Lore, 25/11: low with P6, so not the shop's high «estantería».)
+                    case "rack": return "estante";
+                    case "counter": return "mostrador";
+                    case "receptionDesk":
+                    case "consultDesk":
+                    case "desk":
+                        return "escritorio";
+                    case "table":
+                    case "waitingTable":
+                    case "examTable":
+                        return "mesa";
+                    case "bedsideTable": return "mesilla";
+                    case "sofa":
+                    case "waitingSeats":
+                        return "sofá";
+                    case "bed":
+                    case "hospitalBed":
+                    case "gurney":
+                        return "cama";
+                    case "wardrobe":
+                    case "cabinet":
+                    case "medicalCabinet":
+                        return "armario";
+                    case "crates":
+                    case "lootWeapons":
+                    case "lootMedical":
+                    case "lootAmmo":
+                    case "lootFood":
+                        return "cajas";
+                    case "carFront":
+                    case "carRear":
+                        return "coche";
+                    case "bus": return "autobús";
+                    case "truck": return "camión";
+                    case "bin":
+                    case "container":
+                        return "contenedor";
+                    case "barricade": return "barricada";
+                    case "fence": return "valla";
+                    case "planter": return "jardinera";
+                    case "streetTree":
+                    case "tree":
+                        return "árbol";
+                    case "bush": return "arbusto";
+                    case "rock": return "roca";
+                    case "log":
+                    case "logPile":
+                        return "troncos";
+                    case "rubble": return "escombros";
+                    case "waterTower": return "depósito";
+                    // (Lore, 25/11: low with P6, so not the water tower's high «depósito».)
+                    case "tank": return "depósito de gas";
+                    case "kiosk": return "quiosco";
+                    case "fountain":
+                    case "fountainCorner":
+                        return "fuente";
+                    case "statue": return "estatua";
+                    // Lore's (ui/MENSAJE-DE-LORE-coberturas.md, 25/11), the rest of DecorKinds; stairs and breach cover nothing.
+                    case "armchair": return "sillón";
+                    case "bathtub": return "bañera";
+                    case "bench": return "banco";
+                    case "bollard": return "bolardo";
+                    case "cafeTable":
+                    case "readingTable":
+                        return "mesa";
+                    case "clinicalBin": return "papelera";
+                    case "clinicalSink":
+                    case "washbasin":
+                        return "lavabo";
+                    case "coatRack": return "perchero";
+                    case "coffeeTable": return "mesita";
+                    case "diningChair":
+                    case "visitorChair":
+                        return "silla";
+                    case "doorBoards": return "puerta tapiada";
+                    case "fridge": return "nevera";
+                    // (Lore, 25/11: low with P6, so not the kitchen's high «nevera».)
+                    case "drinksFridge": return "nevera de bebidas";
+                    case "drums": return "bidones";
+                    case "floorLamp": return "lámpara";
+                    case "forklift": return "carretilla elevadora";
+                    case "gatePost": return "poste";
+                    case "hay": return "paja";
+                    case "hydrant": return "boca de riego";
+                    case "machine": return "máquina";
+                    case "mailbox": return "buzón";
+                    case "medicalCart": return "carrito";
+                    case "medicalMonitor": return "monitor";
+                    case "nightstand": return "mesilla";
+                    case "pallets":
+                    case "pallet":
+                        return "palés";
+                    case "pipe": return "tubería";
+                    case "pottedPlant": return "maceta";
+                    case "pylon": return "torre eléctrica";
+                    case "shed": return "caseta";
+                    case "sign": return "cartel";
+                    case "silo": return "silo";
+                    case "sirenCar": return "coche";
+                    case "sterilizer": return "esterilizador";
+                    case "stove": return "cocina";
+                    case "strewn": return "trastos";
+                    case "toilet":
+                    case "wc":
+                        return "váter";
+                    case "tools": return "herramientas";
+                    case "towelRack": return "toallero";
+                    case "tvStand": return "mueble";
+                    case "ultrasound": return "ecógrafo";
+                    case "vegPatch": return "huerto";
+                    case "washingLine": return "tendedero";
+                    case "waterDispenser": return "dispensador de agua";
+                    case "wheelbarrow": return "carretilla";
+                    case "wheelchair": return "silla de ruedas";
+                    case "windowBarricade": return "ventana tapiada";
+                    case "wire": return "alambrada";
+                    case "xray": return "rayos X";
+                    default: return "cobertura";
+                }
+            }
+            /// <summary>A target with less than no defence, which adds to the odds (A3: «Defensa +11» read the wrong way; Lore to confirm).</summary>
+            public const string WeakDefense = "Defensa baja del blanco";
+            /// <summary>The crit at 0, why (cuadro 158; Lore to confirm): behind cover; or nothing of the soldier's gives one.</summary>
+            public const string NoCritCovered = "Sin crítico: está a cubierto";
+            public const string NoCrit = "Sin crítico";
+            /// <summary>A term's help on its icon: its words, and its note («Alcance · 4,1 c.»).</summary>
+            public static string TermTip(string label, string note) => string.IsNullOrEmpty(note) ? label : $"{label} · {note}";
         }
 
         public static class Mission

@@ -1243,6 +1243,7 @@ namespace Bastion.Engine
             PlacePieces(state, new Rng((opts.Map.Seed ?? 0) * 31 + PiecesSalt));
             // M1 (Arturo, cuadros 133 and 134): the buildings open to the outside with no door to close, found from the start.
             Buildings.FindOpen(state);
+            AwakeHeard(state);
             // Paused at the start, while the briefing is read: the space bar (or «Empezar») sets the clock going.
             if (opts.Realtime == true) state.Realtime = new Realtime { Clock = 0, Paused = true, Units = new Dictionary<string, RtUnit>() };
             return state;

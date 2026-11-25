@@ -134,6 +134,104 @@
     color: var(--t-danger);
 }
 
+/* The odds' terms (U1; cuadro 158): the number's title, its bar, then each term an icon and its figure. */
+.mods__title {
+    font-size: 10px;
+    letter-spacing: 1px;
+    margin-bottom: 3px;
+}
+
+.terms {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.term {
+    flex-direction: row;
+    align-items: center;
+    padding: 1px 5px 1px 3px;
+    margin: 0 4px 4px 0;
+    background-color: var(--t-tag);
+    border-width: 1px;
+    border-color: var(--t-line);
+}
+
+.term__icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 3px;
+    -unity-background-image-tint-color: var(--t-muted);
+}
+
+.term--pos .term__icon {
+    -unity-background-image-tint-color: var(--t-good);
+}
+
+.term--neg .term__icon {
+    -unity-background-image-tint-color: var(--t-danger);
+}
+
+.term__value {
+    font-size: 14px;
+}
+
+.term--pos .term__value {
+    color: var(--t-good);
+}
+
+.term--neg .term__value {
+    color: var(--t-danger);
+}
+
+/* The crit at 0, why (cuadro 158). */
+.mods__none {
+    font-size: 11px;
+    margin-bottom: 3px;
+}
+
+.term__note {
+    margin-left: 3px;
+    font-size: 10px;
+    color: var(--t-muted);
+}
+
+/* 0 to 100, each term a piece of it from where the last left it (cuadro 158). */
+.odds-bar {
+    height: 10px;
+    margin-bottom: 5px;
+    background-color: var(--t-panel-lo);
+    border-width: 1px;
+    border-color: var(--t-line);
+}
+
+.odds-bar__piece {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+}
+
+.odds-bar__piece--own {
+    background-color: rgba(161, 167, 157, 0.55);
+}
+
+.odds-bar__piece--pos {
+    background-color: rgba(143, 208, 90, 0.75);
+}
+
+.odds-bar__piece--neg {
+    background-color: rgb(196, 64, 48);
+}
+
+.odds-bar__end {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    margin-left: -1px;
+    background-color: var(--t-accent);
+}
+
 .graze,
 .shot-effect,
 .self-cost,

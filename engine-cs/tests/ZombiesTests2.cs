@@ -713,7 +713,9 @@ namespace Bastion.Engine.Tests
             run.RunAlienTurn();
             var shots = Of<ShotEvent>(run.Events).Where((e) => e.Unit == "r1").ToList();
             Assert.NotEmpty(shots);
-            Assert.True(shots.All((e) => e.Target == "z1" && e.Reaction));
+            // At it before it gets there, on its own turn or on watch (cuadro 157: they defend themselves from the dead);
+            // never at the soldier it doesn't see.
+            Assert.True(shots.All((e) => e.Target == "z1"));
         }
     }
 }

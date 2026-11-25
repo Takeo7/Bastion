@@ -186,6 +186,14 @@ namespace Bastion.UI.EditorTools
             ("node:charges", "ICON_MilitaryCombat_Inventory_Explosive_01_Clean"),
             // The runs' base tabs: Almacén a backpack, Mejoras the workshop's tools (Salir is the Escuadra's La Lata).
             ("tab:stash", Backpack), ("tab:upgrades", "ICON_Apocalpyse_Inventory_Crafting_01"),
+            // The odds' terms at aiming (U1, cuadros 157 and 158): Arte's, ours (Textures/Icons, arte/unity/runs/u1-iconos).
+            ("aim:soldier", "aim-soldier"), ("aim:weapon", "aim-weapon"), ("aim:scope", "aim-scope"), ("aim:range", "aim-range"),
+            ("aim:close", "aim-close"), ("aim:height", "aim-height"), ("aim:coverLow", "aim-coverLow"), ("aim:coverHigh", "aim-coverHigh"),
+            ("aim:defense", "aim-defense"), ("aim:smoke", "aim-smoke"), ("aim:flank", "aim-flank"), ("aim:skill", "aim-skill"),
+            ("aim:partner", "aim-partner"), ("aim:other", "aim-other"),
+            // No two terms with one icon (Producto, cuadro 158): those that shared «aim:other», the packs' own.
+            ("aim:marked", "ICON_DarkFantasy_Status_Targeted_01_Clean"), ("aim:luck", "ICON_DarkFantasy_Stat_Luck_01_Clean"),
+            ("aim:dizzy", "ICON_DarkFantasy_Status_Shocked_01_Clean"), ("aim:suppress", Bullets), ("aim:reaction", Target),
         };
 
         public static void Make()

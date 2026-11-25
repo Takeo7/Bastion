@@ -461,6 +461,9 @@ namespace Bastion.UI.Hud
     {
         public string Label;
         public int Value;
+        /// <summary>Its icon (LineIcon's «aim:…», U1 of 25/11) and a short note by its figure: how far for the reach, what covers.</summary>
+        public string Icon;
+        public string Note;
     }
 
     /// <summary>What the aimed ability takes off (hud.ts DamageView).</summary>
@@ -493,6 +496,8 @@ namespace Bastion.UI.Hud
         public int Graze;
         public List<ModView> Mods = new List<ModView>();
         public List<ModView> CritMods = new List<ModView>();
+        /// <summary>The crit at 0, why (cuadro 158): «Sin crítico: está a cubierto»; null otherwise.</summary>
+        public string CritNote;
         public bool HasDamage;
         public DamageView Damage = new DamageView();
         public string Note;
@@ -588,6 +593,8 @@ namespace Bastion.UI.Hud
         /// <summary>Over an enemy, from the tile under the pointer: aim, sight, flank or none, and its words («74 %»).</summary>
         public string HoverKind;
         public string HoverText;
+        /// <summary>By another target's odds (U1; cuadro 158): the icon of what takes most off them; null, nothing does.</summary>
+        public string HoverIcon;
         /// <summary>
         /// An enemy's eye, in the circle of its gauge (Ana, 7/11 #1): «open», it sees the picked soldier, or, a move under
         /// the pointer, would see it there (Arturo, 5/11 #5, #6); «closed», it doesn't; null, no gauge (one of ours).

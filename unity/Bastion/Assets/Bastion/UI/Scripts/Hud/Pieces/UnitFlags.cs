@@ -604,6 +604,11 @@ namespace Bastion.UI.Hud
             {
                 var line = Ui.El("uflag__hover uflag__hover--" + (f.HoverKind ?? "sight"), el);
                 Ui.Text(f.HoverText, "uflag__hover-text", line);
+                // What takes most off another target's odds, by them (U1; cuadro 158: «solo el icono»).
+                if (!string.IsNullOrEmpty(f.HoverIcon))
+                {
+                    Ui.Icon(icon, f.HoverIcon, "uflag__hover-icon", line);
+                }
             }
             // The name only on the one under the pointer (Ana, Arturo 31/10 #9: no longer on the picked one's).
             if (!string.IsNullOrEmpty(f.Name)) Ui.Text(f.Name, "uflag__name", el);

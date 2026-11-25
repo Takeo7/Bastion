@@ -87,6 +87,11 @@ namespace Bastion.Engine
         /// <summary>Enemies left waiting behind their own this enemy turn (ai.ts walk): they go again once the others have moved.</summary>
         public HashSet<string> Jammed { get; } = new HashSet<string>();
         /// <summary>
+        /// The living whose turn without the squad in sight has been counted this enemy turn (Ai.Remember): a second go, jammed
+        /// behind their own, doesn't count another (Producto's review of 0.14.7).
+        /// </summary>
+        public HashSet<string> Remembered { get; } = new HashSet<string>();
+        /// <summary>
         /// In a siege, where the dead get to from each place, their own aside (ai.ts breachPlan), while nothing changes
         /// that would change it: what stands where (a door gives way), or the living (one falls). Their own moving doesn't.
         /// </summary>
@@ -1018,6 +1023,9 @@ namespace Bastion.Engine
                         Content.HostileTo(o, u) &&
                         o.Overwatch &&
                         !(o.KillZone && o.ReactedTo.Contains(u.Id)) &&
+                        // The squad hidden, only at one it notices (cone and detection, as a group notices; Producto's review of
+                        // 0.14.7: one of the living on watch fired at a hidden soldier it couldn't have seen).
+                        (!S.Concealed || u.Team != Teams.Xcom || Rules.Notices(S, o, u, step)) &&
                         (o.WatchMelee == true ? Aim.InMeleeReach(S, o.Pos, step) : Loaded(o) && Watches(o, step))).ToList();
                 var suppressors = shadow ? new List<Unit>() : S.Units.Where((o) => o.Alive && Content.HostileTo(o, u) && o.Suppressing == u.Id && Loaded(o)).ToList();
                 var biters = shadow ? new List<Unit>() : PassBiters(u, step, i < path.Count - 1, bitAt);
@@ -1028,6 +1036,8 @@ namespace Bastion.Engine
                 foreach (var r in reactors)
                 {
                     if (!u.Alive || Over) break;
+                    // Noticed, the squad is seen.
+                    if (r.Alive && r.Overwatch && u.Team == Teams.Xcom) BreakConcealment(ConcealReasons.Spotted, u.Id, r.Id);
                     if (r.Alive && r.Overwatch) Attack(r, u, r.WatchMelee == true ? AbilityIds.Slash : AbilityIds.Shoot, true);
                 }
                 foreach (var r in suppressors)
@@ -1307,6 +1317,16 @@ namespace Bastion.Engine
                     if (facing != null && (m.Facing == null || facing.Value != m.Facing.Value)) Emit(new TurnedEvent { Unit = m.Id, Facing = facing.Value });
                     if (m.Hunting?.Id != prey.Id || m.Hunting.Missed != 0) Emit(new HuntingEvent { Unit = m.Id, Target = prey.Id, Missed = 0 });
                 }
+            }
+            // The living: the one who saw the soldier, or was struck by them, follows them (Ai.Remember; Producto's review of
+            // 0.14.7: woken on the squad's turn, out of sight by the enemy's, it knew nothing). The rest of its group, what it sees.
+            foreach (var pod in pods)
+            {
+                var why = WhyOf(pod);
+                var prey = !string.IsNullOrEmpty(why.Unit) ? Grid.GetUnit(S, why.Unit!) : null;
+                var by = !string.IsNullOrEmpty(why.By) ? Grid.GetUnit(S, why.By!) : null;
+                if (prey?.Team != Teams.Xcom || !prey.Alive || by == null || !by.Alive || Content.Templates[by.Template].Undead || !pod.UnitIds.Contains(by.Id) || Over) continue;
+                if (by.Hunting?.Id != prey.Id || by.Hunting.Missed != 0) Emit(new HuntingEvent { Unit = by.Id, Target = prey.Id, Missed = 0 });
             }
             // Woken by the sight of a soldier: whoever else of the dead sees them goes after them.
             if (seen && spotted?.Team == Teams.Xcom && spotted.Alive && !Over) HuntedBy(spotted);
@@ -1780,6 +1800,7 @@ namespace Bastion.Engine
             var walkers = Ai.FrontFirst(S, active.Where((u) => Ai.OnlyWalks(S, u)).ToList());
             var actors = active.Where((u) => !walkers.Contains(u)).Concat(walkers).Select((u) => u.Id).ToList();
             Jammed.Clear();
+            Remembered.Clear();
             foreach (var id in actors)
             {
                 var u = Grid.GetUnit(S, id)!;

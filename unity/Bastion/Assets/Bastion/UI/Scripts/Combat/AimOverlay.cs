@@ -15,6 +15,8 @@ namespace Bastion.UI.Combat
     {
         static readonly Color32 Enemy = MoveOverlay.Hex(0xff4a4a);
         static readonly Color32 EnemyLine = MoveOverlay.Hex(0xff5a5a);
+        /// <summary>Where a shot is taken from when it isn't the shooter's tile (U1): pale, as the path's end.</summary>
+        static readonly Color32 Peek = MoveOverlay.Hex(0xfff2c0);
         static readonly Color32 Friend = MoveOverlay.Hex(0x4dff9a);
         static readonly Color32 Blast = MoveOverlay.Hex(0xff8a2a);
         /// <summary>A molotov's fire (Arturo, 01/11 #10): redder than a grenade's blast, and drawn as the reach is, with flames.</summary>
@@ -358,9 +360,11 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// The target's ring on `to`; `marked`, an enemy picked to shoot or strike: beating, a light under it, no line. Else
-        /// a line from `from` at chest height, green to an ally (`friendly`).
+        /// a line from `from` at chest height, green to an ally (`friendly`). `peek` (U1, 25/11): the tile the shot is taken
+        /// from when it isn't the shooter's own (leaning out of a door or round a corner), ringed, and the line from it even
+        /// when marked. `cover`: the tile of what covers the target from it, washed red and framed (Gameplay's P5).
         /// </summary>
-        public void ShowAim(GameState s, Pos from, Pos to, bool friendly = false, bool marked = false)
+        public void ShowAim(GameState s, Pos from, Pos to, bool friendly = false, bool marked = false, Pos peek = null, Pos cover = null)
         {
             this.marked = marked;
             ring.gameObject.SetActive(s != null && to != null);
@@ -373,6 +377,20 @@ namespace Bastion.UI.Combat
                 ringMaterial.color = friendly ? Friend : Enemy;
                 glow.transform.localPosition = Board.TileToWorld(s, to, 0.04f * T);
                 if (from != null && !marked) build.Line(Board.TileToWorld(s, from, 1.1f * T), Board.TileToWorld(s, to, 1.1f * T), 3, friendly ? Friend : EnemyLine);
+                if (peek != null)
+                {
+                    build.Arc(Board.TileToWorld(s, peek, 0.06f * T), 0.34f * T, 0.44f * T, 0, Mathf.PI * 2, 36, Peek);
+                    build.Line(Board.TileToWorld(s, peek, 1.1f * T), Board.TileToWorld(s, to, 1.1f * T), 2, Peek);
+                }
+                if (cover != null)
+                {
+                    var c = Board.Corner(cover.X, cover.Y, Board.TileToWorld(s, cover).y + 0.07f * T);
+                    build.Flat(c.x, c.z, c.x + T, c.z - T, c.y, new Color32(Enemy.r, Enemy.g, Enemy.b, 0x48));
+                    build.Line(c, c + new Vector3(T, 0, 0), 2, Enemy);
+                    build.Line(c + new Vector3(T, 0, 0), c + new Vector3(T, 0, -T), 2, Enemy);
+                    build.Line(c + new Vector3(T, 0, -T), c + new Vector3(0, 0, -T), 2, Enemy);
+                    build.Line(c + new Vector3(0, 0, -T), c, 2, Enemy);
+                }
             }
             line.sharedMesh = build.Build(line.sharedMesh);
         }
