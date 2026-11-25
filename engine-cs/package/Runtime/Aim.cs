@@ -121,6 +121,42 @@ namespace Bastion.Engine
         public List<RangeAim> Range { get; set; } = new List<RangeAim>();
     }
 
+    /// <summary>One of a soldier's bonuses on a weapon's card (O7): where it comes from, and what it adds with that weapon.</summary>
+    public sealed class CardBonus
+    {
+        /// <summary>Its name as the game shows it (a cell of the board, a line, a trait, a thing on the belt); "" if none.</summary>
+        public string Label { get; set; } = "";
+        public int Damage { get; set; }
+        public int CritDamage { get; set; }
+        public int Aim { get; set; }
+        public int Crit { get; set; }
+    }
+
+    /// <summary>
+    /// A weapon's card in a soldier's hands (O7, Arturo 25/11: «el daño que voy a hacer, no el del arma en sí»): the weapon
+    /// alone (Weapon, the Armería's card), and what that soldier does with it, from the front and out of point-blank range
+    /// (ShotDamage's), with the aim and the crit it fights with before reach, cover and defence, and the bonuses by name.
+    /// </summary>
+    public sealed class SoldierWeaponCard
+    {
+        public WeaponProfile Weapon { get; set; } = new WeaponProfile();
+        /// <summary>The attack the numbers are of: the plain one with that weapon (AbilityIds: shoot, pistol or slash).</summary>
+        public string Ability { get; set; } = "";
+        public DamageRange Damage { get; set; } = new DamageRange();
+        public DamageRange CritDamage { get; set; } = new DamageRange();
+        public int Aim { get; set; }
+        public int Crit { get; set; }
+        public List<CardBonus> Bonuses { get; set; } = new List<CardBonus>();
+        /// <summary>
+        /// What of Aim is the soldier's, neither the weapon's (Weapon.Aim, a scope with it) nor a bonus with a name (UI,
+        /// cuadro 156: «base 55 · arma +15 · Pulso firme +3»): its template's and the base of Bars (55 on a run), the attack's
+        /// own (none today), and without `sources`, all of its mods. Aim = BaseAim + Weapon.Aim + Σ Bonuses.Aim.
+        /// </summary>
+        public int BaseAim { get; set; }
+        /// <summary>The same of the crit: Crit = clamp(BaseCrit + Weapon.Crit + Σ Bonuses.Crit, 0, 100).</summary>
+        public int BaseCrit { get; set; }
+    }
+
     public static class Aim
     {
         private static int Clamp(int v, int lo, int hi)
@@ -424,6 +460,98 @@ namespace Bastion.Engine
         public static WeaponDef WeaponOf(Unit u)
         {
             return Content.AttackWeapon(u, AbilityIds.Shoot);
+        }
+
+        // ------------------------------------------------- a weapon in a soldier's hands (O7)
+
+        /// <summary>The kit place a weapon of the Armería goes in (FoundWeaponDef.slot).</summary>
+        public static string SlotOf(FoundWeaponDef def)
+        {
+            return def.Slot == FoundWeaponSlots.Melee ? KitSlots.Melee : def.Slot == FoundWeaponSlots.Sidearm ? KitSlots.Pistol : KitSlots.Primary;
+        }
+
+        /// <summary>
+        /// The card of weapon `g` in `u`'s hands (O7): `g` put in its place, the rest as `u` has it (a pistol beside a weapon
+        /// in the hand is the pistol's shot, with nothing in the hand the main one's: Content.AttackWeapon), with `u`'s mods as
+        /// they are (a run's fight: as it set out; Mano de machete only with the machete it set out with). The numbers are the
+        /// rules' own: the damage ShotDamage's, the aim and the crit PreviewShot's terms that don't depend on the target or the
+        /// place. `sources` (Runs.SourcesOf), the bonuses by name; what of `u`'s mods none of them gives, a bonus with no name.
+        /// Null if `g` isn't a weapon.
+        /// </summary>
+        public static SoldierWeaponCard? CardFor(Unit u, Gear g, IReadOnlyList<ModSource>? sources = null)
+        {
+            var def = Content.GearWeapon(g);
+            if (def == null) return null;
+            var slot = SlotOf(def);
+            var a = u.Arms;
+            var kit = Gears.ClonePlaces(u.Kit ?? new KitPlaces());
+            var probe = new Unit
+            {
+                Template = u.Template,
+                Mods = u.Mods,
+                Arms = a != null ? new Arms { Primary = a.Primary, PrimaryId = a.PrimaryId, Condition = a.Condition, Mods = a.Mods != null ? new List<string>(a.Mods) : null, Melee = a.Melee, MeleeId = a.MeleeId, Pistol = a.Pistol, PistolId = a.PistolId } : new Arms(),
+                Kit = kit,
+            };
+            var before = Gears.InSlot(kit, slot);
+            var put = Gears.CloneGear(g);
+            Gears.SetSlot(kit, slot, put);
+            RunPack.Refit(probe, slot, before, put);
+            var ability = slot == KitSlots.Melee ? AbilityIds.Slash : slot == KitSlots.Pistol && !string.IsNullOrEmpty(probe.Arms!.Primary) ? AbilityIds.Pistol : AbilityIds.Shoot;
+            var weapon = Content.AttackWeapon(probe, ability);
+            var adef = Content.Abilities[ability];
+            var secondary = adef.Weapon == AbilityWeapons.Secondary;
+            var st = Content.Templates[probe.Template];
+            // The shooter's own terms, as PreviewShot adds them for this weapon.
+            int AimOf(UnitMods m) => m.Aim + (weapon.Melee ? m.MeleeAim : m.GunAim) + (secondary ? m.PistolAim : 0);
+            int CritOf(UnitMods m) => m.Crit + (weapon.Melee ? m.MeleeCrit : m.GunCrit) + (secondary ? m.PistolCrit : 0);
+            int BonusOf(UnitMods m) => ShotDamageModsOf(new Unit { Template = probe.Template, Arms = probe.Arms, Kit = kit, Mods = m }, ability, false).Bonus;
+            var aim = st.Aim + AimOf(probe.Mods) + weapon.Aim + (adef.Aim ?? 0);
+            if (Content.FiresPrimary(probe, ability))
+            {
+                if (Content.ConditionOf(probe) < Content.WornBelow) aim -= Content.WornAim;
+                if (Content.HasMod(probe, WeaponModIds.Scope)) aim += Content.ModAim;
+            }
+            var damage = ShotDamage(probe, ability);
+            var crit = st.Crit + CritOf(probe.Mods) + weapon.Crit;
+            // The knife is no weapon of the Armería's (Content.Knife): its card as every soldier's (UI, 25/11).
+            var profile = Content.FoundWeapons.ContainsKey(def.Id) ? WeaponProfileOf(def.Id, 100, g.Mods ?? new List<string>()) : BaseWeaponProfile(def.Weapon, def.Name);
+            profile.Kind = def.Id;
+            var card = new SoldierWeaponCard
+            {
+                Weapon = profile,
+                Ability = ability,
+                Damage = damage.Hit,
+                CritDamage = damage.Crit ?? damage.Hit,
+                Aim = aim,
+                Crit = Clamp(crit, 0, 100),
+            };
+            // The soldier's own (cuadro 156): what is neither the weapon's nor a bonus with a name.
+            void Base()
+            {
+                card.BaseAim = card.Aim - card.Weapon.Aim - card.Bonuses.Sum((b) => b.Aim);
+                card.BaseCrit = crit - card.Weapon.Crit - card.Bonuses.Sum((b) => b.Crit);
+            }
+            if (sources == null)
+            {
+                Base();
+                return card;
+            }
+            var zero = BonusOf(Content.ZeroMods);
+            var named = new CardBonus();
+            foreach (var src in sources)
+            {
+                var b = new CardBonus { Label = src.Label, Damage = BonusOf(src.Mods) - zero, CritDamage = src.Mods.CritDamage, Aim = AimOf(src.Mods), Crit = CritOf(src.Mods) };
+                named.Damage += b.Damage;
+                named.CritDamage += b.CritDamage;
+                named.Aim += b.Aim;
+                named.Crit += b.Crit;
+                if (!src.Base && (b.Damage != 0 || b.CritDamage != 0 || b.Aim != 0 || b.Crit != 0)) card.Bonuses.Add(b);
+            }
+            // What of the mods none of the sources gives (they are a fight's, and the soldier's now are another's).
+            var rest = new CardBonus { Damage = BonusOf(probe.Mods) - zero - named.Damage, CritDamage = probe.Mods.CritDamage - named.CritDamage, Aim = AimOf(probe.Mods) - named.Aim, Crit = CritOf(probe.Mods) - named.Crit };
+            if (rest.Damage != 0 || rest.CritDamage != 0 || rest.Aim != 0 || rest.Crit != 0) card.Bonuses.Add(rest);
+            Base();
+            return card;
         }
 
         // ------------------------------------------------------------- the Armería

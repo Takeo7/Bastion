@@ -1984,6 +1984,9 @@ namespace Bastion.UI.Combat
 
         Awaitable Wait(float seconds) => Awaitable.WaitForSecondsAsync(seconds, stop);
 
+        /// <summary>The longest the camera is waited for, to one of ours burnt as the turn opens, before the burn (O4).</summary>
+        const float BurnLook = 1.5f;
+
         /// <summary>Something awaited that the event doesn't wait for (an animation that ends on its own, a bullet's sparks).</summary>
         static async void Loose(Awaitable a)
         {
@@ -2198,9 +2201,22 @@ namespace Bastion.UI.Combat
                     return;
                 }
                 case BurnedEvent b:
+                {
                     // Fire underfoot (Arturo, 01/11): its point of health comes next, as any damage, said as the burn.
                     burnt.Add(b.Unit);
+                    // One of ours burnt as the squad's turn opens (O4, cuadro 152: no longer as it ended): the camera, wherever the
+                    // dead left it, to them first, while the player hasn't taken it, so the burn is seen whole.
+                    var burning = Unit(b.Unit);
+                    if (burning != null && burning.Team == Teams.Xcom && v.ActiveTeam == Teams.Xcom && rig != null && rig.Epoch == epoch && ShownToSquad(burning))
+                    {
+                        rig.Focus(Feet(b.Unit));
+                        // (Till it is a tile off, BurnLook at most: the dead may have left it far.)
+                        var since = Time.unscaledTime;
+                        while (rig != null && rig.Epoch == epoch && rig.Left > Board.Tile && Time.unscaledTime - since < BurnLook)
+                            await Awaitable.NextFrameAsync(stop);
+                    }
                     return;
+                }
                 case DamagedEvent d:
                 {
                     var target = Unit(d.Unit);

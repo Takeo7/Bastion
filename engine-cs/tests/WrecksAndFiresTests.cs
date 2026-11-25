@@ -121,7 +121,7 @@ namespace Bastion.Engine.Tests
             return s;
         }
 
-        [Fact(DisplayName = "fires › stepping on fire burns a point, armour or not; ending the turn on it, another")]
+        [Fact(DisplayName = "fires › stepping on fire burns a point, armour or not; beginning the next turn on it, another")]
         public void SteppingOnFireBurns()
         {
             var s = Street();
@@ -134,12 +134,66 @@ namespace Bastion.Engine.Tests
             Assert.Contains("burned", Tags(sim.Events));
             Assert.Equal(hp - 1, soldier.Hp);
             Assert.True(Grid.SamePos(P(5, 1), soldier.Pos));
-            // On it at the end of the squad's turn: again; and the dead too, at the end of theirs.
+            // On it as the squad's next turn begins: again.
             soldier.Pos = P(4, 1);
             var end = NewSim(s);
             end.RunAlienTurn();
             Assert.Equal(hp - 2, soldier.Hp);
             Assert.True(Los.IsLit(s, P(4, 1)));
+        }
+
+        /// <summary>The events' tags with each burned one's unit: «turnBegan:xcom», «burned:s1».</summary>
+        private static List<string> Turns(IEnumerable<GameEvent> events) => events.Select((e) => e switch
+        {
+            TurnBeganEvent b => $"turnBegan:{b.Team}",
+            BurnedEvent b => $"burned:{b.Unit}",
+            DiedEvent d => $"died:{d.Unit}",
+            _ => e.T,
+        }).Where((t) => t.StartsWith("turnBegan") || t.StartsWith("burned") || t.StartsWith("died")).ToList();
+
+        [Fact(DisplayName = "fires › it burns as a turn begins, not as it ends (cuadro 152): the dead as theirs begins, the squad as its next does")]
+        public void ItBurnsAsATurnBegins()
+        {
+            var s = Street();
+            AddUnit(s, "s1", TemplateIds.Rookie, 4, 1);
+            var zombie = AddUnit(s, "a1", TemplateIds.Zombie, 9, 4);
+            zombie.Hp = zombie.MaxHp = 9;
+            s.Fires!.Single().Tiles.Add(Grid.TileIndex(s, 9, 4));
+            var sim = NewSim(s);
+            sim.RunAlienTurn();
+            // Nobody as the squad's turn ends; the dead's on it as theirs begins, before they act; the squad's as its next does.
+            Assert.Equal(new[] { "turnBegan:alien", "burned:a1", "turnBegan:xcom", "burned:s1" }, Turns(sim.Events));
+        }
+
+        [Fact(DisplayName = "fires › on its last turn: the dead still burn as theirs begins; out as it ends, the squad doesn't")]
+        public void OnItsLastTurn()
+        {
+            var s = Street();
+            var soldier = AddUnit(s, "s1", TemplateIds.Rookie, 4, 1);
+            var zombie = AddUnit(s, "a1", TemplateIds.Zombie, 9, 4);
+            zombie.Hp = zombie.MaxHp = 9;
+            s.Fires = new List<Fire> { new Fire { Id = "m1", Source = Grid.TileIndex(s, 4, 1), Tiles = new List<int> { Grid.TileIndex(s, 4, 1), Grid.TileIndex(s, 9, 4) }, Turns = 1 } };
+            var hp = soldier.Hp;
+            var sim = NewSim(s);
+            sim.RunAlienTurn();
+            Assert.Equal(new[] { "turnBegan:alien", "burned:a1", "turnBegan:xcom" }, Turns(sim.Events));
+            Assert.Contains("fireOut", Tags(sim.Events));
+            Assert.Equal(hp, soldier.Hp);
+        }
+
+        [Fact(DisplayName = "fires › one who begins their turn on fire with a point left falls there, before acting")]
+        public void FallsAsTheTurnBegins()
+        {
+            var s = Street();
+            AddUnit(s, "s1", TemplateIds.Rookie, 1, 1);
+            var zombie = AddUnit(s, "a1", TemplateIds.Zombie, 4, 1);
+            zombie.Hp = 1;
+            AddUnit(s, "a2", TemplateIds.Zombie, 9, 4);
+            var sim = NewSim(s);
+            sim.RunAlienTurn();
+            Assert.Equal(new[] { "turnBegan:alien", "burned:a1", "died:a1" }, Turns(sim.Events).Take(3));
+            Assert.False(zombie.Alive);
+            Assert.True(Grid.SamePos(P(4, 1), zombie.Pos));
         }
 
         [Fact(DisplayName = "fires › the enemies go round it when they can, and through it when they can't")]

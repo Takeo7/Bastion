@@ -229,7 +229,9 @@ namespace Bastion.Engine
 
         /// <summary>
         /// Tiles a unit at `p` can look/shoot from: its own tile plus the XCOM-style
-        /// "step out" tiles beside any adjacent full cover, on the same level.
+        /// "step out" tiles beside any adjacent full cover, on the same level. Never a
+        /// closed door (Arturo, 25/11, O3: «desde dentro vi la calle»): one inside by a
+        /// door, beside a cupboard, looked out from its doorway, the door shut.
         /// </summary>
         public static List<Pos> PeekOrigins(GameState s, Pos p)
         {
@@ -241,7 +243,7 @@ namespace Bastion.Engine
                 foreach (var side in new[] { (x: d.Y, y: -d.X), (x: -d.Y, y: d.X) })
                 {
                     var q = new Pos { X = p.X + side.x, Y = p.Y + side.y, Z = p.Z };
-                    if (Flights.CanStopAt(s, q) && Grid.HeightAt(s, q) == h && !origins.Any((o) => Grid.SamePos(o, q))) origins.Add(q);
+                    if (Flights.CanStopAt(s, q) && Grid.HeightAt(s, q) == h && Grid.KindAt(s, q) != TileKinds.Door && !origins.Any((o) => Grid.SamePos(o, q))) origins.Add(q);
                 }
             }
             return origins;

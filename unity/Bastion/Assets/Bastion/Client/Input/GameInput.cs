@@ -31,7 +31,8 @@ namespace Bastion.Client
             Map,         // M
             Sight,       // V
             NextMark,    // O
-            Mark,        // G
+            Mark,        // P (cuadro 154: it was G)
+            Grid,        // G, the floor's grid (O6, 25/11)
             Ready,       // Retroceso
             FloorUp,     // RePág
             FloorDown,   // AvPág
@@ -156,7 +157,8 @@ namespace Bastion.Client
                 case Key.Map: return (k.mKey, null);
                 case Key.Sight: return (k.vKey, null);
                 case Key.NextMark: return (k.oKey, null);
-                case Key.Mark: return (k.gKey, null);
+                case Key.Mark: return (k.pKey, null);
+                case Key.Grid: return (k.gKey, null);
                 case Key.Ready: return (k.backspaceKey, null);
                 case Key.FloorUp: return (k.pageUpKey, null);
                 case Key.FloorDown: return (k.pageDownKey, null);

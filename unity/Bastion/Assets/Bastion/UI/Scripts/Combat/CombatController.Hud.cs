@@ -1128,6 +1128,8 @@ namespace Bastion.UI.Combat
                 Objective = objective,
                 ObjectiveTip = tip,
                 TurnsLeft = turnsLeft,
+                // A Limpieza's (O8): won with none of them left (Rules' Combatants), so all of them, seen or not.
+                Left = m.Kind == MissionKinds.Elimination ? Bastion.Engine.Grid.Combatants(s, Teams.Alien).Count : -1,
                 Alert = alert,
                 HordeFill = fill.HasValue ? (float)fill.Value : -1,
                 HordeDb = fill.HasValue ? 40 + (int)Math.Floor(50 * fill.Value + 0.5) : 0,

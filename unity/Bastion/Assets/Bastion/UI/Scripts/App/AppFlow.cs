@@ -281,7 +281,9 @@ namespace Bastion.UI.App
                 if (test == "corte" || (test == "corte1" && !cutOnce)) link.Leave();
                 if (test == "corte1") cutOnce = true;
                 if (test == "anfitrion") HostClosedCard();
-                if (sheet != null) await RaiseVeil(sheet, FadeIn);
+                // The stage's sheet, what is to be done, five seconds at least (Arturo, 25/11, O2: «que la pantalla de carga con
+                // lo que hay que hacer dure 5 s»); longer if the load is, as ever.
+                if (sheet != null) await RaiseVeil(sheet, FadeIn, StageSheetLeast);
             }
             finally
             {
@@ -409,11 +411,16 @@ namespace Bastion.UI.App
         const float VeilMost = 20;
         /// <summary>How long it takes to come in over the map (the sheet) and to go (s).</summary>
         const float FadeIn = 0.3f, VeilOut = 0.4f;
+        /// <summary>The stage's sheet up at least this long, from when it starts to come in (O2, 25/11).</summary>
+        const float StageSheetLeast = 5;
 
         LoadWindow window;
         VisualElement loadVeil;
         LoadView shownView;
         float loadSince, liftSince = -1, fadeFrom = -1, fadeLength;
+        /// <summary>The window not lifted before this (the stage's sheet: StageSheetLeast); a lift asked before it waits for it.</summary>
+        float holdUntil = -1;
+        bool liftAsked;
         /// <summary>
         /// Which raising the window is at (each change of screen its own): a lift asked for one before (the start screen's
         /// backdrop built as the base's window went up over it) leaves the newer window be.
@@ -429,10 +436,12 @@ namespace Bastion.UI.App
         /// returns: the load that follows freezes on it. Without a view, a dark one, to be told the battle's words
         /// (VeilWords). Up already: its view put in if it had none.
         /// </summary>
-        async Awaitable RaiseVeil(LoadView v, float fade)
+        async Awaitable RaiseVeil(LoadView v, float fade, float least = 0)
         {
             veilRaised++;
             loadSince = Time.realtimeSinceStartup;
+            holdUntil = least > 0 ? loadSince + least : -1;
+            liftAsked = false;
             Perf.Covered();
             if (loadVeil != null)
             {
@@ -483,7 +492,9 @@ namespace Bastion.UI.App
             if (fadeFrom >= 0) loadVeil.style.opacity = Mathf.Clamp01((now - fadeFrom) / fadeLength);
             if (liftSince < 0)
             {
-                if (now - loadSince > VeilMost) LiftVeil();
+                // Its load done before its least time: it goes once that is up.
+                if (liftAsked && now >= holdUntil) Lift(now);
+                else if (now - loadSince > VeilMost) LiftVeil();
                 return;
             }
             var gone = now - liftSince;
@@ -530,9 +541,25 @@ namespace Bastion.UI.App
             var app = instance;
             if (app == null || app.loadVeil == null || app.liftSince >= 0) return;
             if (raised >= 0 && raised != app.veilRaised) return;
+            var now = Time.realtimeSinceStartup;
+            if (now < app.holdUntil)
+            {
+                // (The stage's sheet: drawn, held till its least time, StepVeil.)
+                if (!app.liftAsked) Debug.Log($"[hoja] la etapa: cargada a los {now - app.loadSince:0.00} s, se queda hasta los {app.holdUntil - app.loadSince:0.0}");
+                app.liftAsked = true;
+                return;
+            }
+            app.Lift(now);
+        }
+
+        void Lift(float now)
+        {
+            if (holdUntil > 0) Debug.Log($"[hoja] la etapa: se quita a los {now - loadSince:0.00} s");
             Perf.End();
-            app.liftSince = Time.realtimeSinceStartup;
-            app.loadVeil.pickingMode = PickingMode.Ignore;
+            liftSince = now;
+            liftAsked = false;
+            holdUntil = -1;
+            loadVeil.pickingMode = PickingMode.Ignore;
         }
 
         /// <summary>The window is up and not going: what comes after it (the arrival card) waits.</summary>

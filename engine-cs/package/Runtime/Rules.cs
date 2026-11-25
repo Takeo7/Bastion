@@ -1124,7 +1124,11 @@ namespace Bastion.Engine
             CheckOutcome();
         }
 
-        /// <summary>Whoever of `team` ends its turn on fire burns.</summary>
+        /// <summary>
+        /// Whoever of `team` begins its turn on fire burns (Arturo, 25/11, cuadro 152: «al empezar, no al acabar»), after its
+        /// TurnBeganEvent: the squad's after the fires have counted down (one on its last turn went out as the dead's turn
+        /// ended, and burns nobody), the dead's (and the living's) with the fires as the squad left them.
+        /// </summary>
         private void BurnStanding(string team)
         {
             if (S.Fires == null || S.Fires.Count == 0) return;
@@ -1755,13 +1759,13 @@ namespace Bastion.Engine
         {
             var turn = S.Turn;
             AlienBudget = new AlienBudget { Explosives = 1, Psi = 1 };
-            // Whoever of the squad ends its turn on fire burns.
-            BurnStanding(Teams.Xcom);
-            if (Over) return;
             // G23.6 Evacuación: the civilians' step, as the squad's turn ends, before the dead's.
             CivilianStep();
             if (Over) return;
             Emit(new TurnBeganEvent { Team = Teams.Alien, Turn = turn });
+            // The enemies that begin their turn on fire burn (cuadro 152).
+            BurnStanding(Teams.Alien);
+            if (Over) return;
             // Mordido (G23.2): the bitten's count out, they turn.
             Bite();
             if (Over) return;
@@ -1839,13 +1843,13 @@ namespace Bastion.Engine
             }
             // G23 Las cargas: the count, and at 0 the blast and La Lata.
             if (ChargesCount()) return;
-            // The enemies that end their turn on fire burn.
-            BurnStanding(Teams.Alien);
-            if (Over) return;
             // Bengalas and fires on their last turn burn out; the rest burn down as the squad's turn begins.
             foreach (var l in (S.Lights ?? new List<Light>()).ToList()) if (l.Turns != null && l.Turns <= 1) Emit(new LightOffEvent { Id = l.Id });
             foreach (var f in (S.Fires ?? new List<Fire>()).ToList()) if (f.Turns != null && f.Turns <= 1) Emit(new FireOutEvent { Id = f.Id });
             Emit(new TurnBeganEvent { Team = Teams.Xcom, Turn = turn + 1, Command = OpeningCommander(turn + 1) });
+            // Whoever of the squad begins its turn on fire burns (cuadro 152).
+            BurnStanding(Teams.Xcom);
+            if (Over) return;
             // Knocked down by El Toro (H6): up first, for one of the actions.
             GetUp();
             // An Asedio's La Lata come (T24; Red, 18/11): whoever waits on a tile of it gets in, as many as its seats.

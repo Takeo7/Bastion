@@ -20,6 +20,7 @@ namespace Bastion.UI.App
         const string VSyncKey = "bastion.vsync";
         const string CounterKey = "bastion.showFps";
         const string TintKey = "bastion.squadTint";
+        const string GridKey = "bastion.floorGrid";
         const string CinemaKey = "bastion.cinematic";
         const string InterfaceKey = "bastion.uiScale";
         const string AutoKey = "bastion.autoQuality";
@@ -191,6 +192,25 @@ namespace Bastion.UI.App
         }
 
         /// <summary>
+        /// «Rejilla del suelo» (Arturo, 25/11, O6; cuadro 154): the tiles drawn on the ground in a battle, off to start with,
+        /// put and taken away with G or in Ajustes, kept on this computer (this player's, never over the network).
+        /// Arte's map draws it (Bastion.Client.Map.FloorGrid.Shown, set here and in Apply); BASTION_REJILLA=1 shows it for the
+        /// labs without keeping it.
+        /// </summary>
+        public static bool FloorGrid
+        {
+            get => PlayerPrefs.GetInt(GridKey, 0) == 1;
+            set
+            {
+                Bastion.Client.Map.FloorGrid.Shown = value;
+                if (FloorGrid == value) return;
+                PlayerPrefs.SetInt(GridKey, value ? 1 : 0);
+                PlayerPrefs.Save();
+                Changed?.Invoke();
+            }
+        }
+
+        /// <summary>
         /// «Aspecto de película» (Arte's T7, 18/11: Bastion.Client.Cinematic, the grade, the haze and the blurred
         /// background; on by default). BASTION_SIN_CINE=1 turns it off for the labs' «before» without keeping it.
         /// </summary>
@@ -349,6 +369,8 @@ namespace Bastion.UI.App
             Bastion.Client.Units.SquadTint.On = SquadTint;
             // «Aspecto de película», Arte's (the mood shown now applied again if it changed).
             Bastion.Client.Cinematic.On = Cinematic;
+            // «Rejilla del suelo», Arte's grid (O6).
+            Bastion.Client.Map.FloorGrid.Shown = FloorGrid || Environment.GetEnvironmentVariable("BASTION_REJILLA") == "1";
             ApplyInterface();
             if (Application.isEditor)
             {
@@ -488,6 +510,7 @@ namespace Bastion.UI.App
         public const string VSyncId = "vsync";
         public const string CounterId = "showFps";
         public const string TintId = "squadTint";
+        public const string GridId = "floorGrid";
         public const string CinemaId = "cinematic";
         public const string InterfaceId = "uiScale";
         public const string AutoId = "autoQuality";
@@ -686,6 +709,17 @@ namespace Bastion.UI.App
                 On = SquadTint ? 1 : 0,
                 Tail = true,
             },
+            // (O6, 25/11: with the finger there is no G; with the keyboard it is worth the same.)
+            new Hud.SettingView
+            {
+                Id = GridId,
+                Label = "Rejilla del suelo",
+                About = "Marca las casillas en el suelo del combate. La G la pone y la quita.",
+                Choices = new System.Collections.Generic.List<string> { "No", "Sí" },
+                // (What is shown: the same as kept, but for BASTION_REJILLA's labs.)
+                On = Bastion.Client.Map.FloorGrid.Shown ? 1 : 0,
+                Tail = true,
+            },
             new Hud.SettingView
             {
                 Id = InterfaceId,
@@ -733,6 +767,7 @@ namespace Bastion.UI.App
             else if (id == VSyncId) VSync = value == 0;
             else if (id == CounterId) ShowFps = value == 0;
             else if (id == TintId) SquadTint = value == 1;
+            else if (id == GridId) FloorGrid = value == 1;
             else if (id == CinemaId) Cinematic = value == 0;
             else if (id == AutoId) AutoQuality = value == 0;
             else if (id == InterfaceId) InterfaceSize = InterfaceSizes[Mathf.Clamp((int)value, 0, InterfaceSizes.Length - 1)];

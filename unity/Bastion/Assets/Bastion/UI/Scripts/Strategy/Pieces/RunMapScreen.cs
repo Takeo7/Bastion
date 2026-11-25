@@ -112,12 +112,11 @@ namespace Bastion.UI.Strategy
             homeNote = Ui.Text("", "runmap-home muted", foot);
             stop = new StopPlate(plate, tips, icon, handlers) { Floor = NextRowTop };
             Sheet();
-            // The right: the squad folded to its busts over the stage's card; «Equipo ▸» opens the kits in the card's place.
+            // The right: the stage's card beside the map, and the chosen one's kit open always (Arturo, 25/11, O1: «no quiero
+            // botón, que salga directamente»): its places, its pack and its board with the points to spend, no «Equipo ▸».
             side = Ui.El("runmap-side", view);
-            squad = new KitPanel(side, "panel runmap-squad", tips, handlers, board) { Icon = icon };
-            squad.Foldable(StrategyText.Runs.KitOpen, StrategyText.Runs.KitClose);
-            squad.FoldChanged += _ => ShowCard();
             card = Ui.El("panel runmap-card", side);
+            squad = new KitPanel(side, "panel runmap-squad", tips, handlers, board) { Icon = icon };
             Show(false);
         }
 
@@ -388,12 +387,12 @@ namespace Bastion.UI.Strategy
         /// <summary>
         /// The stage's card in parts (cuadros 126 and 132; Producto's review 16): «Etapa · fila 4», its symbol and name, its
         /// danger and modifiers as facts, what to do, where, its notes, a warning in amber, why it can't be taken; «Ir a esta
-        /// etapa» on one that can. Not while the kits are open nor at a stop.
+        /// etapa» on one that can. Beside the kit, always open (O1, 25/11); not at a stop.
         /// </summary>
         void ShowCard()
         {
             var n = Shown();
-            var on = view != null && squad.Folded && view.Stop == null;
+            var on = view != null && view.Stop == null;
             Ui.Show(card, on);
             card.Clear();
             if (!on) return;

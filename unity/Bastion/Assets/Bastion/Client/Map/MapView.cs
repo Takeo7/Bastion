@@ -477,7 +477,12 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>What is outlined to be searched or opened outlined again if the map made it again since (SearchOutline.KeepUp).</summary>
-        void LateUpdate() => Units.SearchOutline.KeepUp();
+        void LateUpdate()
+        {
+            Units.SearchOutline.KeepUp();
+            // (The tiles' grid, if it is on: kept to this map and the storey in view. FloorGrid.)
+            if (Current == this) FloorGrid.Keep(this);
+        }
 
         /// <summary>
         /// The storey in view (0 the ground): the cutaway's chosen storey (Cutaway.Focus.level), the buildings with storeys

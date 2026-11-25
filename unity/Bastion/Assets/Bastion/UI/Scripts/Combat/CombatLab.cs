@@ -1282,6 +1282,8 @@ namespace Bastion.UI.Combat
         {
             CommandResult result;
             using (MRules.Auto()) result = Rules.ExecuteCommand(host, cmd, slot, Two ? new[] { 0, 1 } : new[] { 0 }, rng);
+            // (What each order was and what it did, for the labs: «move s2 → moved», «ability s2 → searched».)
+            if (result.Ok) Debug.Log($"[lab] orden {cmd.Type}{(cmd is AbilityCommand ab ? " " + ab.Ability : "")} → {string.Join(", ", (result.Events ?? new List<GameEvent>()).Select(e => e.GetType().Name.Replace("Event", "")).Distinct())}");
             if (!result.Ok)
             {
                 Debug.Log($"[lab] orden rechazada ({cmd.Type}): {result.Error}");

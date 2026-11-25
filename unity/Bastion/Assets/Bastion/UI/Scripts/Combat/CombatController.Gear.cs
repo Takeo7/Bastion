@@ -24,14 +24,15 @@ namespace Bastion.UI.Combat
         RunPackView RunPackOf(GameState v, Unit u, bool live)
         {
             packUnit = u.Id;
-            // A weapon in the pack or on the floor against what the soldier carries in its place (T4).
-            var against = u.Kit != null ? (slot => Gears.InSlot(u.Kit, slot), u.Name.Split(' ')[0]) : ((System.Func<string, Bastion.Engine.Gear>, string)?)null;
+            // A weapon in the pack or on the floor against what the soldier carries in its place (T4), as it would have
+            // each (O7: HandsOf); what it carries, as it has it.
+            var against = u.Kit != null ? new Wielder { At = slot => Gears.InSlot(u.Kit, slot), Who = u.Name.Split(' ')[0], Hand = HandsOf(u) } : null;
             var view = new RunPackView { Pack = StrategyPresenter.Grid(u.Pack, u.Id, KitSlots.Pack, live, 0, against) };
             foreach (var slot in new[] { KitSlots.Primary, KitSlots.Melee, KitSlots.Pistol, KitSlots.Vest })
             {
                 var (w, h) = Box(slot);
                 var g = u.Kit != null ? Gears.InSlot(u.Kit, slot) : null;
-                view.Kit.Add(new GearSlotView { Owner = u.Id, Slot = slot, Label = GearText.SlotLabel(slot), W = w, H = h, Gear = g != null ? StrategyPresenter.Item(g) : null, Mine = live });
+                view.Kit.Add(new GearSlotView { Owner = u.Id, Slot = slot, Label = GearText.SlotLabel(slot), W = w, H = h, Gear = g != null ? StrategyPresenter.Item(g, against) : null, Mine = live });
             }
             // The belt as it stands, its uses left (RunPack.BeltLeft).
             var belt = RunPack.BeltLeft(u);
@@ -52,6 +53,17 @@ namespace Bastion.UI.Combat
                 foreach (var o in v.Units.Where(o => o.Id != u.Id && o.Alive && o.Team == Teams.Xcom && !o.Captive && o.Pack != null && Aim.InMeleeReach(v, u.Pos, o.Pos)))
                     view.Give.Add(new GearSlotView { Owner = o.Id, Slot = "give", Label = o.Name.Split(' ')[0].ToUpperInvariant(), W = 2, H = 1, Mine = true });
             return view;
+        }
+
+        /// <summary>
+        /// What `u` would do with a weapon in this battle (O7: Aim.CardFor, with its mods as it set out), its bonuses named
+        /// after the campaign's soldier it is (Runs.SourcesOf); a skirmish's, without names.
+        /// </summary>
+        System.Func<Bastion.Engine.Gear, HeldFigures?> HandsOf(Unit u)
+        {
+            var cs = !string.IsNullOrEmpty(u.CampaignId) ? Campaign?.Invoke()?.Soldiers.FirstOrDefault(x => x.Id == u.CampaignId) : null;
+            var sources = cs != null ? Bastion.Engine.Runs.SourcesOf(cs) : null;
+            return g => StrategyPresenter.Held(Bastion.Engine.Aim.CardFor(u, g, sources));
         }
 
         /// <summary>A kit place's box in combat, in cells of 40 points (smaller than the base's: the panel is narrow).</summary>

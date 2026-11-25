@@ -47,6 +47,17 @@ namespace Bastion.Engine
         public UnitMods Mods { get; set; } = new UnitMods();
     }
 
+    /// <summary>
+    /// One of the places a soldier's mods come from (Bars.ModSourcesOf; a weapon's card, O7): its name as the game shows it
+    /// (a line, a cell of the board, a thing on the belt, a trait), and what it adds. The base aim has none (Base).
+    /// </summary>
+    public sealed class ModSource
+    {
+        public string Label { get; set; } = "";
+        public bool Base { get; set; }
+        public UnitMods Mods { get; set; } = new UnitMods();
+    }
+
     /// <summary>Everything a soldier fights with, from its lines, its talents and what it carries.</summary>
     public sealed class FighterStats
     {
@@ -301,13 +312,9 @@ namespace Bastion.Engine
         public static FighterStats FighterStatsOf(Skills skills, Growth growth, IReadOnlyList<string> board, IReadOnlyList<string>? gear = null, Arms? arms = null)
         {
             gear ??= new string[0];
-            var tpl = Content.Templates[TemplateIds.Rookie];
-            var mods = Content.AddMods(Content.ZeroMods, new UnitMods { Aim = BaseAim - tpl.Aim });
+            // Its mods, the sum of where each comes from (ModSourcesOf: the weapon's card names them, O7).
+            var mods = ModSourcesOf(growth, board, gear, arms).Aggregate(Content.ZeroMods, (m, x) => Content.AddMods(m, x.Mods));
             var maxHp = BaseHp;
-            foreach (var id in SkillIds.All)
-            {
-                mods = Content.AddMods(mods, GrowthDeltaOf(id, 0, Of(growth, id)).Mods);
-            }
             var armor = 0;
             var perks = new List<string>();
             var charges = new Dictionary<string, int>();
@@ -319,7 +326,6 @@ namespace Bastion.Engine
             var cells = board.Select((id) => Board.BoardCells.TryGetValue(id, out var c) ? c : null).Where((c) => c != null).Select((c) => c!).ToList();
             foreach (var c in cells)
             {
-                if (c.Mods != null) mods = Content.AddMods(mods, c.Mods);
                 maxHp += c.Hp ?? 0;
                 armor += c.Armor ?? 0;
                 if (c.Perk != null && !perks.Contains(c.Perk)) perks.Add(c.Perk);
@@ -327,12 +333,10 @@ namespace Bastion.Engine
             }
             foreach (var item in gear.Select((id) => Content.Items[id]))
             {
-                if (item.Mods != null) mods = Content.AddMods(mods, item.Mods);
                 maxHp += item.Hp ?? 0;
                 Add(item.Charges);
             }
-            // Mano de machete wants the machete; Buen brazo, one more grenade in every accessory of them.
-            if (perks.Contains(PerkIds.BladeMaster) && arms?.Melee == FoundWeaponIds.Machete) mods = Content.AddMods(mods, new UnitMods { MeleeDamage = 2, MeleeAim = 15 });
+            // Buen brazo, one more grenade in every accessory of them (Mano de machete is in ModSourcesOf).
             // The chainsaw, with its fuel for the mission.
             if (arms?.Melee == FoundWeaponIds.Chainsaw) Add(new Dictionary<string, int> { [ChargeIds.Fuel] = Content.ChainsawFuel });
             if (perks.Contains(PerkIds.GoodArm)) Add(new Dictionary<string, int> { [ChargeIds.Grenade] = gear.Count((id) => Content.Items[id].Charges != null && Of(Content.Items[id].Charges!, ChargeIds.Grenade) != 0) });
@@ -344,6 +348,26 @@ namespace Bastion.Engine
             }
             var rank = VeterancyRank(cells.Count);
             return new FighterStats { Template = TemplateIds.Rookie, Mods = mods, MaxHp = maxHp, Charges = charges, Will = VeteranWill(rank) + mods.Will, Armor = armor, Perks = perks, Rank = rank };
+        }
+
+        /// <summary>
+        /// Where a soldier's mods come from (FighterStatsOf sums them, so they are its mods to the bit): the base aim (Label
+        /// "", Base), each line's bars (its name), each cell of the board with mods (its name, as the board shows it), each
+        /// thing on the belt with mods (its name), and Mano de machete with the machete (its cell's name). For the weapon's
+        /// card (O7, Arturo 25/11: «el daño que voy a hacer, no el del arma»).
+        /// </summary>
+        public static List<ModSource> ModSourcesOf(Growth growth, IReadOnlyList<string> board, IReadOnlyList<string>? gear = null, Arms? arms = null)
+        {
+            var tpl = Content.Templates[TemplateIds.Rookie];
+            var all = new List<ModSource> { new ModSource { Label = "", Base = true, Mods = new UnitMods { Aim = BaseAim - tpl.Aim } } };
+            foreach (var id in SkillIds.All) all.Add(new ModSource { Label = SkillDefs[id].Name, Mods = GrowthDeltaOf(id, 0, Of(growth, id)).Mods });
+            var cells = board.Select((id) => Board.BoardCells.TryGetValue(id, out var c) ? c : null).Where((c) => c != null).Select((c) => c!).ToList();
+            foreach (var c in cells) if (c.Mods != null) all.Add(new ModSource { Label = c.Name, Mods = c.Mods });
+            foreach (var item in (gear ?? new string[0]).Select((id) => Content.Items[id])) if (item.Mods != null) all.Add(new ModSource { Label = item.Name, Mods = item.Mods });
+            // Mano de machete wants the machete.
+            var master = cells.FirstOrDefault((c) => c.Perk == PerkIds.BladeMaster);
+            if (master != null && arms?.Melee == FoundWeaponIds.Machete) all.Add(new ModSource { Label = master.Name, Mods = new UnitMods { MeleeDamage = 2, MeleeAim = 15 } });
+            return all;
         }
 
         // -------------------------------------------------------------- the board

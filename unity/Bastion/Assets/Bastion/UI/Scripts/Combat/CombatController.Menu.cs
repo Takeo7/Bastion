@@ -26,7 +26,9 @@ namespace Bastion.UI.Combat
             ("C", "Ceder el mando"),
             ("Retroceso", "Terminar turno"),
             // Signalling (playtest 19/10 #14): Shift and a click, G, or the wheel's click.
-            ("Mayús + clic · G · clic con la rueda", Lore.SettingsText.PingControls),
+            // (Cuadro 154: marking went from G to P; G is the floor's grid, O6.)
+            ("Mayús + clic · P · clic con la rueda", Lore.SettingsText.PingControls),
+            ("G", "Poner o quitar la rejilla del suelo"),
             // Shift held, everything to search (U11; Lore's words, 18/11).
             ("Mantener Mayús", "Resaltar lo que queda por registrar; en claro, lo que el soldado elegido alcanza desde donde está"),
             ("H · clic en su nombre", "Hoja del soldado: tablero, estadísticas y lo que lleva"),

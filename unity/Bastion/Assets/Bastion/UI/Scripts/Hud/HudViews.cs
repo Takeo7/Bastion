@@ -520,6 +520,8 @@ namespace Bastion.UI.Hud
         public string ObjectiveTip;
         /// <summary>Turns left; -1, no timer.</summary>
         public int TurnsLeft = -1;
+        /// <summary>A Limpieza's (O8, Arturo 25/11): the hostiles left on the whole map, seen or not; -1, another fight.</summary>
+        public int Left = -1;
         /// <summary>A siege's next wave, short and in full, and whether it comes this turn.</summary>
         public string WaveText;
         public string WaveTip;

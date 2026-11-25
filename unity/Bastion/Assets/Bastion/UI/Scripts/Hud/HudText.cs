@@ -202,6 +202,9 @@ namespace Bastion.UI.Hud
             public static string Decibels(int db) => $"{db} dB";
 
             public static string Turns(int n) => n == 1 ? "1 TURNO" : $"{n} TURNOS";
+            /// <summary>A Limpieza's count (O8, Arturo 25/11: «la cantidad de zombies que te quedan»), as the turns' chip.</summary>
+            public static string Left(int n) => n == 1 ? "QUEDA 1" : $"QUEDAN {n}";
+            public const string LeftTip = "Los que quedan por abatir en todo el mapa, se vean o no.";
         }
 
         public static class Banner

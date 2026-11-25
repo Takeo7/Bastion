@@ -306,6 +306,24 @@ namespace Bastion.UI.Strategy
             public const string Head = "Almacén";
             /// <summary>Right over a weapon's figures weighed against a soldier's (T4; Lore's words): «Frente al fusil de cerrojo de Anja (verde, mejor; rojo, peor):».</summary>
             public static string Against(string the, string who) => $"Frente {(the.StartsWith("el ") ? "al " + the.Substring(3) : "a " + the)} de {who} (verde, mejor; rojo, peor):";
+            /// <summary>A soldier's bonus on a weapon whose source has no name (O7: a fight's mods the sources don't explain).</summary>
+            public const string Others = "otros";
+            /// <summary>Under a gun's whole aim (cuadro 156; Lore's words).</summary>
+            public const string NoReachNorCover = "sin contar distancia ni cobertura";
+            /// <summary>
+            /// Under a figure the soldier changes (O7, Producto's words): the soldier's own base if it has a part (aim and
+            /// crit, cuadro 156), the weapon's, then each of the soldier's that touches it, by its name: «arma 3–5 · Golpe
+            /// pesado +1», «base 55 · arma +15».
+            /// </summary>
+            public static string FromWeapon(string weapon, IEnumerable<string> bonuses, string own = null)
+            {
+                var parts = new List<string>();
+                // The soldier's own first, when it has a part (aim and crit: «base 55 · arma +15»).
+                if (own != null) parts.Add($"base {own}");
+                parts.Add($"arma {weapon}");
+                parts.AddRange(bonuses);
+                return string.Join(" · ", parts);
+            }
             /// <summary>
             /// A weapon's reach in tiles (T23, Lore's words): how far first, then where it's best, so no figure has to be guessed:
             /// «hasta 18 casillas; mejor de 1 a 11», «hasta 18 casillas; mejor desde 11», «hasta 18 casillas»; a blade «1 casilla».

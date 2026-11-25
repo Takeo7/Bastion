@@ -464,10 +464,10 @@ namespace Bastion.UI.Hud
         /// <summary>An enemy just seen: a mark on its flag for 2 s, an eye if it hasn't noticed the squad, a «!» if it has (UnitFlags.Spot).</summary>
         public void Spot(string id, bool alert) => flags.Spot(id, alert);
 
-        /// <summary>For the labs: the help of the first element of class `className` pinned open; whether there was one.</summary>
+        /// <summary>For the labs: the help of the first element of class `className` (or by that name: a gear's id) pinned open; whether there was one.</summary>
         public bool PinTip(string className)
         {
-            var over = root?.Q(className: className);
+            var over = root?.Q(className: className) ?? root?.Q(className);
             if (over != null) tips?.Pin(over);
             return over != null;
         }

@@ -174,7 +174,7 @@ namespace Bastion.UI.Combat
         public static string DamageValue(GameState s, Unit u, string id)
         {
             // A molotov's fire burns as the map's does (Arturo, 01/11 #10): a point as it falls, on stepping in, and at a turn's end there.
-            if (id == AbilityIds.Molotov) return $"{Content.Flames.Damage} al caer, al entrar y al acabar el turno dentro";
+            if (id == AbilityIds.Molotov) return $"{Content.Flames.Damage} al caer, al entrar y al empezar el turno dentro";
             // Vigilancia fires the rifle at whoever moves: a reaction shot, which only crits with the talent.
             var watch = Watch(id);
             var d = Rules.AbilityDamage(s, u, watch ? AbilityIds.Shoot : id);

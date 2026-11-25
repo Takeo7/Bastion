@@ -159,7 +159,7 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// G: the tile under the pointer marked for both (playtest 18/10 #7), an enemy's in red; at most a few a second. From
+        /// P (G till cuadro 154): the tile under the pointer marked for both (playtest 18/10 #7), an enemy's in red; at most a few a second. From
         /// above (the map, M: Arturo, 02/11 A3), the ground's tile under the pointer, or `at`.
         /// </summary>
         void Ping(Pos at = null)

@@ -253,7 +253,7 @@ namespace Bastion.UI.Strategy
                     foreach (var w in stop.Wares ?? new List<Ware>())
                         v.Wares.Add(new WareView
                         {
-                            Gear = Ware(w.Gear, buyer),
+                            Gear = Ware(c, w.Gear, buyer),
                             Price = w.Price.ToString(),
                             Why = Gears.BuyWareRefusal(c, Slot, Connected, new BuyWareCommand { Ware = w.Gear.Id, Soldier = buyer?.Id ?? "" }),
                         });
@@ -270,7 +270,7 @@ namespace Bastion.UI.Strategy
                             if (price <= 0) continue;
                             v.Offers.Add(new WareView
                             {
-                                Gear = Ware(spot.Gear, buyer),
+                                Gear = Ware(c, spot.Gear, buyer),
                                 Price = "+" + price,
                                 Why = Gears.SellRefusal(c, Slot, Connected, new SellGearCommand { Soldier = buyer.Id, Gear = spot.Gear.Id }),
                                 Note = spot.Slot != KitSlots.Pack ? StrategyText.Runs.WornOf(spot.Gear.Kind, spot.Gear.Type, spot.Gear.Count) : null,
@@ -311,10 +311,10 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>A ware as the Trueque lists it (Lore.GearName): one, its name in the singular; more, how many and the plural («2 medicinas»).</summary>
-        static Gear.GearItemView Ware(Engine.Gear g, CampaignSoldier buyer)
+        static Gear.GearItemView Ware(CampaignState c, Engine.Gear g, CampaignSoldier buyer)
         {
-            // Against the soldier it would go to (T4).
-            var v = Item(g, Against(buyer));
+            // Against the soldier it would go to (T4), as it would have it (O7).
+            var v = Item(g, Against(c, buyer));
             v.Name = Lore.GearName(g.Kind, g.Type, g.Count);
             return v;
         }

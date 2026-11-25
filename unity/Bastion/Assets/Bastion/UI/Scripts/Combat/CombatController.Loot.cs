@@ -283,12 +283,11 @@ namespace Bastion.UI.Combat
             var list = new List<(Pos at, bool lit)>();
             var u = Unit();
             if (u == null || !BesideQuiet(u)) return list;
+            // (Not the bodies nor a fallen comrade's things: a click on them walks there; they are searched with Registrar and
+            // taken in the pack. Arturo, 25/11, O5.)
             if (HasSpots && Abilities.AbilityBlocker(State, u, AbilityIds.Search) == null)
                 foreach (var t in Looting.SearchableTiles(State, u))
-                    if (t.Z <= Level && !Covered(State, t, Level)) list.Add((t, true));
-            foreach (var d in State.FloorGear ?? new List<DroppedGear>())
-                if (d.From != null && d.Pos.Z <= Level && !list.Any(m => Same(m.at, d.Pos)) && FallenWithGear(State, d.Pos) != null && RunPack.InReach(State, u, d))
-                    list.Add((d.Pos, true));
+                    if (t.Z <= Level && !Covered(State, t, Level) && !BodyLike(Looting.SearchSpot(State, t))) list.Add((t, true));
             return list;
         }
 

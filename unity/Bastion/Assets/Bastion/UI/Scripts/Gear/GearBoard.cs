@@ -300,6 +300,8 @@ namespace Bastion.UI.Gear
         VisualElement Item(GearItemView g, float w, float h, float pw, float ph, bool turned, Target from)
         {
             var el = Ui.El("gear-item gear-item--" + (g.Kind ?? "thing"));
+            // (By its id, for the labs' «ayuda:g26».)
+            el.name = g.Id;
             el.style.width = w;
             el.style.height = h;
             el.userData = g.Id;

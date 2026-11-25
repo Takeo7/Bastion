@@ -13,7 +13,7 @@ namespace Bastion.UI
     /// seconds from when the list starts, as a player's press. «press=Texto» presses every button showing whose text is
     /// that (any case; as Red's UiPress), «click=Texto» clicks a text showing that says it (what listens above it gets
     /// it), «escribe=campo:texto» writes in the text field of that name (Write), «ventana=1920x1080» resizes the window
-    /// (Window), «shot=name» saves the screen as
+    /// (Window), «tecla=DownArrow/0.1» holds a key as a real one (Tecla), «shot=name» saves the screen as
     /// BASTION_FOTOS/name.png, «quit» closes the app; the rest goes to the screen's
     /// own (`other`: BaseRun's steps on the base). Each step goes to the log as «[recorrido]».
     /// </summary>
@@ -56,6 +56,8 @@ namespace Bastion.UI
                     return Write(arg) > 0;
                 case "ventana":
                     return Window(arg);
+                case "tecla":
+                    return Tecla(arg);
                 case "shot":
                     var folder = Environment.GetEnvironmentVariable("BASTION_FOTOS");
                     if (string.IsNullOrEmpty(folder)) return false;
@@ -138,6 +140,45 @@ namespace Bastion.UI
             if (size.Length != 2 || !int.TryParse(size[0], out var width) || !int.TryParse(size[1], out var height) || width < 320 || height < 200) return false;
             Screen.SetResolution(width, height, FullScreenMode.Windowed);
             return true;
+        }
+
+        /// <summary>
+        /// «tecla=DownArrow/0.1» (Red, 25/11, Producto's yes; for Pruebas, the menu by the keyboard): that key (InputSystem's
+        /// Key, any case: UpArrow, Enter, Escape…) held so many seconds (0.1 unless said) and let go, as the fight's «hold»
+        /// (CombatRun.Hold): the keyboard's state queued each frame, so it goes through the input actions and UI Toolkit's
+        /// Navigate and Submit as a real key; the window's focus ignored meanwhile (a test app runs behind). False if the key
+        /// isn't one.
+        /// </summary>
+        public static bool Tecla(string arg)
+        {
+            var part = arg.Split('/');
+            if (!Enum.TryParse<UnityEngine.InputSystem.Key>(part[0], true, out var key) || key == UnityEngine.InputSystem.Key.None) return false;
+            var seconds = part.Length > 1 && float.TryParse(part[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var held) ? held : 0.1f;
+            if (UnityEngine.InputSystem.Keyboard.current == null) return false;
+            _ = HoldKey(key, seconds);
+            return true;
+        }
+
+        static async Awaitable HoldKey(UnityEngine.InputSystem.Key key, float seconds)
+        {
+            var keys = UnityEngine.InputSystem.Keyboard.current;
+            var settings = UnityEngine.InputSystem.InputSystem.settings;
+            var was = settings.backgroundBehavior;
+            settings.backgroundBehavior = UnityEngine.InputSystem.InputSettings.BackgroundBehavior.IgnoreFocus;
+            try
+            {
+                var until = Time.realtimeSinceStartup + seconds;
+                while (Time.realtimeSinceStartup < until)
+                {
+                    UnityEngine.InputSystem.InputSystem.QueueStateEvent(keys, new UnityEngine.InputSystem.LowLevel.KeyboardState(key));
+                    await Awaitable.NextFrameAsync();
+                }
+                UnityEngine.InputSystem.InputSystem.QueueStateEvent(keys, new UnityEngine.InputSystem.LowLevel.KeyboardState());
+            }
+            finally
+            {
+                settings.backgroundBehavior = was;
+            }
         }
 
         static System.Collections.Generic.IEnumerable<T> Showing<T>() where T : VisualElement

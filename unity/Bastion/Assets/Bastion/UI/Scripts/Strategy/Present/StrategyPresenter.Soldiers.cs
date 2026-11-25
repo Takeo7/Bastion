@@ -144,7 +144,9 @@ namespace Bastion.UI.Strategy
                     v.Sheet.Care = null;
                     if (soldier?.Kit is Kit kit)
                     {
-                        foreach (var slot in new[] { KitSlots.Primary, KitSlots.Melee, KitSlots.Pistol }) v.Sheet.Arms.Add(KitPick(kit, slot));
+                        // Its weapons as it has them (O7).
+                        var who = Against(c, soldier);
+                        foreach (var slot in new[] { KitSlots.Primary, KitSlots.Melee, KitSlots.Pistol }) v.Sheet.Arms.Add(KitPick(kit, slot, who));
                         v.Sheet.Belt.Add(KitPick(kit, KitSlots.Vest));
                         foreach (var slot in new[] { KitSlots.Belt0, KitSlots.Belt1 }) v.Sheet.Belt.Add(KitPick(kit, slot));
                     }
@@ -154,10 +156,10 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>A place of a run's kit round the figure (T3): its name, what is in it with its picture and its help; empty, «Nada».</summary>
-        static PickView KitPick(Kit kit, string slot)
+        static PickView KitPick(Kit kit, string slot, Wielder who = null)
         {
             var g = Gears.InSlot(kit, slot);
-            var item = g != null ? Item(g) : null;
+            var item = g != null ? Item(g, who) : null;
             var label = Bastion.UI.Gear.GearText.SlotLabel(slot);
             var v = new PickView { Id = slot, Label = label != "" ? label : Bastion.UI.Gear.GearText.Belt, Value = item != null ? (item.Count > 1 ? $"{item.Name} ×{item.Count}" : item.Name) : StrategyText.Stash.Nothing, Icon = item?.Icon, Editable = false };
             if (!string.IsNullOrEmpty(item?.Tip)) v.Lines.Add(item.Tip);

@@ -88,6 +88,8 @@ namespace Bastion.UI.Hud
                 tips.Attach(goal, string.IsNullOrEmpty(m.ObjectiveTip) ? m.Objective : m.ObjectiveTip);
             }
             if (m.TurnsLeft >= 0) Ui.Text(HudText.Mission.Turns(m.TurnsLeft), m.TurnsLeft <= 3 ? "timer timer--urgent" : "timer", host);
+            // A Limpieza's, how many are left on the map (O8), as the turns' chip.
+            if (m.Left >= 0) tips.Attach(Ui.Text(HudText.Mission.Left(m.Left), "timer", host), HudText.Mission.LeftTip);
             if (!string.IsNullOrEmpty(m.WaveText)) tips.Attach(Ui.Text(m.WaveText, m.WaveUrgent ? "timer timer--urgent" : "timer", host), m.WaveTip);
             // The weather (Arturo, 01/11): its drawing and its name beside the turns, what it changes in its help.
             var weather = HudText.Weather.Name(m.Weather);

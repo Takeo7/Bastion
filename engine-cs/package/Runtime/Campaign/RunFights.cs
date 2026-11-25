@@ -109,18 +109,8 @@ namespace Bastion.Engine
         public static SquadMember SquadMemberOf(CampaignState c, CampaignSoldier s)
         {
             var kit = s.Kit ?? new Kit();
-            var arms = new Arms
-            {
-                Primary = kit.Primary?.Type,
-                PrimaryId = kit.Primary?.Id,
-                Mods = kit.Primary?.Mods != null && kit.Primary.Mods.Count > 0 ? new List<string>(kit.Primary.Mods) : null,
-                // The knife is the blade everyone fights with when there is no other.
-                Melee = kit.Melee == null || kit.Melee.Type == FoundWeaponIds.Knife ? null : kit.Melee.Type,
-                MeleeId = kit.Melee?.Id,
-                Pistol = kit.Pistol != null,
-                PistolId = kit.Pistol?.Id,
-            };
-            var belt = kit.Belt.Where((g) => g?.Type != null).SelectMany((g) => Enumerable.Repeat(g!.Type!, g.Count)).ToList();
+            var arms = ArmsOf(kit);
+            var belt = BeltOf(kit);
             var stats = Bars.FighterStatsOf(s.Skills, s.Growth, s.Board, belt, arms);
             var traits = s.Traits.Select((t) => Quests.Traits[t]).ToList();
             var vest = kit.Vest?.Type != null && Content.Vests.TryGetValue(kit.Vest.Type, out var def) ? def : null;
@@ -153,6 +143,63 @@ namespace Bastion.Engine
                 Pack = kit.Pack,
                 Kit = Gears.ClonePlaces(kit),
             };
+        }
+
+        /// <summary>A run's soldier's weapons as it sets out with `kit` (with their mods, no wear).</summary>
+        private static Arms ArmsOf(IKitPlaces kit)
+        {
+            return new Arms
+            {
+                Primary = kit.Primary?.Type,
+                PrimaryId = kit.Primary?.Id,
+                Mods = kit.Primary?.Mods != null && kit.Primary.Mods.Count > 0 ? new List<string>(kit.Primary.Mods) : null,
+                // The knife is the blade everyone fights with when there is no other.
+                Melee = kit.Melee == null || kit.Melee.Type == FoundWeaponIds.Knife ? null : kit.Melee.Type,
+                MeleeId = kit.Melee?.Id,
+                Pistol = kit.Pistol != null,
+                PistolId = kit.Pistol?.Id,
+            };
+        }
+
+        /// <summary>The belt's things as uses, one id each.</summary>
+        private static List<string> BeltOf(IKitPlaces kit)
+        {
+            return kit.Belt.Where((g) => g?.Type != null).SelectMany((g) => Enumerable.Repeat(g!.Type!, g.Count)).ToList();
+        }
+
+        /// <summary>
+        /// Where a run's soldier's mods come from setting out with `kit` (its own, by default): Bars.ModSourcesOf and its
+        /// traits' aim, by name. They add up to SquadMemberOf's mods; in a fight, the campaign's kit is the one it set out
+        /// with, so they are its unit's (Aim.CardFor's names, O7).
+        /// </summary>
+        public static List<ModSource> SourcesOf(CampaignSoldier s, IKitPlaces? kit = null)
+        {
+            kit ??= s.Kit ?? new Kit();
+            var all = Bars.ModSourcesOf(s.Growth, s.Board, BeltOf(kit), ArmsOf(kit));
+            foreach (var trait in s.Traits.Select((id) => Quests.Traits[id])) if (trait.Aim != 0) all.Add(new ModSource { Label = trait.Name, Mods = new UnitMods { Aim = trait.Aim } });
+            return all;
+        }
+
+        /// <summary>
+        /// The card of weapon `g` for a run's soldier at the base, the Trade or the map (O7): as if it set out with `g` in its
+        /// place and the rest of its kit as it is (Mano de machete with a machete), the numbers SquadMemberOf's and the
+        /// rules' (Aim.CardFor), the bonuses by name. Null if `g` isn't a weapon.
+        /// </summary>
+        public static SoldierWeaponCard? CardFor(CampaignState c, CampaignSoldier s, Gear g)
+        {
+            var def = Content.GearWeapon(g);
+            if (def == null) return null;
+            var kit = Gears.ClonePlaces(s.Kit ?? new Kit());
+            Gears.SetSlot(kit, Aim.SlotOf(def), Gears.CloneGear(g));
+            var sources = SourcesOf(s, kit);
+            var unit = new Unit
+            {
+                Template = TemplateIds.Rookie,
+                Mods = sources.Aggregate(Content.ZeroMods, (m, x) => Content.AddMods(m, x.Mods)),
+                Arms = ArmsOf(kit),
+                Kit = kit,
+            };
+            return Aim.CardFor(unit, g, sources);
         }
 
         // ---------------------------------------------------------------- launch

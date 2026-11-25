@@ -17,12 +17,13 @@
 }
 
 /* The map's side: from the left edge to the column on the right. */
+/* (Its right: the stage's card and the kit beside it, .runmap-side, 18 + 280 + 10 + 334 and 16 of room: O1, 25/11.) */
 .runmap-plate {
     position: absolute;
     left: 16px;
     top: 59px;
     bottom: 12px;
-    right: 368px;
+    right: 658px;
 }
 
 .runmap-top {
@@ -217,20 +218,28 @@
 
 /* ================================================================ the right: the squad folded, the stage's card */
 
+/* The stage's card and, at the right edge, the chosen one's kit open always (O1, 25/11: no «Equipo ▸»), side by side. */
 .runmap-side {
     position: absolute;
     right: 18px;
     top: 12px;
     bottom: 10px;
-    width: 334px;
+    width: 624px;
+    flex-direction: row;
+    align-items: flex-start;
 }
 
 .runmap-squad {
+    width: 334px;
+    flex-shrink: 0;
     padding: 10px 12px 10px;
-    margin-bottom: 10px;
 }
 
 .runmap-card {
+    width: 280px;
+    flex-shrink: 0;
+    margin-top: 47px;
+    margin-right: 10px;
     padding: 12px 14px 14px;
 }
 

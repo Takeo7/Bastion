@@ -898,6 +898,10 @@ namespace Bastion.UI.Combat
         {
             Hover(place);
             var at = Rig != null ? (Vector2)Rig.Camera.WorldToScreenPoint(Board.TileToWorld(State, place)) : Vector2.zero;
+            // (For the labs: what the click lands on.)
+            var u = Unit();
+            var dest = tiles?.FirstOrDefault(t => Same(t.Pos, place));
+            Debug.Log($"[clic] {place.X}/{place.Y}: bajo el puntero {BodyUnder(at)?.Id ?? "nadie"}, órdenes {CanAct()}, llegando {Arriving()}, en el alcance {dest != null}{(u != null && dest != null && reach.Cost.TryGetValue(Grid.NodeOf(State, place), out var c) ? $" (coste {c} de {Paths.MoveBudget(State, u)})" : "")}, modo {mode}");
             Click(at);
         }
 
@@ -990,7 +994,7 @@ namespace Bastion.UI.Combat
             // A press on the map closes the backpack's menu (one on the HUD, its root: Backpack.PressedAt).
             if (Hud != null && !overHud && (GameInput.Pressed(GameInput.Button.Primary) || GameInput.Pressed(GameInput.Button.Secondary))) Hud.ClosePackMenu();
             // From above (#12) a click only brings the camera down there: no pointer on a tile, no order. Marks, as in the
-            // view (Arturo, 02/11 A3): Shift and the click, or the wheel's click, on the tile under the pointer (G: Keys).
+            // view (Arturo, 02/11 A3): Shift and the click, or the wheel's click, on the tile under the pointer (P: Keys).
             if (Overhead)
             {
                 if (!overHud && (Hud == null || !Hud.MenuOpen)) App.GameCursor.Ask(App.GameCursor.Kind.Arrow);
@@ -1277,6 +1281,12 @@ namespace Bastion.UI.Combat
             if (GameInput.Down(GameInput.Key.Sight)) ToggleSight();
             if (GameInput.Down(GameInput.Key.NextMark)) NextMark();
             if (GameInput.Down(GameInput.Key.Mark)) Ping();
+            // The floor's grid, put or taken away (O6, 25/11; kept as Ajustes' «Rejilla del suelo»).
+            if (GameInput.Down(GameInput.Key.Grid))
+            {
+                App.GameSettings.FloorGrid = !Bastion.Client.Map.FloorGrid.Shown;
+                Debug.Log($"[rejilla] {(Bastion.Client.Map.FloorGrid.Shown ? "puesta" : "quitada")} con la G");
+            }
             if (GameInput.Down(GameInput.Key.Ready)) EndKey();
             if (GameInput.Down(GameInput.Key.FloorUp)) SetLevel(Level + 1);
             if (GameInput.Down(GameInput.Key.FloorDown)) SetLevel(Level - 1);
@@ -1396,19 +1406,16 @@ namespace Bastion.UI.Combat
                 CancelMode();
                 return;
             }
-            // A fallen comrade's body beside, its things still there: the pack opened on them (U12).
-            if (FallenWithGear(State, tile) != null && TakesFromFallen(u, tile))
-            {
-                Hud?.OpenPockets();
-                return;
-            }
+            // (A fallen comrade's body beside no longer opens the pack on a click (U12): a body is walked to as any tile and
+            // searched only with Registrar, or its things taken in the pack (Arturo, 25/11, O5).)
             // A closed door beside the soldier: the click opens it, for free (playtest 13/10 #2). Furniture beside: it searches it (18/10 #29).
             // A boarded window beside, with the crowbar: the boards come off (02/11 A11).
             foreach (var id in new[] { AbilityIds.OpenDoor, AbilityIds.Search, AbilityIds.Pry })
             {
                 if (!HandTiles(id).Any(t => Same(t, tile))) continue;
-                // A body that can't be searched now is walked to like any other tile (U9).
-                if (id == AbilityIds.Search && BodyLike(Looting.SearchSpot(State, tile)) && !SearchesAt(u, tile)) continue;
+                // A body is walked to like any other tile (U9), searched only with Registrar or its key (Arturo, 25/11, O5:
+                // «los cuerpos solo con el botón de registrar»).
+                if (id == AbilityIds.Search && BodyLike(Looting.SearchSpot(State, tile))) continue;
                 var view = BarView(id);
                 if (view?.Enabled == true) UseDoor(id, tile);
                 else if (view?.Reason != null) Toast(view.Reason);
@@ -1541,7 +1548,7 @@ namespace Bastion.UI.Combat
             var hovered = hover != null ? Grid.UnitAt(Shown, hover) : null;
             // Over Mordido's bitten, found (U23): their count in words (Lore's), as the flag can't take the pointer.
             var biteNote = hovered != null && BiteLeft(Shown, hovered) is int left && !Unfound(hovered) ? Lore.BiteText.Countdown(left) : null;
-            Note(hover, hover != null && Burning.At(Shown, hover) ? $"Fuego: quita {Content.Flames.Damage} de salud al pisarlo, y {Content.Flames.Damage} más al acabar el turno en él" : null, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, BreakableNote(hover), IntentNote(hovered), biteNote);
+            Note(hover, hover != null && Burning.At(Shown, hover) ? $"Fuego: quita {Content.Flames.Damage} de salud al pisarlo, y {Content.Flames.Damage} más al empezar el turno en él" : null, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, BreakableNote(hover), IntentNote(hovered), biteNote);
             // The pointer on El Toro: whom his charge reaches from there (H6).
             if (hovered != null && hovered.Id == Shown.Mission?.Boss) ShowBossCharges(hovered);
             if (AlightArmed())
@@ -1583,22 +1590,17 @@ namespace Bastion.UI.Combat
                     Note(hover, stop != null ? $"{what} · {stop.TrimEnd('.').ToLowerInvariant()}" : GameInput.Touch ? HudText.Touch.Boards(what) : $"{what} · clic: quitar las tablas");
                     return;
                 }
-                // A fallen comrade's body with its things still there, beside (U12): outlined, the rucksack over it, and a click
-                // opens the pack on what it carried (taken from there, free: G16). From further, a tile like any other (U9).
-                if (FallenWithGear(State, hover) is Unit fallen && TakesFromFallen(u, hover))
-                {
-                    searchNext = new List<(Pos, bool)> { (hover, true) };
-                    // «El cuerpo de Chiara · toca otra vez: registrar» (Lore, 18/11).
-                    if (GameInput.Touch) Note(hover, HudText.Touch.Open(Lore.FallenBody(fallen.Name), "registrar"));
-                    return;
-                }
+                // (A fallen comrade's body is a tile like any other under the pointer: its things are taken in the pack, Arturo
+                // 25/11, O5.)
                 // A box the squad has seen: its name, and whether it can be opened from here (docs/FASE8.md §B).
                 var decor = HasSpots ? Looting.SearchSpot(State, hover) : null;
                 // A body only where a click searches it (U9, Arturo 18/11): from further, beside it without the means, or
                 // searched, its tile is a tile like any other (the way there, its ring and its cover; below). And only once
                 // the figure is there, not while it still walks to it (Producto, 18/11). A police station's dead officer the
                 // same (U15: on the floor, its tile walked on).
-                if (BodyLike(decor) && (!SearchesAt(u, hover) || !StandsWhereSeen(u))) decor = null;
+                // (Arturo, 25/11, O5: never a body now, beside or not: «no quiero que los cuerpos se seleccionen por encima del
+                // movimiento, los cuerpos solo con el botón de registrar»; the way there, its ring and its cover, below.)
+                if (BodyLike(decor)) decor = null;
                 // A body or a car's boot: the thing itself outlined and a rucksack over it, no frame on the tile and no
                 // words (Arturo, 5/11 #12); lit where a click searches it. Searched, nothing.
                 if (decor != null && IsBodyOrBoot(decor))
@@ -1682,7 +1684,7 @@ namespace Bastion.UI.Combat
             var burns = path?.Count(p => Burning.At(Shown, p)) ?? 0;
             if (burns == 0) return null;
             var line = $"Fuego en el camino: −{burns * Content.Flames.Damage} de salud";
-            return Burning.At(Shown, path[path.Count - 1]) ? $"{line}, y −{Content.Flames.Damage} más si acaba el turno ahí" : line;
+            return Burning.At(Shown, path[path.Count - 1]) ? $"{line}, y −{Content.Flames.Damage} más si empieza el turno ahí" : line;
         }
 
         /// <summary>At night a tile in the light is seen from as far as by day (los.ts sightTo, detectionTo): the previews say so.</summary>
