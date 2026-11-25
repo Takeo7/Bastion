@@ -296,6 +296,23 @@ namespace Bastion.UI.Strategy
         /// <summary>The free recruit's line while the debrief is to be read (FreeRecruit; BaseController keeps it).</summary>
         public string Joined;
 
+        /// <summary>The Huerto's line while the debrief is to be read (GardenLine; BaseController keeps it).</summary>
+        public string Garden;
+
+        /// <summary>
+        /// The Huerto's § back from an expedition (cuadros 164 and 165): the line the engine logs as one ends (Runs.EndRun,
+        /// RunTexts.Garden, with what fit), when it ended since `before`; or, with its report to read (`pending`), in the
+        /// fight that ended it (whoever comes in with it, no state of before). Null without the Huerto, or on an expedition.
+        /// </summary>
+        public string GardenLine(CampaignState before, bool pending)
+        {
+            var c = State;
+            if (c.Stash == null || c.Run != null || Runs.Level(c, UpgradeIds.Garden) == 0) return null;
+            if (before?.Run == null && !(pending && c.LastReport?.Run?.Ended != null)) return null;
+            var most = Runs.GardenSupplies.Max();
+            return c.Log.Select(e => e.Text).FirstOrDefault(t => t != null && Enumerable.Range(0, most + 1).Any(k => t == RunTexts.Garden(k)));
+        }
+
         /// <summary>
         /// The recruit a commander left with nobody alive gets for nothing (Campaign.NobodyLeft; Arturo, 2/11), who came
         /// since `before` and is the only one of their owner's alive: the campaign's line for them, as Lore wrote it, or null.

@@ -325,6 +325,8 @@ namespace Bastion.UI.Gear
             if (g.Kind == "weapon" && !string.IsNullOrEmpty(g.Name) && w >= 2 * Cell - 1) Ui.Text(g.Name, "gear-item__name", el).pickingMode = PickingMode.Ignore;
             if (g.Pile > 1) Ui.Text(g.Count.ToString(), "gear-item__count font-title", el).pickingMode = PickingMode.Ignore;
             Mods(el, g);
+            // Given by the base (Botiquín de salida, cuadro 165): a lock in its corner (its card says why).
+            if (g.Issued) Ui.Icon(icon, "lock", "gear-item__issued", el);
             if (g.Card != null) tips.Attach(el, g.Card);
             else tips.Attach(el, g.Tip ?? g.Name);
             el.RegisterCallback<PointerDownEvent>(e =>

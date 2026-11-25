@@ -335,6 +335,9 @@ namespace Bastion.UI.Hud
             public const string SquadLost = "ESCUADRA PERDIDA";
             public const string SquadLostLine = "Lo que llevaban se pierde, y la expedición acaba.";
             public const string StageAbandoned = "Etapa abandonada";
+            /// <summary>The Motor silencioso's turn on the noise meter (cuadro 165), short, and its help (Lore's TEXTOS.md).</summary>
+            public static string HordeFromShort(int turn) => $"horda, turno {turn}";
+            public static string HordeFromTip(int turn) => $"La horda llega en el turno {turn}.";
             public const string RunToBase = "VOLVER A LA BASE";
             public const string RunReturning = "VOLVIENDO A LA BASE…";
             public const string RunGoOn = "SEGUIR LA EXPEDICIÓN";

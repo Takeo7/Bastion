@@ -227,6 +227,13 @@ namespace Bastion.Engine
             [UpgradeIds.Mend] = new[] { 120 },
             [UpgradeIds.Sight] = new[] { 80, 160 },
             [UpgradeIds.Haggle] = new[] { 100 },
+            // The base's ten more (Arturo, cuadros 164 and 165): the first six (0.14.9).
+            [UpgradeIds.Training] = new[] { 60, 120, 200 },
+            [UpgradeIds.Route] = new[] { 100 },
+            [UpgradeIds.Engine] = new[] { 80, 160 },
+            [UpgradeIds.Garden] = new[] { 150, 250 },
+            [UpgradeIds.Radio] = new[] { 120 },
+            [UpgradeIds.Kit] = new[] { 100, 150 },
         };
 
         // ---------------------------------------------------------------- the Trade
@@ -308,6 +315,8 @@ namespace Bastion.Engine
         /// </summary>
         public static int SellPrice(Gear g, bool haggle)
         {
+            // What the base gave (Botiquín de salida, cuadro 165): never.
+            if (g.Issued == true) return 0;
             var half = ListPrice(g.Kind, g.Type) * g.Count / 2;
             var price = (int)Math.Floor(half / 5) * 5;
             if (g.Kind == GearKinds.Weapon && price > 0) price += (g.Mods?.Count ?? 0) * (int)Math.Floor(ListPrices[GearKinds.Mod] / 2.0 / 5) * 5;

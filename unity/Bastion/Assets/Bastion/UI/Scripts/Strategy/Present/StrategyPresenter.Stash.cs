@@ -121,6 +121,7 @@ namespace Bastion.UI.Strategy
                 Id = g.Id, Kind = g.Kind, Type = g.Type, Name = GearName(g), The = Lore.GearThe(g.Kind, g.Type, g.Count), Icon = GearIcon(g),
                 W = w, H = h, Count = g.Count, Pile = Content.PileOf(g.Kind, g.Type), Tip = GearTip(g, against), Brief = BriefOf(g, against),
                 Mods = g.Mods != null && g.Mods.Count > 0 ? g.Mods.ToList() : null,
+                Issued = g.Issued == true,
             };
         }
 
@@ -200,6 +201,8 @@ namespace Bastion.UI.Strategy
         {
             var pile = Content.PileOf(g.Kind, g.Type);
             var lines = new List<string> { pile > 1 ? $"{GearName(g)} · {g.Count} de {pile}" : GearName(g) };
+            // Given by the base (Botiquín de salida, cuadro 165): it can't be offered.
+            if (g.Issued == true) lines.Add(StrategyText.Stash.Issued);
             switch (g.Kind)
             {
                 case GearKinds.Weapon:

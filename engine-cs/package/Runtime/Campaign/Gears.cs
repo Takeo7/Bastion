@@ -100,7 +100,7 @@ namespace Bastion.Engine
         /// <summary>Two gears that make one pile: the same kind and type, piled (Content.PileOf past 1), nothing mounted.</summary>
         public static bool SamePile(Gear a, Gear b)
         {
-            return a != b && a.Kind == b.Kind && a.Type == b.Type && Content.PileOf(a.Kind, a.Type) > 1 && a.Mods == null && b.Mods == null;
+            return a != b && a.Kind == b.Kind && a.Type == b.Type && Content.PileOf(a.Kind, a.Type) > 1 && a.Mods == null && b.Mods == null && a.Issued == b.Issued;
         }
 
         /// <summary>How many more a pile takes.</summary>
@@ -190,7 +190,10 @@ namespace Bastion.Engine
         public static Gear Split(CampaignState c, Gear pile, int count)
         {
             pile.Count -= count;
-            return NewGear(c, pile.Kind, pile.Type, count);
+            var part = NewGear(c, pile.Kind, pile.Type, count);
+            // What the base gave stays given (Gear.Issued).
+            part.Issued = pile.Issued;
+            return part;
         }
 
         // ------------------------------------------------------- where things are
@@ -198,7 +201,7 @@ namespace Bastion.Engine
         /// <summary>A gear, deep: its own mods.</summary>
         public static Gear CloneGear(Gear g)
         {
-            return new Gear { Id = g.Id, Kind = g.Kind, Type = g.Type, Count = g.Count, Mods = g.Mods != null ? new List<string>(g.Mods) : null };
+            return new Gear { Id = g.Id, Kind = g.Kind, Type = g.Type, Count = g.Count, Mods = g.Mods != null ? new List<string>(g.Mods) : null, Issued = g.Issued };
         }
 
         public static GearGrid CloneGrid(GearGrid g)

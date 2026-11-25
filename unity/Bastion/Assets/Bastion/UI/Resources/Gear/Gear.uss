@@ -301,6 +301,19 @@
     -unity-text-align: middle-center;
 }
 
+/* Given by the base (cuadro 165): a small lock in the tile's top right corner. */
+/* What the base gave (Botiquín de salida): a lock, white on a dark chip, readable on any tile. */
+.gear-item__issued {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 15px;
+    height: 15px;
+    border-radius: 2px;
+    background-color: rgba(21, 24, 26, 0.7);
+    -unity-background-image-tint-color: #ffffff;
+}
+
 .gear-orders__count {
     margin: 0 8px 0 4px;
     font-size: 14px;

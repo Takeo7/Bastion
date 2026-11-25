@@ -32,6 +32,8 @@ namespace Bastion.UI.Gear
         public int Pile = 1;
         /// <summary>The words on hover when there is no card.</summary>
         public string Tip;
+        /// <summary>Given by the base (Botiquín de salida, Gear.Issued; cuadro 165): never offered, a lock on its tile.</summary>
+        public bool Issued;
         /// <summary>
         /// In a line, what it changes against what is worn in its place (U4, a kit place's list): a weapon's damage and aim as
         /// that soldier would have them, a vest's health and armour; green better, red worse (rich text); null, nothing to say.

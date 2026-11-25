@@ -1594,8 +1594,9 @@ namespace Bastion.Engine
         {
             var m = S.Mission;
             if (m.Horde == null || m.Horde.Count == 0 || Grid.Combatants(S, Teams.Alien).Count >= Content.Horde.Cap) return;
-            // Evacuación (R1 of 21/11): none of it before Setup.CivilianHordeFrom.
+            // Evacuación (R1 of 21/11): none of it before Setup.CivilianHordeFrom; with the Motor afinado, before its turn.
             if (m.Civilians != null && turn < Setup.CivilianHordeFrom) return;
+            if (m.HordeFrom != null && turn < m.HordeFrom.Value) return;
             // A few every turn, always (playtest 2026-10-15, #11); twice as many while a sabotage's alarm still sounds (#14).
             var alarm = m.Kind == MissionKinds.Sabotage && !m.ObjectiveDone ? 2 : 1;
             // A bigger map, more edge to come in by (docs/MAPAS.md §6): as many more as it is longer a side than 48.

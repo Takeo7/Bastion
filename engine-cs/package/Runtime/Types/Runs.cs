@@ -215,8 +215,20 @@ namespace Bastion.Engine
         public const string Sight = "sight";
         /// <summary>The Trade 20 % cheaper.</summary>
         public const string Haggle = "haggle";
+        /// <summary>Entrenamiento (cuadro 164): whoever joins comes with 1, 2 or 3 bars more (Runs.Trained).</summary>
+        public const string Training = "training";
+        /// <summary>Ruta de vuelta: home from a Trade too, not only from a Refuge (Runs.EndRunRefusal).</summary>
+        public const string Route = "route";
+        /// <summary>Motor afinado: the horda from the 3rd turn, the 5th at level 2 (MissionState.HordeFrom).</summary>
+        public const string Engine = "engine";
+        /// <summary>Huerto: back from each expedition, 25 or 50 § into the stash (Runs.Garden).</summary>
+        public const string Garden = "garden";
+        /// <summary>Radio: one more row of the map in sight, and every stage's modifier (RunMap.ModifierSeen).</summary>
+        public const string Radio = "radio";
+        /// <summary>Botiquín de salida: out with a first aid kit in the belt, and a molotov at level 2 (Runs.Issue; Gear.Issued).</summary>
+        public const string Kit = "kit";
 
-        public static readonly IReadOnlyList<string> All = new[] { Squad, Stash, Pack, Mend, Sight, Haggle };
+        public static readonly IReadOnlyList<string> All = new[] { Squad, Stash, Pack, Mend, Sight, Haggle, Training, Route, Engine, Garden, Radio, Kit };
     }
 
     // ------------------------------------------------------- the runs' votes

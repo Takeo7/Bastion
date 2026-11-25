@@ -257,6 +257,16 @@ namespace Bastion.UI.Strategy
         public string Supplies;
         public string SuppliesTip;
         public List<UpgradeRowView> Rows = new List<UpgradeRowView>();
+        /// <summary>The groups the rows go in, in order (cuadro 164: Soldados, Expedición, Base); each row's `Group` is one's id.</summary>
+        public List<UpgradeGroupView> Groups = new List<UpgradeGroupView>();
+    }
+
+    /// <summary>A group of upgrades, a column of the screen (cuadro 164): its id and its title.</summary>
+    [Serializable]
+    public sealed class UpgradeGroupView
+    {
+        public string Id;
+        public string Title;
     }
 
     [Serializable]
@@ -268,6 +278,8 @@ namespace Bastion.UI.Strategy
         public string Line;
         /// <summary>The same in figures (U3, cuadro 157): «4 → 6 plazas», «+2 filas».</summary>
         public string Delta;
+        /// <summary>Its group's id (cuadro 164): squad, run or base.</summary>
+        public string Group;
         public int Level, Levels;
         /// <summary>The level in words beside its marks (B12): «Sin mejorar», «Nivel 1 de 3», «Nivel 3 de 3: al máximo».</summary>
         public string LevelText;

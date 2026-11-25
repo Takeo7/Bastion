@@ -1135,7 +1135,9 @@ namespace Bastion.UI.Combat
                 Alert = alert,
                 HordeFill = fill.HasValue ? (float)fill.Value : -1,
                 HordeDb = fill.HasValue ? 40 + (int)Math.Floor(50 * fill.Value + 0.5) : 0,
-                HordeTitle = !fill.HasValue ? null : HudText.Mission.NoiseTip,
+                // With the Motor silencioso (cuadro 165): the turn it can come from, till then, on the meter and in its help.
+                HordeFrom = m.HordeFrom is int from && s.Turn < from ? from : 0,
+                HordeTitle = !fill.HasValue ? null : m.HordeFrom is int comes && s.Turn < comes ? HudText.Mission.HordeFromTip(comes) : HudText.Mission.NoiseTip,
                 Weather = s.Weather,
                 Steps = steps,
             };

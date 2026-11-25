@@ -655,6 +655,9 @@ namespace Bastion.Engine.Tests
             var u = Squaddie(s);
             InPack(s, u, GearKinds.Medicine, null, 0, 0, 2);
             s.FloorGear = new List<DroppedGear> { new DroppedGear { Gear = Made(s, GearKinds.Mags, null), Pos = Events.CopyPos(u.Pos), From = "s9" } };
+            // The base's ten more (0.14.9; UI's catch): what the base gave (Gear.Issued) and the Motor afinado's turn.
+            u.Kit!.Belt[0] = new Gear { Id = "g990", Kind = GearKinds.Item, Type = ItemIds.FirstAid, Count = 1, Issued = true };
+            s.Mission.HordeFrom = 5;
             var json = Json.Write(s);
             Assert.Equal(json, Json.Write(Json.Read<GameState>(json)));
             Assert.Equal(json, Json.Write(Events.CloneState(s)));

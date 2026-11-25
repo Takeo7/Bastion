@@ -507,6 +507,14 @@
     color: #8fd05a;
 }
 
+/* Given by the base (cuadro 165): a small lock by its name. */
+.runstop__issued {
+    width: 13px;
+    height: 13px;
+    margin-left: 6px;
+    -unity-background-image-tint-color: #c4c9c0;
+}
+
 /* Short of supplies for it (U2): the price red, why on hover. */
 .runstop__price--short .supplies-mark__value {
     color: #f0503c;

@@ -360,6 +360,11 @@ namespace Bastion.Engine
         public Siege? Siege { get; set; }
         /// <summary>The runs' «horda despierta» (H3): every group alert from the start, and a wave by an edge in the first enemy turn.</summary>
         public bool? Awake { get; set; }
+        /// <summary>
+        /// Motor afinado (cuadro 165): the horde, its trickle and its waves, from this turn on, not before (Sim.CallHorde).
+        /// Missing: from the first.
+        /// </summary>
+        public int? HordeFrom { get; set; }
         /// <summary>A run's Asedio (H5): La Lata comes on this turn; till then it takes nobody, and the waves come every two turns.</summary>
         public int? HoldUntil { get; set; }
         /// <summary>A run's Travesía (H5): the edge the horde comes in by, the squad's start's (Sim.ChooseDropZone's sides).</summary>

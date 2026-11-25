@@ -328,6 +328,9 @@ namespace Bastion.Engine
             Setup.OutOfPits(state);
             // Despiertos: its living know where the squad comes in, all now in their places (Setup.AwakeHeard).
             Setup.AwakeHeard(state);
+            // Motor afinado (cuadro 165): the horde later.
+            var engine = Level(c, UpgradeIds.Engine);
+            if (engine > 0) state.Mission.HordeFrom = EngineHordeFrom[Math.Min(engine, EngineHordeFrom.Count) - 1];
             return (state, name);
         }
 
@@ -582,6 +585,7 @@ namespace Bastion.Engine
             var lines = SurvivorLines(node);
             s.Skills = lines.Skills;
             s.Growth = lines.Growth;
+            Trained(c, s, rng);
             // As they looked on the map, in their player's colours.
             s.Appearance = Appearances.DefaultAppearance(owner.Value, null, vip.Appearance?.Sex ?? Campaign.SexOfPerson(vip.Name) ?? s.Appearance.Sex, Campaign.RunsSurvivorLook(vip.Name), s.Appearance.Wardrobe);
             var run = c.Run!;

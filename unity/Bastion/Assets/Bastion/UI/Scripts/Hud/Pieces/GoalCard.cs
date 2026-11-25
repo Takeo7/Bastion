@@ -112,7 +112,8 @@ namespace Bastion.UI.Hud
                 var bar = Ui.El("horde__bar well", horde);
                 Ui.El("horde__fill", bar).style.width = Length.Percent(Mathf.Clamp01(m.HordeFill) * 100);
                 for (var db = 50; db < 90; db += 10) Ui.El("horde__mark", bar).style.left = Length.Percent((db - 40) * 2);
-                Ui.Text(HudText.Mission.Decibels(m.HordeDb), "horde__db", horde);
+                // (Before the Motor silencioso's turn, that turn: cuadro 165.)
+                Ui.Text(m.HordeFrom > 0 ? HudText.Mission.HordeFromShort(m.HordeFrom) : HudText.Mission.Decibels(m.HordeDb), "horde__db", horde);
                 tips.Attach(horde, m.HordeTitle);
             }
             if (!string.IsNullOrEmpty(m.Alert)) Ui.Text(m.Alert, "timer timer--urgent", host);

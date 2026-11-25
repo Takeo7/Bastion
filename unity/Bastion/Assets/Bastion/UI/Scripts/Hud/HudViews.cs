@@ -538,6 +538,8 @@ namespace Bastion.UI.Hud
         /// <summary>The same as noise (Ana's notes, Arturo 29/10): 40 dB quiet, 90 as the wave comes.</summary>
         public int HordeDb;
         public string HordeTitle;
+        /// <summary>The turn the horde can come from, while it can't yet (Motor silencioso, cuadro 165); 0, it can.</summary>
+        public int HordeFrom;
         /// <summary>«VIENEN MÁS».</summary>
         public string Alert;
         /// <summary>The weather (Weathers' ids; Arturo, 01/11): its name and what it changes on the card; null, clear.</summary>

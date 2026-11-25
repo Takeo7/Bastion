@@ -218,8 +218,30 @@
 
 /* ================================================================ Mejoras (UpgradesScreen) */
 
+/* Mejoras (cuadro 164): its groups as columns side by side, as wide as they need. */
 .upgrades {
-    width: 440px;
+    width: auto;
+}
+
+.upgrades__cols {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.upgrades__col {
+    width: 370px;
+    margin-right: 24px;
+}
+
+.upgrades__col:last-child {
+    margin-right: 0;
+}
+
+.upgrades__group {
+    margin: 4px 0 2px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: #a1a79d;
 }
 
 .upgrade {
@@ -269,7 +291,9 @@
     background-color: #8fd05a;
 }
 
+/* Its own width, whatever the sentence (cuadro 164: a long one shrank it, and the key, put to the right, covered the gap). */
 .upgrade__side {
+    flex-shrink: 0;
     align-items: flex-end;
     margin-left: 12px;
 }

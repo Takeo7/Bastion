@@ -20,6 +20,8 @@ namespace Bastion.UI.Strategy
                 Supplies = Gears.Supplies(c.Stash).ToString(),
                 SuppliesTip = StrategyText.Stash.SuppliesTip,
             };
+            // Its three groups (cuadro 164), as columns.
+            foreach (var (gid, title) in StrategyText.Runs.UpgradeGroups) v.Groups.Add(new UpgradeGroupView { Id = gid, Title = title });
             foreach (var id in UpgradeIds.All)
             {
                 if (!Content.UpgradePrices.TryGetValue(id, out var prices)) continue;
@@ -29,8 +31,9 @@ namespace Bastion.UI.Strategy
                 {
                     Id = id,
                     Name = StrategyText.Runs.UpgradeName(id),
-                    Line = StrategyText.Runs.UpgradeLine(id, Runs.SeatsOf(c), level + 1 < Runs.Seats.Count ? Runs.Seats[level + 1] : Runs.SeatsOf(c)),
-                    Delta = StrategyText.Runs.UpgradeDelta(id, Runs.SeatsOf(c), level + 1 < Runs.Seats.Count ? Runs.Seats[level + 1] : Runs.SeatsOf(c)),
+                    Line = StrategyText.Runs.UpgradeLine(id, Runs.SeatsOf(c), level + 1 < Runs.Seats.Count ? Runs.Seats[level + 1] : Runs.SeatsOf(c), System.Math.Min(level + 1, prices.Count)),
+                    Delta = StrategyText.Runs.UpgradeDelta(id, Runs.SeatsOf(c), level + 1 < Runs.Seats.Count ? Runs.Seats[level + 1] : Runs.SeatsOf(c), System.Math.Min(level + 1, prices.Count)),
+                    Group = StrategyText.Runs.UpgradeGroupOf(id),
                     Level = level,
                     Levels = prices.Count,
                     LevelText = StrategyText.Runs.UpgradeLevel(level, prices.Count),

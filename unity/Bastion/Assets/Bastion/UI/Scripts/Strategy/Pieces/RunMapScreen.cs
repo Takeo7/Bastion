@@ -262,8 +262,14 @@ namespace Bastion.UI.Strategy
                 Rise(hit, n.Row);
                 if (n.Hidden)
                 {
-                    // A «?» at half light.
+                    // A «?» at half light; with the Radio, its modifier by it, as a seen stage's (cuadros 164 and 165).
                     Ui.Text("?", "rnode__q font-title", hit).pickingMode = PickingMode.Ignore;
+                    if (n.ModifierId != null)
+                    {
+                        var known = Words(p + new Vector2(r + 9, -10), "", Far, false, n.Row);
+                        var m = n.ModifierId;
+                        Aside(known, m == Modifiers.Night ? "night" : m == Modifiers.Storm ? "weather:storm" : "node:" + m, Lore.ModifierName(m).ToLowerInvariant(), m == Modifiers.Awake ? Marker : Note, m == Modifiers.Awake ? Ink : Note);
+                    }
                     continue;
                 }
                 var far = !n.Open && !n.At && !n.Done && !n.Boss;

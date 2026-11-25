@@ -273,10 +273,17 @@ namespace Bastion.UI.Strategy
             tips.Attach(name, w.Gear.Tip);
             // Worn (U2): a mark by its name, «Lo lleva puesto» on hover.
             if (w.Note != null) tips.Attach(Ui.Text(StrategyText.Runs.WornTag, "runstop__worn font-title", nameRow), w.Note);
+            // Given by the base (cuadro 165): its lock, why on hover.
+            if (w.Gear.Issued) tips.Attach(Ui.Icon(icon, "lock", "runstop__issued", nameRow), StrategyText.Stash.Issued);
             // Short of supplies (U2): its price red, the reason on hover; another reason stays written (B18).
             if (w.Why != null && !w.Short) Ui.Text(w.Why, "runstop__ware-why", words);
-            var price = SuppliesMark.Make(row, w.Price, "supplies-mark--small runstop__price" + (offered ? " runstop__price--gain" : "") + (w.Short ? " runstop__price--short" : ""));
-            if (w.Short && w.Why != null) tips.Attach(price, w.Why);
+            // (No price for what the base gave, cuadro 165: it isn't offered.)
+            if (w.Price != null)
+            {
+                var price = SuppliesMark.Make(row, w.Price, "supplies-mark--small runstop__price" + (offered ? " runstop__price--gain" : "") + (w.Short ? " runstop__price--short" : ""));
+                if (w.Short && w.Why != null) tips.Attach(price, w.Why);
+            }
+            else Ui.El("runstop__price", row);
             var ware = w.Gear.Id;
             var worn = offered && w.Note != null;
             var b = new Button(() =>

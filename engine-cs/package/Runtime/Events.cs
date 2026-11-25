@@ -1509,6 +1509,7 @@ namespace Bastion.Engine
                     Night = m.Night,
                     Siege = m.Siege != null ? new Siege { Hold = m.Siege.Hold } : null,
                     Awake = m.Awake,
+                    HordeFrom = m.HordeFrom,
                     HoldUntil = m.HoldUntil,
                     HordeSide = m.HordeSide,
                     Stealth = m.Stealth,

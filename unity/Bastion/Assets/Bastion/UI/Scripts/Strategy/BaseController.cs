@@ -134,6 +134,14 @@ namespace Bastion.UI.Strategy
                 if (ReportPending(c)) p.Joined = joined;
                 else root.Toast(joined);
             }
+            // The Huerto's § back from an expedition (cuadro 165): its line in the report when there is one to read (the
+            // expedition ended in its fight), else a note, as the recruit's.
+            var garden = p.GardenLine(prev, ReportPending(c));
+            if (garden != null)
+            {
+                if (ReportPending(c)) p.Garden = garden;
+                else root.Toast(garden);
+            }
             // The clock as the days pass.
             if (prev != null && c.Day > prev.Day) Bastion.Client.Audio.UiSounds.Play("tick");
             var premise = p.Premise();
@@ -815,6 +823,7 @@ namespace Bastion.UI.Strategy
             var c = p.State;
             if (c?.LastReport != null) LocalMarks.Write(LocalMarks.Key("seenReport", c), new[] { ReportKey(c) });
             p.Joined = null;
+            p.Garden = null;
             Go(c?.Run != null ? BaseViews.RunMap : c?.Stash != null ? BaseViews.Stash : BaseViews.Squad);
         }
 

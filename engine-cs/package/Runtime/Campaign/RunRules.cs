@@ -169,7 +169,68 @@ namespace Bastion.Engine
         {
             var s = Campaign.RunsRecruit(c, owner, rng, join);
             s.Kit = NewKit(c);
+            Trained(c, s, rng);
             return s;
+        }
+
+        /// <summary>
+        /// Entrenamiento (Arturo, cuadros 164 and 165): whoever joins comes with a bar more a level, in a line at random with
+        /// its growth (Bars.OneMoreBar), a point each for the board. A survivor who joins, once their own bars are theirs
+        /// (RunFights.Rescued).
+        /// </summary>
+        public static void Trained(CampaignState c, CampaignSoldier s, Rng rng)
+        {
+            for (var k = 0; k < Level(c, UpgradeIds.Training); k++)
+            {
+                var more = Bars.OneMoreBar(s.Skills, s.Growth, rng);
+                s.Skills = more.Skills;
+                s.Growth = more.Growth;
+            }
+        }
+
+        /// <summary>Motor afinado (cuadro 165): the turn the horde comes from, by level (MissionState.HordeFrom).</summary>
+        public static readonly IReadOnlyList<int> EngineHordeFrom = new[] { 3, 5 };
+
+        /// <summary>Huerto (cuadro 165): the § the base gives back from each expedition, by level.</summary>
+        public static readonly IReadOnlyList<int> GardenSupplies = new[] { 25, 50 };
+
+        /// <summary>
+        /// Botiquín de salida (cuadros 164 and 165): each soldier setting out with a first aid kit in its belt, and a molotov
+        /// at level 2, if it has none there and a place is free (it fills up, it doesn't pile). Given (Gear.Issued): never
+        /// offered at a Trade nor sold.
+        /// </summary>
+        private static void Issue(CampaignState c, IEnumerable<CampaignSoldier> going)
+        {
+            var level = Level(c, UpgradeIds.Kit);
+            if (level == 0) return;
+            var items = level >= 2 ? new[] { ItemIds.FirstAid, ItemIds.Molotov } : new[] { ItemIds.FirstAid };
+            foreach (var s in going)
+            {
+                var kit = s.Kit;
+                if (kit == null) continue;
+                foreach (var item in items)
+                {
+                    if (kit.Belt.Any((g) => g?.Kind == GearKinds.Item && g.Type == item)) continue;
+                    var free = Array.IndexOf(kit.Belt, null);
+                    if (free < 0) continue;
+                    var given = Gears.NewGear(c, GearKinds.Item, item);
+                    given.Issued = true;
+                    kit.Belt[free] = given;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Huerto (cuadros 164 and 165): back from an expedition, however it went, its § into the stash, while there is room
+        /// (what isn't, lost, as a reward's); the log says how many.
+        /// </summary>
+        private static void Garden(CampaignState c)
+        {
+            var level = Level(c, UpgradeIds.Garden);
+            if (level == 0 || c.Stash == null) return;
+            var amount = GardenSupplies[Math.Min(level, GardenSupplies.Count) - 1];
+            var left = Gears.Stow(c.Stash, Gears.NewGear(c, GearKinds.Supplies, null, amount));
+            Campaign.RunsLog(c, RunTexts.Garden(amount - left), LogTones.Good);
         }
 
         /// <summary>
@@ -327,6 +388,7 @@ namespace Bastion.Engine
                 Hp = going.ToDictionary((s) => s.Id, (s) => Math.Max(1, MaxHp(s) - (Levels.Of(c).Wounds ? s.Hurt ?? 0 : 0))),
                 HomeFromRefuge = true,
             };
+            Issue(c, going);
             Campaign.RunsLog(c, RunTexts.RunStarted(chapter));
         }
 
@@ -381,12 +443,17 @@ namespace Bastion.Engine
         {
             var run = c.Run;
             if (run == null) return RunTexts.NoRun;
-            if (run.HomeFromRefuge == true) return AtRefuge(run) ? null : RunTexts.EndFromRefuge;
+            // Ruta de vuelta (cuadros 164 and 165): from a Trade too.
+            var route = Level(c, UpgradeIds.Route) > 0;
+            if (run.HomeFromRefuge == true) return AtRefuge(run) || (route && AtTrade(run)) ? null : route ? RunTexts.EndFromRefugeOrTrade : RunTexts.EndFromRefuge;
             return run.Phase != RunPhases.Choose ? RunTexts.EndFromMap : null;
         }
 
         /// <summary>Whether the squad is at a Refuge's stop (G22: the way home).</summary>
         public static bool AtRefuge(RunState run) => run.Phase == RunPhases.Stop && RunMap.Node(run, run.At)?.Kind == NodeKinds.Refuge;
+
+        /// <summary>Whether the squad is at a Trade's stop (Ruta de vuelta: the way home too).</summary>
+        public static bool AtTrade(RunState run) => run.Phase == RunPhases.Stop && RunMap.Node(run, run.At)?.Kind == NodeKinds.Trade;
 
         /// <summary>
         /// The run ends: back to the base, everyone healed (health is only counted in a run), each pack with what it holds;
@@ -404,6 +471,7 @@ namespace Bastion.Engine
             c.Run = null;
             c.Squad = c.Squad.Where((id) => c.Soldiers.Any((s) => s.Id == id && s.Alive)).ToList();
             Campaign.RunsLog(c, line ?? (Levels.Of(c).Wounds ? RunTexts.RunEndedHurt : RunTexts.RunEnded), LogTones.Good);
+            Garden(c);
             NobodyLeft(c, rng);
         }
 

@@ -31,6 +31,8 @@ namespace Bastion.Engine
             /// RunTexts.EndFromRefuge, said as a fact.
             /// </summary>
             public const string ReturnWhere = "Se vuelve a la base desde un Refugio o al superar el capítulo.";
+            /// <summary>ReturnWhere with the Ruta de vuelta (cuadro 165): from a Trade too (RunTexts.EndFromRefugeOrTrade).</summary>
+            public const string ReturnWhereRoute = "Se vuelve a la base desde un Refugio o un Trueque, o al superar el capítulo.";
             /// <summary>Over the stage map: «Expedición · Capítulo 1».</summary>
             public static string Header(int chapter) => $"Expedición · Capítulo {chapter}";
             /// <summary>What a fight with an objective gives on top when it is met (Gameplay's «caja de premio»).</summary>
@@ -448,13 +450,21 @@ namespace Bastion.Engine
             [UpgradeIds.Mend] = "Curas en el camino",
             [UpgradeIds.Sight] = "Mapas de carreteras",
             [UpgradeIds.Haggle] = "Buen trato",
+            // The base's ten more (cuadros 164 and 165), the first six (Lore, 25/11: producto/mejoras-base-2026-11-25/TEXTOS.md).
+            [UpgradeIds.Training] = "Entrenamiento",
+            [UpgradeIds.Route] = "Ruta de vuelta",
+            // «Motor silencioso», Lore's, Arturo's yes (cuadro 166; the working name was «Motor afinado»).
+            [UpgradeIds.Engine] = "Motor silencioso",
+            [UpgradeIds.Garden] = "Huerto",
+            [UpgradeIds.Radio] = "Radio",
+            [UpgradeIds.Kit] = "Botiquín de salida",
         };
 
         /// <summary>
         /// What an upgrade's next level does. `now` and `next`: the soldiers who go out before and after it (Más plazas);
-        /// `amount`: the health Curas en el camino heals.
+        /// `amount`: the health Curas en el camino heals; `level`: the level it goes to (the base's ten more, cuadro 165).
         /// </summary>
-        public static string UpgradeLine(string id, int now = 0, int next = 0, int amount = 0)
+        public static string UpgradeLine(string id, int now = 0, int next = 0, int amount = 0, int level = 1)
         {
             switch (id)
             {
@@ -472,6 +482,27 @@ namespace Bastion.Engine
                 case UpgradeIds.Haggle:
                     // M10 (cuadro 141): what is offered pays more too (Content.SellPrice).
                     return $"En el Trueque, todo cuesta un {Content.HaggleDiscount} % menos, y lo que ofrecéis se paga un {Content.HaggleSale} % más.";
+                // The base's ten more (cuadros 164 and 165; Lore, 25/11, TEXTOS.md).
+                case UpgradeIds.Training:
+                {
+                    // Runs.Trained: a point a level, to a survivor who joins and to a recruit (Runs.NewSoldier). Never «barra»
+                    // here (Arturo, cuadro 166): the player sees «puntos por gastar».
+                    var points = Math.Max(1, level);
+                    return $"Quien se une al Bastión, un superviviente o un recluta, llega con {points} {(points == 1 ? "punto" : "puntos")} de habilidad por gastar.";
+                }
+                case UpgradeIds.Route:
+                    return "Desde un Trueque también se puede volver a la base, no solo desde un Refugio.";
+                case UpgradeIds.Engine:
+                    return $"La horda no llega hasta el turno {Runs.EngineHordeFrom[Math.Max(1, Math.Min(level, Runs.EngineHordeFrom.Count)) - 1]}: hasta entonces no entran muertos, ni los de cada turno ni los que trae el ruido.";
+                case UpgradeIds.Garden:
+                    return $"Al volver de cada expedición, el almacén recibe {Runs.GardenSupplies[Math.Max(1, Math.Min(level, Runs.GardenSupplies.Count)) - 1]} §, aunque haya ido mal.";
+                case UpgradeIds.Radio:
+                    return "En el mapa se ven los avisos de todas las etapas del capítulo (de noche, mal tiempo, horda despierta), también de las que aún son «?», y una etapa más del camino.";
+                case UpgradeIds.Kit:
+                    // Runs.Issue: into a free place of the belt, if there is none of it there; Gear.Issued, never offered.
+                    return level >= 2
+                        ? "Cada soldado sale también con un cóctel molotov en el cinturón, si no lleva ya uno y hay sitio. No se puede cambiar."
+                        : "Cada soldado sale de la base con un botiquín en el cinturón, si no lleva ya uno y hay sitio. No se puede cambiar.";
                 default:
                     throw new ArgumentException($"Unknown upgrade: {id}");
             }

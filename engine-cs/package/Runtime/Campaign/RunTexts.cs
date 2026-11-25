@@ -50,6 +50,10 @@ namespace Bastion.Engine
         /// beaten (ChapterDone). An expedition started before keeps EndFromMap.
         /// </summary>
         public const string EndFromRefuge = "Solo se vuelve a la base desde un Refugio o al superar el capítulo.";
+        /// <summary>Ruta de vuelta (cuadro 165): from a Trade too (Lore, 25/11; Lore.ExpeditionText.ReturnWhereRoute).</summary>
+        public const string EndFromRefugeOrTrade = "Solo se vuelve a la base desde un Refugio o un Trueque, o al superar el capítulo.";
+        /// <summary>Huerto (cuadro 165): what the base gave back on coming home, what fitted of it (Gameplay's words, Lore's yes, 25/11).</summary>
+        public static string Garden(int supplies) => supplies > 0 ? $"El huerto deja {supplies} § en el almacén." : "El huerto no deja nada: el almacén está lleno.";
         public const string NotAtStop = "No estáis en una parada.";
         public const string NothingToAnswer = "Aquí no hay nada que responder.";
         public const string Answered = "Eso ya está respondido.";

@@ -41,6 +41,32 @@ namespace Bastion.UI.Strategy
             if (ColorUtility.TryParseHtmlString(System.Environment.GetEnvironmentVariable("BASTION_LUZ_COMPANERO") ?? "", out var light)) SoldiersScreen.TheirLight = light;
         }
 
+        /// <summary>
+        /// BASTION_MEJORAS_MAQUETA=1 (cuadro 164): the ten new upgrades added as rows, level 0, at the contract's prices
+        /// (Gameplay's CONTRATO.md), till the engine has them; how sixteen fit, for Arturo's photo.
+        /// </summary>
+        static UpgradesView Mockup(UpgradesView v)
+        {
+            if (v == null || System.Environment.GetEnvironmentVariable("BASTION_MEJORAS_MAQUETA") != "1") return v;
+            var ten = new[]
+            {
+                ("training", "Entrenamiento", new[] { 60, 120, 200 }), ("stretcher", "Camilla", new[] { 250 }), ("kit", "Botiquín de salida", new[] { 100, 150 }),
+                ("trunk", "Baúl de La Lata", new[] { 120, 200 }), ("route", "Ruta de vuelta", new[] { 100 }), ("engine", "Motor silencioso", new[] { 80, 160 }),
+                ("radio", "Radio", new[] { 120 }), ("workshop", "Taller", new[] { 100, 200 }), ("garden", "Huerto", new[] { 150, 250 }), ("scrap", "Chatarrero", new[] { 120 }),
+            };
+            foreach (var (id, name, prices) in ten)
+            {
+                if (v.Rows.Exists(r => r.Id == id)) continue;
+                v.Rows.Add(new UpgradeRowView
+                {
+                    Id = id, Name = name, Line = name, Delta = StrategyText.Runs.UpgradeDelta(id, 0, 0, 1), Group = StrategyText.Runs.UpgradeGroupOf(id),
+                    Level = 0, Levels = prices.Length, LevelText = StrategyText.Runs.UpgradeLevel(0, prices.Length), Price = prices[0].ToString(),
+                    Button = StrategyText.Runs.Upgrade, Why = null, Tip = StrategyText.Runs.UpgradeTip(prices[0]),
+                });
+            }
+            return v;
+        }
+
         /// <summary>BASTION_ESTRATEGIA_PULSA: a button's text, pressed a few frames after the case is up (TestSteps.Press); the order goes to the log.</summary>
         string press = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_PULSA");
         string gearDrag = System.Environment.GetEnvironmentVariable("BASTION_RUNS_ARRASTRE");
@@ -806,7 +832,7 @@ namespace Bastion.UI.Strategy
                 UnityEngine.UIElements.UQueryExtensions.Q(doc, className: "runmap-field")?.RegisterCallback(laid);
                 if (!float.IsNaN(doc.layout.width) && doc.layout.width > 0) Draw();
             }
-            else if (view == "upgrades") root.SetUpgrades(p.Upgrades());
+            else if (view == "upgrades") root.SetUpgrades(Mockup(p.Upgrades()));
             else if (view == "squad") root.SetSquad(p.RunSquad());
             else if (view == "barracks") root.SetSoldiers(p.Soldiers(pick));
             else if (view == "debrief") root.SetDebrief(p.Debrief());

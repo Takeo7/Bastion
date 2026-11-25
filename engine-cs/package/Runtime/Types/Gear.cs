@@ -82,6 +82,11 @@ namespace Bastion.Engine
         public int Count { get; set; } = 1;
         /// <summary>A weapon's mounted mods, WeaponModIds values (not gear), Content.ModSlots at most.</summary>
         public List<string>? Mods { get; set; } // WeaponModIds
+        /// <summary>
+        /// Given by the base at setting out (Botiquín de salida, cuadro 165): it can't be offered at a Trade nor sold
+        /// (Content.SellPrice 0), and makes no pile with one that wasn't (Gears.SamePile). Missing: no.
+        /// </summary>
+        public bool? Issued { get; set; }
     }
 
     /// <summary>Where a gear lies in a grid: its top-left cell; turned, its width and height swap.</summary>

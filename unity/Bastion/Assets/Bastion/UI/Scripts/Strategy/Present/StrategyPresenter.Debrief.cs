@@ -53,6 +53,8 @@ namespace Bastion.UI.Strategy
                 v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.NoBedLine(run.NoBed.Name, run.NoBed.Gave.Count > 0, run.NoBed.Lost.Select(g => Lore.GearThe(g.Kind, g.Type, g.Count)).ToList()), Bad = run.NoBed.Lost.Count > 0 });
             // (One a line: whoever came in late has them all from the report, ReportRecruits.)
             if (Joined != null) foreach (var line in Joined.Split('\n')) v.Lines.Add(new DebriefLineView { Text = line });
+            // The Huerto's § (cuadro 165), the expedition over in this fight: its line, as the log has it (GardenLine).
+            if (Garden != null) v.Lines.Add(new DebriefLineView { Text = Garden });
             foreach (var e in ReportOrder(c, report))
             {
                 var card = ReportCard(c, report, e);

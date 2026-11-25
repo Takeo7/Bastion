@@ -3451,6 +3451,22 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Los § no caben en la mochila de Anja ni en las de tus otros soldados.", RunTexts.SuppliesNoRoom("Anja"));
             Assert.Equal("Anja cambia un fusil de asalto por 45 §.", RunTexts.Sold("Anja", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.AssaultRifle), 45));
             Assert.All(UpgradeIds.All, (id) => Assert.True(Lore.UpgradeNames.ContainsKey(id)));
+            // The base's ten more, the first six (cuadros 164 and 165; producto/mejoras-base-2026-11-25/TEXTOS.md).
+            Assert.Equal("Motor silencioso", Lore.UpgradeNames[UpgradeIds.Engine]);
+            Assert.Equal("Botiquín de salida", Lore.UpgradeNames[UpgradeIds.Kit]);
+            Assert.Equal("Quien se une al Bastión, un superviviente o un recluta, llega con 1 punto de habilidad por gastar.", Lore.UpgradeLine(UpgradeIds.Training, level: 1));
+            Assert.Equal("Quien se une al Bastión, un superviviente o un recluta, llega con 3 puntos de habilidad por gastar.", Lore.UpgradeLine(UpgradeIds.Training, level: 3));
+            Assert.Equal("Desde un Trueque también se puede volver a la base, no solo desde un Refugio.", Lore.UpgradeLine(UpgradeIds.Route));
+            Assert.Equal("La horda no llega hasta el turno 3: hasta entonces no entran muertos, ni los de cada turno ni los que trae el ruido.", Lore.UpgradeLine(UpgradeIds.Engine, level: 1));
+            Assert.Equal("La horda no llega hasta el turno 5: hasta entonces no entran muertos, ni los de cada turno ni los que trae el ruido.", Lore.UpgradeLine(UpgradeIds.Engine, level: 2));
+            Assert.Equal("Al volver de cada expedición, el almacén recibe 50 §, aunque haya ido mal.", Lore.UpgradeLine(UpgradeIds.Garden, level: 2));
+            Assert.Equal("En el mapa se ven los avisos de todas las etapas del capítulo (de noche, mal tiempo, horda despierta), también de las que aún son «?», y una etapa más del camino.", Lore.UpgradeLine(UpgradeIds.Radio));
+            Assert.Equal("Cada soldado sale de la base con un botiquín en el cinturón, si no lleva ya uno y hay sitio. No se puede cambiar.", Lore.UpgradeLine(UpgradeIds.Kit, level: 1));
+            Assert.Equal("Cada soldado sale también con un cóctel molotov en el cinturón, si no lleva ya uno y hay sitio. No se puede cambiar.", Lore.UpgradeLine(UpgradeIds.Kit, level: 2));
+            Assert.Equal("Solo se vuelve a la base desde un Refugio o un Trueque, o al superar el capítulo.", RunTexts.EndFromRefugeOrTrade);
+            Assert.Equal("Se vuelve a la base desde un Refugio o un Trueque, o al superar el capítulo.", Lore.ExpeditionText.ReturnWhereRoute);
+            Assert.Equal("El huerto deja 25 § en el almacén.", RunTexts.Garden(25));
+            Assert.Equal("El huerto no deja nada: el almacén está lleno.", RunTexts.Garden(0));
             // The gear's names (UI: the grid's sheets, the Trueque, throwing away).
             Assert.Equal("Granada", Lore.GearName(GearKinds.Item, ItemIds.FragGrenade));
             Assert.Equal("2 cócteles molotov", Lore.GearName(GearKinds.Item, ItemIds.Molotov, 2));

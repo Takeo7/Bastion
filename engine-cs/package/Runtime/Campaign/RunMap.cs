@@ -505,12 +505,24 @@ namespace Bastion.Engine
             return at == null ? run.Nodes.Where((n) => n.Row == 1).ToList() : at.Next.Select((id) => Node(run, id)).Where((n) => n != null).Select((n) => n!).ToList();
         }
 
-        /// <summary>The last row in sight: two past the one the squad is at (0 before the first), and one more a «sight» level.</summary>
+        /// <summary>
+        /// The last row in sight: two past the one the squad is at (0 before the first), one more a «sight» level, and one
+        /// more with the Radio (cuadros 164 and 165).
+        /// </summary>
         public static int VisibleRows(CampaignState c)
         {
             var run = c.Run;
             if (run == null) return 0;
-            return (Node(run, run.At)?.Row ?? 0) + Sight + Runs.Level(c, UpgradeIds.Sight);
+            return (Node(run, run.At)?.Row ?? 0) + Sight + Runs.Level(c, UpgradeIds.Sight) + Runs.Level(c, UpgradeIds.Radio);
+        }
+
+        /// <summary>
+        /// Whether a node's modifier (night, storm, the horde awake) is known: in sight, or, with the Radio (cuadros 164 and
+        /// 165), every node's of the chapter, those not in sight yet too.
+        /// </summary>
+        public static bool ModifierSeen(CampaignState c, RunNode n)
+        {
+            return Visible(c, n) || Runs.Level(c, UpgradeIds.Radio) > 0;
         }
 
         /// <summary>

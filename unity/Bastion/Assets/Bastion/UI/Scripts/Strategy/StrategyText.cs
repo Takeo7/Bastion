@@ -174,6 +174,33 @@ namespace Bastion.UI.Strategy
             /// <summary>By a worn thing's name on the Trueque's side offered (U2; Lore to confirm): «Lo lleva puesto» on hover.</summary>
             public const string WornTag = "PUESTO";
             public const string UpgradeTop = "Al máximo";
+            /// <summary>
+            /// The upgrades' three groups, in order, each its id and title (cuadro 164; Gameplay's CONTRATO.md): Soldados, Expedición,
+            /// Base; an upgrade's group by its id (one not listed, Base).
+            /// </summary>
+            public static readonly (string id, string title)[] UpgradeGroups = { ("squad", "SOLDADOS"), ("run", "EXPEDICIÓN"), ("base", "BASE") };
+
+            public static string UpgradeGroupOf(string id)
+            {
+                switch (id)
+                {
+                    case Bastion.Engine.UpgradeIds.Squad:
+                    case Bastion.Engine.UpgradeIds.Mend:
+                    case Bastion.Engine.UpgradeIds.Training:
+                    case "stretcher":
+                    case Bastion.Engine.UpgradeIds.Kit:
+                        return "squad";
+                    case Bastion.Engine.UpgradeIds.Pack:
+                    case Bastion.Engine.UpgradeIds.Sight:
+                    case "trunk":
+                    case Bastion.Engine.UpgradeIds.Route:
+                    case Bastion.Engine.UpgradeIds.Engine:
+                    case Bastion.Engine.UpgradeIds.Radio:
+                        return "run";
+                    default: return "base";
+                }
+            }
+
             /// <summary>An upgrade's level in words beside its marks (Producto's review, 23/11, B12; Lore's yes).</summary>
             /// <remarks>U3 (cuadro 157): a figure, «0 de 3», where it said «Sin mejorar» or «Nivel 1 de 3: al máximo».</remarks>
             public static string UpgradeLevel(int level, int levels) => $"{System.Math.Max(0, level)} de {levels}";
@@ -187,10 +214,30 @@ namespace Bastion.UI.Strategy
             /// What the next level does in figures (U3, cuadro 157; Lore to confirm): `seats`, how many go out now, `next`
             /// after it (Más plazas).
             /// </summary>
-            public static string UpgradeDelta(string id, int seats, int next)
+            public static string UpgradeDelta(string id, int seats, int next, int level = 1)
             {
                 switch (id)
                 {
+                    // The ten of cuadros 164 and 165 (Lore's TEXTOS.md; the engine's figures). `level`, the next one.
+                    // (The same at every level, and never «barra»: Arturo, cuadro 166.)
+                    case Bastion.Engine.UpgradeIds.Training: return "+1 punto de habilidad al unirse";
+                    case "stretcher": return "El primero que cae no muere, una vez por expedición";
+                    case Bastion.Engine.UpgradeIds.Kit: return level <= 1 ? "Todos salen con un botiquín" : "Todos salen también con un cóctel molotov";
+                    case "trunk": return level <= 1 ? "Un baúl de 4×2 en La Lata" : "Baúl de 4×2 → 4×4";
+                    case Bastion.Engine.UpgradeIds.Route: return "Volver a la base desde un Trueque";
+                    case Bastion.Engine.UpgradeIds.Engine:
+                    {
+                        var from = Bastion.Engine.Runs.EngineHordeFrom;
+                        return level <= 1 ? $"La horda, desde el turno {from[0]}" : $"La horda, desde el turno {from[level - 2]} → {from[System.Math.Min(level, from.Count) - 1]}";
+                    }
+                    case Bastion.Engine.UpgradeIds.Radio: return "Avisos de todas las etapas · +1 etapa a la vista";
+                    case "workshop": return level <= 1 ? "Hacer cargadores, flechas y cócteles" : "Hacer accesorios, a 45 §";
+                    case Bastion.Engine.UpgradeIds.Garden:
+                    {
+                        var gives = Bastion.Engine.Runs.GardenSupplies;
+                        return level <= 1 ? $"+{gives[0]} § al volver" : $"{gives[level - 2]} → {gives[System.Math.Min(level, gives.Count) - 1]} § al volver";
+                    }
+                    case "scrap": return "Cambiar en la base, a la mitad del Trueque";
                     case Bastion.Engine.UpgradeIds.Squad: return $"{seats} → {next} plazas";
                     case Bastion.Engine.UpgradeIds.Stash: return "+2 filas en el almacén";
                     case Bastion.Engine.UpgradeIds.Pack: return "+1 fila en cada mochila";
@@ -203,7 +250,7 @@ namespace Bastion.UI.Strategy
             }
 
             /// <summary>What the next level does; `seats`, how many go out now, `next` after it (Más plazas).</summary>
-            public static string UpgradeLine(string id, int seats, int next) => Lore.UpgradeLine(id, seats, next, Bastion.Engine.Runs.MendHeal);
+            public static string UpgradeLine(string id, int seats, int next, int level = 1) => Lore.UpgradeLine(id, seats, next, Bastion.Engine.Runs.MendHeal, level);
 
             // Salir (Lore: «Salir», its help «Sale la escuadra: empieza una expedición del capítulo {n}.»).
             public const string Start2 = Lore.ExpeditionText.Start;
@@ -328,6 +375,8 @@ namespace Bastion.UI.Strategy
             public const string Head = "Almacén";
             /// <summary>Right over a weapon's figures weighed against a soldier's (T4; Lore's words): «Frente al fusil de cerrojo de Anja (verde, mejor; rojo, peor):».</summary>
             public static string Against(string the, string who) => $"Frente {(the.StartsWith("el ") ? "al " + the.Substring(3) : "a " + the)} de {who} (verde, mejor; rojo, peor):";
+            /// <summary>What the base gave (Botiquín de salida, cuadro 165; Lore's TEXTOS.md), on hover.</summary>
+            public const string Issued = "De la base: no se puede cambiar.";
             /// <summary>A vest's two figures in a kit place's list (U4; Lore to confirm).</summary>
             public const string HealthWord = "Salud";
             public const string ArmorWord = "Blindaje";

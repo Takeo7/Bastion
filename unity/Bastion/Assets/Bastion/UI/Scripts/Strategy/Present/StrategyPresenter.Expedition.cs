@@ -36,7 +36,9 @@ namespace Bastion.UI.Strategy
                 // Supervivencia's (N9): the wounded stay wounded (Lore.WoundsText), not «todos se curan».
                 BackTip = Levels.Of(c).Wounds ? Lore.WoundsText.ReturnHelp : StrategyText.Runs.BackTip,
                 BackWhy = Runs.EndRunRefusal(c),
-                HomeNote = run.HomeFromRefuge == true && !Runs.AtRefuge(run) ? Lore.ExpeditionText.ReturnWhere : null,
+                // (With the Ruta de vuelta, from a Trueque too: cuadro 165, Lore's line.)
+                HomeNote = run.HomeFromRefuge == true && !Runs.AtRefuge(run) && !(Runs.Level(c, UpgradeIds.Route) > 0 && Runs.AtTrade(run))
+                    ? (Runs.Level(c, UpgradeIds.Route) > 0 ? Lore.ExpeditionText.ReturnWhereRoute : Lore.ExpeditionText.ReturnWhere) : null,
                 SquadHead = StrategyText.Runs.Squad,
                 Run = $"{run.Chapter}:{run.Seed}",
                 Fresh = run.At == null && run.Path.Count == 0,
@@ -118,6 +120,14 @@ namespace Bastion.UI.Strategy
                         nv.Card.Add(ModifierCard(added) + StrategyText.Runs.ByEvent);
                         nv.Notes.Add(ModifierCard(added) + StrategyText.Runs.ByEvent);
                     }
+                }
+                // The Radio (cuadros 164 and 165): a «?»'s modifier known too (RunMap.ModifierSeen), its mark by it.
+                else if (n.Modifier != null && RunMap.ModifierSeen(c, n))
+                {
+                    nv.ModifierId = n.Modifier;
+                    nv.Modifier = StrategyText.Runs.ModifierName(n.Modifier);
+                    nv.ModifierIcon = ModifierIcon(n.Modifier);
+                    nv.Notes.Add(ModifierCard(n.Modifier));
                 }
                 else
                 {
@@ -238,8 +248,9 @@ namespace Bastion.UI.Strategy
                 Leave = StrategyText.Runs.Leave,
                 LeaveWhy = Runs.LeaveStopRefusal(c),
             };
-            // A Refugio (G22, U21): the two ways out, «Seguir la expedición» first and «Volver a la base» after it.
-            if (node.Kind == NodeKinds.Refuge && run.HomeFromRefuge == true)
+            // A Refugio (G22, U21): the two ways out, «Seguir la expedición» first and «Volver a la base» after it; a Trueque
+            // too with the Ruta de vuelta (cuadro 165).
+            if ((node.Kind == NodeKinds.Refuge || (node.Kind == NodeKinds.Trade && Runs.Level(c, UpgradeIds.Route) > 0)) && run.HomeFromRefuge == true)
             {
                 v.Leave = StrategyText.Runs.EndNo;
                 v.Home = StrategyText.Runs.Back;
@@ -276,12 +287,14 @@ namespace Bastion.UI.Strategy
                         foreach (var spot in Gears.OfKit(buyer))
                         {
                             var price = Content.SellPrice(spot.Gear, haggle);
-                            if (price <= 0) continue;
+                            // (What the base gave, cuadro 165: shown, off, with why; the rest with no price, not at all.)
+                            var given = spot.Gear.Issued == true;
+                            if (price <= 0 && !given) continue;
                             v.Offers.Add(new WareView
                             {
                                 Gear = Ware(c, spot.Gear, buyer),
-                                Price = "+" + price,
-                                Why = Gears.SellRefusal(c, Slot, Connected, new SellGearCommand { Soldier = buyer.Id, Gear = spot.Gear.Id }),
+                                Price = given ? null : "+" + price,
+                                Why = given ? RunTexts.NotForSale : Gears.SellRefusal(c, Slot, Connected, new SellGearCommand { Soldier = buyer.Id, Gear = spot.Gear.Id }),
                                 Note = spot.Slot != KitSlots.Pack ? StrategyText.Runs.WornOf(spot.Gear.Kind, spot.Gear.Type, spot.Gear.Count) : null,
                             });
                         }
