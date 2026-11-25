@@ -187,7 +187,11 @@ namespace Bastion.UI.Strategy
             var v = new NavView { Hidden = view == BaseViews.Squad || view == BaseViews.Debrief || view == BaseViews.RunMap };
             var promotions = c.Soldiers.Where(s => s.Owner == Slot && s.Alive && Campaign.CanSpendPoints(c, s)).ToList();
             var partner = Partner;
-            foreach (var (id, label) in new[] { (BaseViews.Stash, StrategyText.Stash.Head), (BaseViews.Barracks, "Soldados"), (BaseViews.Upgrades, StrategyText.Runs.UpgradesHead), (BaseViews.Squad, StrategyText.Runs.Start2) })
+            var tabs = new List<(string, string)> { (BaseViews.Stash, StrategyText.Stash.Head), (BaseViews.Barracks, "Soldados"), (BaseViews.Upgrades, StrategyText.Runs.UpgradesHead) };
+            // The Taller and the Chatarrero's (cuadro 165), once one is bought: the 0.10.1's Armería's screen.
+            if (HasWorkshop) tabs.Add((BaseViews.Engineering, WorkshopTab));
+            tabs.Add((BaseViews.Squad, StrategyText.Runs.Start2));
+            foreach (var (id, label) in tabs)
             {
                 var tab = new TabView { Id = id, Label = label, On = view == id };
                 // Only one's own: a soldier's skills are its owner's alone, there or not (playtest 18/10 #42).

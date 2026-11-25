@@ -26,6 +26,8 @@ namespace Bastion.UI.Strategy
         readonly Label hint;
         readonly VisualElement bin;
         bool shown;
+        /// <summary>The kit on the right: not on the Taller's tab, whose plate is there (cuadro 165).</summary>
+        bool withKit = true;
         StashScreenView view;
 
         public StashScreen(VisualElement view, TooltipLayer tips, Func<string, Sprite> icon, IStrategyHandlers handlers, GearBoard board)
@@ -44,11 +46,12 @@ namespace Bastion.UI.Strategy
             Show(false);
         }
 
-        public void Show(bool on)
+        public void Show(bool on, bool kit = true)
         {
             shown = on;
+            withKit = kit;
             Ui.Show(left, on);
-            Ui.Show(right.Root, on && view?.Kit != null);
+            Ui.Show(right.Root, on && kit && view?.Kit != null);
         }
 
         public void Set(StashScreenView v)
@@ -73,7 +76,7 @@ namespace Bastion.UI.Strategy
             Ui.Show(hint, !string.IsNullOrEmpty(v.Hint));
             board.SetBin(bin);
             right.Set(v.Soldiers, v.Kit);
-            Ui.Show(right.Root, shown && v.Kit != null);
+            Ui.Show(right.Root, shown && withKit && v.Kit != null);
         }
     }
 }

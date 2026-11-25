@@ -458,6 +458,10 @@ namespace Bastion.Engine
             [UpgradeIds.Garden] = "Huerto",
             [UpgradeIds.Radio] = "Radio",
             [UpgradeIds.Kit] = "Botiquín de salida",
+            // The next three (0.14.10; Lore, 25/11, TEXTOS.md).
+            [UpgradeIds.Trunk] = "Baúl de La Lata",
+            [UpgradeIds.Workshop] = "Taller",
+            [UpgradeIds.Scrap] = "Chatarrero",
         };
 
         /// <summary>
@@ -498,6 +502,20 @@ namespace Bastion.Engine
                     return $"Al volver de cada expedición, el almacén recibe {Runs.GardenSupplies[Math.Max(1, Math.Min(level, Runs.GardenSupplies.Count)) - 1]} §, aunque haya ido mal.";
                 case UpgradeIds.Radio:
                     return "En el mapa se ven los avisos de todas las etapas del capítulo (de noche, mal tiempo, horda despierta), también de las que aún son «?», y una etapa más del camino.";
+                // The next three (0.14.10; Lore, 25/11, TEXTOS.md).
+                case UpgradeIds.Trunk:
+                    // Gears.Target: moved between stages, never in a fight; RunRules.EndRun: home also with the squad fallen.
+                    return $"La Lata lleva un baúl de 4×{Content.TrunkRows[Math.Max(1, Math.Min(level, Content.TrunkRows.Count)) - 1]} casillas: entre etapa y etapa se deja y se coge lo que queráis. Al volver a la base, lo que lleve pasa al almacén, también si cae la escuadra.";
+                case UpgradeIds.Workshop:
+                {
+                    var w = Content.WorkshopWares;
+                    return level >= 2
+                        ? $"El taller hace también accesorios: mira, silenciador, culata y cargador ampliado, a {w[WorkshopIds.Scope].Price} § cada uno."
+                        : $"En la base se hacen, con los § del almacén, cargadores ({w[WorkshopIds.Mags].Price} §), flechas ({w[WorkshopIds.Arrows].Price} § las {w[WorkshopIds.Arrows].Count}) y cócteles molotov ({w[WorkshopIds.Molotov].Price} §).";
+                }
+                case UpgradeIds.Scrap:
+                    // Content.ScrapPrice: half the Trade's, without «Buen trato».
+                    return "En la base, lo del almacén se puede cambiar por §: se paga la mitad que en el Trueque, sin contar «Buen trato». Lo que no se cambia en el Trueque, aquí tampoco.";
                 case UpgradeIds.Kit:
                     // Runs.Issue: into a free place of the belt, if there is none of it there; Gear.Issued, never offered.
                     return level >= 2

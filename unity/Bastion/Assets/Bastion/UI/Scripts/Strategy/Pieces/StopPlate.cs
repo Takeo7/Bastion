@@ -28,7 +28,8 @@ namespace Bastion.UI.Strategy
         /// <summary>The worn thing whose sale is being asked about in its row (M10, Producto 24/11); null, none.</summary>
         string confirming;
         /// <summary>
-        /// When the question opened (the real clock): its «Cambiar» heeds no press for AskGrace after it, so the second click
+        /// When the question opened, or the last thing was bought or sold (the real clock): its «Cambiar» heeds no press for
+        /// AskGrace after it, so the second click
         /// of a double click, landing on the plate drawn again, doesn't sell unasked (the 0.14.3's independent review, 4).
         /// </summary>
         float askedAt;
@@ -141,7 +142,16 @@ namespace Bastion.UI.Strategy
                 var line = Ui.El("runstop__purse-line", purse);
                 var tail = StrategyText.Runs.PurseAfter;
                 Ui.Text(StrategyText.Runs.PurseBefore, "runstop__purse-text font-title", line);
-                SuppliesMark.Make(line, v.Purse, "supplies-mark--small runstop__purse-amount" + (tail.Length > 0 && char.IsPunctuation(tail[0]) ? " runstop__purse-amount--end" : ""));
+                string End(string after) => after.Length > 0 && char.IsPunctuation(after[0]) ? " runstop__purse-amount--end" : "";
+                var end = End(tail);
+                // («…, y el baúl, [30 and the crate].»: La Lata's trunk's, which pay too; cuadro 167. Each crate close to the
+                // comma or the stop after it.)
+                SuppliesMark.Make(line, v.Purse, "supplies-mark--small runstop__purse-amount" + (v.PurseTrunk != null ? End(StrategyText.Runs.PurseTrunk) : end));
+                if (v.PurseTrunk != null)
+                {
+                    Ui.Text(StrategyText.Runs.PurseTrunk, "runstop__purse-text font-title", line);
+                    SuppliesMark.Make(line, v.PurseTrunk, "supplies-mark--small runstop__purse-amount" + end);
+                }
                 Ui.Text(StrategyText.Runs.PurseAfter, "runstop__purse-text font-title", line);
                 // (U2: that only what they carry counts, on hover; whose pack it goes to, by the wares' head.)
                 if (!string.IsNullOrEmpty(v.PurseNote)) tips.Attach(line, v.PurseNote);
@@ -264,7 +274,8 @@ namespace Bastion.UI.Strategy
             else if (id != null && id.Length == 1) Ui.Text(id, "runstop__glyph font-title", tile);
             else if (LineIcon.Has(id)) tile.Add(new LineIcon(id) { pickingMode = PickingMode.Ignore });
             else Ui.Icon(icon, id, "runstop__icon", tile);
-            // The name, and under it why it can't be had now (B18: «Faltan 25 §.», «No cabe en la mochila de Anja.»), not only on
+            // The name, and under it why it can't be had now (B18: «Faltan 25 §.», «No cabe en las mochilas de tus soldados ni en el
+            // baúl.»; the engine's RunTexts, cuadro 167), not only on
             // the greyed key's help.
             var words = Ui.El("runstop__ware-words", row);
             var asking = offered && confirming == w.Gear.Id;
@@ -273,6 +284,8 @@ namespace Bastion.UI.Strategy
             tips.Attach(name, w.Gear.Tip);
             // Worn (U2): a mark by its name, «Lo lleva puesto» on hover.
             if (w.Note != null) tips.Attach(Ui.Text(StrategyText.Runs.WornTag, "runstop__worn font-title", nameRow), w.Note);
+            // In La Lata's trunk (cuadro 167): its mark the same way, its place on hover.
+            if (w.Tag != null) tips.Attach(Ui.Text(w.Tag, "runstop__worn font-title", nameRow), w.TagTip);
             // Given by the base (cuadro 165): its lock, why on hover.
             if (w.Gear.Issued) tips.Attach(Ui.Icon(icon, "lock", "runstop__issued", nameRow), StrategyText.Stash.Issued);
             // Short of supplies (U2): its price red, the reason on hover; another reason stays written (B18).
@@ -291,11 +304,17 @@ namespace Bastion.UI.Strategy
                 // For a moment after a question opens or closes, no key of the plate buys or sells: the second click of a
                 // double click lands on the plate drawn again, on whatever row is there (the 0.14.4's independent review, 1).
                 if (Time.realtimeSinceStartup - askedAt < AskGrace) return;
-                if (!offered) handlers.OnBuy(ware);
+                if (!offered)
+                {
+                    // (After a buy or a sale too, the rows under the pointer move up: the 0.14.10's independent review, 3.)
+                    askedAt = Time.realtimeSinceStartup;
+                    handlers.OnBuy(ware);
+                }
                 else if (worn && confirming != ware) Ask(ware);
                 else
                 {
                     confirming = null;
+                    askedAt = Time.realtimeSinceStartup;
                     handlers.OnSell(ware);
                 }
             }) { text = StrategyText.Runs.Swap };

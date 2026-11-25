@@ -3449,6 +3449,11 @@ namespace Bastion.Engine.Tests
             // M10 (cuadro 141).
             Assert.Equal("Eso no se puede cambiar.", RunTexts.NotForSale);
             Assert.Equal("Los § no caben en la mochila de Anja ni en las de tus otros soldados.", RunTexts.SuppliesNoRoom("Anja"));
+            Assert.Equal("Los § no caben en la mochila de Anja, ni en las de tus otros soldados, ni en el baúl.", RunTexts.SuppliesNoRoom("Anja", trunk: true));
+            Assert.Equal("No cabe en la mochila de Anja ni en el baúl.", RunTexts.NoRoomToBuy("Anja", true));
+            Assert.Equal("No cabe en la mochila de Anja.", RunTexts.NoRoomToBuy("Anja", false));
+            Assert.Equal("No cabe en la mochila de Anja ni en el baúl.", RunTexts.NoRoomToBuy("Anja Kowalska", true));
+            Assert.Equal("Los § no caben en la mochila de Anja ni en las de tus otros soldados.", RunTexts.SuppliesNoRoom("Anja Kowalska"));
             Assert.Equal("Anja cambia un fusil de asalto por 45 §.", RunTexts.Sold("Anja", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.AssaultRifle), 45));
             Assert.All(UpgradeIds.All, (id) => Assert.True(Lore.UpgradeNames.ContainsKey(id)));
             // The base's ten more, the first six (cuadros 164 and 165; producto/mejoras-base-2026-11-25/TEXTOS.md).
@@ -3467,6 +3472,21 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Se vuelve a la base desde un Refugio o un Trueque, o al superar el capítulo.", Lore.ExpeditionText.ReturnWhereRoute);
             Assert.Equal("El huerto deja 25 § en el almacén.", RunTexts.Garden(25));
             Assert.Equal("El huerto no deja nada: el almacén está lleno.", RunTexts.Garden(0));
+            // The next three (0.14.10): Baúl de La Lata, Taller and Chatarrero.
+            Assert.Equal("La Lata lleva un baúl de 4×2 casillas: entre etapa y etapa se deja y se coge lo que queráis. Al volver a la base, lo que lleve pasa al almacén, también si cae la escuadra.", Lore.UpgradeLine(UpgradeIds.Trunk, level: 1));
+            Assert.Equal("La Lata lleva un baúl de 4×4 casillas: entre etapa y etapa se deja y se coge lo que queráis. Al volver a la base, lo que lleve pasa al almacén, también si cae la escuadra.", Lore.UpgradeLine(UpgradeIds.Trunk, level: 2));
+            Assert.Equal("En la base se hacen, con los § del almacén, cargadores (15 §), flechas (15 § las 5) y cócteles molotov (10 §).", Lore.UpgradeLine(UpgradeIds.Workshop, level: 1));
+            Assert.Equal("El taller hace también accesorios: mira, silenciador, culata y cargador ampliado, a 45 § cada uno.", Lore.UpgradeLine(UpgradeIds.Workshop, level: 2));
+            Assert.Equal("En la base, lo del almacén se puede cambiar por §: se paga la mitad que en el Trueque, sin contar «Buen trato». Lo que no se cambia en el Trueque, aquí tampoco.", Lore.UpgradeLine(UpgradeIds.Scrap));
+            Assert.Equal("La Lata no lleva baúl.", RunTexts.NoTrunk);
+            Assert.Equal("Lo del baúl pasa al almacén.", RunTexts.TrunkHome(0));
+            Assert.Equal("Lo del baúl pasa al almacén, menos 1 cosa, que no cabe y se pierde.", RunTexts.TrunkHome(1));
+            Assert.Equal("Lo del baúl pasa al almacén, menos 3 cosas, que no caben y se pierden.", RunTexts.TrunkHome(3));
+            Assert.Equal("Hace falta la mejora «Taller».", RunTexts.NoWorkshop);
+            Assert.Equal("Hace falta el «Taller» de nivel 2.", RunTexts.WorkshopLevel);
+            Assert.Equal("El taller hace 5 flechas por 15 §.", RunTexts.Made(Lore.GearA(GearKinds.Arrows, null, 5), 15));
+            Assert.Equal("Hace falta la mejora «Chatarrero».", RunTexts.NoScrap);
+            Assert.Equal("El chatarrero solo cambia lo del almacén.", RunTexts.ScrapStashOnly);
             // The gear's names (UI: the grid's sheets, the Trueque, throwing away).
             Assert.Equal("Granada", Lore.GearName(GearKinds.Item, ItemIds.FragGrenade));
             Assert.Equal("2 cócteles molotov", Lore.GearName(GearKinds.Item, ItemIds.Molotov, 2));

@@ -134,13 +134,13 @@ namespace Bastion.UI.Strategy
                 if (ReportPending(c)) p.Joined = joined;
                 else root.Toast(joined);
             }
-            // The Huerto's § back from an expedition (cuadro 165): its line in the report when there is one to read (the
-            // expedition ended in its fight), else a note, as the recruit's.
-            var garden = p.GardenLine(prev, ReportPending(c));
-            if (garden != null)
+            // What came home with an expedition (cuadro 165: La Lata's trunk, the Huerto's §): its lines in the report when
+            // there is one to read (the expedition ended in its fight), else a note, as the recruit's.
+            var home = p.HomeLines(prev, ReportPending(c));
+            if (home != null)
             {
-                if (ReportPending(c)) p.Garden = garden;
-                else root.Toast(garden);
+                if (ReportPending(c)) p.BackHome = home;
+                else root.Toast(home);
             }
             // The clock as the days pass.
             if (prev != null && c.Day > prev.Day) Bastion.Client.Audio.UiSounds.Play("tick");
@@ -158,7 +158,8 @@ namespace Bastion.UI.Strategy
             if (c.Stash != null)
             {
                 if (c.Run != null && view != BaseViews.RunMap && view != BaseViews.Debrief) SetView(BaseViews.RunMap);
-                else if (c.Run == null && (view == BaseViews.RunMap || view == BaseViews.Geoscape || view == BaseViews.Engineering || view == BaseViews.Facilities)) SetView(BaseViews.Stash);
+                // (The Taller's tab, BaseViews.Engineering, only with the Taller or the Chatarrero: cuadro 165.)
+                else if (c.Run == null && (view == BaseViews.RunMap || view == BaseViews.Geoscape || (view == BaseViews.Engineering && !p.HasWorkshop) || view == BaseViews.Facilities)) SetView(BaseViews.Stash);
             }
             // The first time, Salir alone (U16): whatever came before it, the partner coming in too.
             if (p.FirstTime && view != BaseViews.Squad && view != BaseViews.Debrief) SetView(BaseViews.Squad);
@@ -250,6 +251,12 @@ namespace Bastion.UI.Strategy
                 case BaseViews.Stash:
                     stash = p.StashScreen(soldiers.Soldier);
                     root.SetStash(stash);
+                    break;
+                // The Taller and the Chatarrero (cuadro 165): the Almacén's grid on the left, their plate on the right.
+                case BaseViews.Engineering:
+                    stash = p.StashScreen(soldiers.Soldier);
+                    root.SetStash(stash);
+                    root.SetWorkshop(p.Workshop());
                     break;
                 case BaseViews.RunMap:
                     root.SetRunMap(p.Expedition(soldiers.Soldier));
@@ -372,10 +379,11 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>
-        /// The clearing's shot for a tab (Arte, 16/11): Almacén's chosen soldier as Soldados', the map of an expedition the
+        /// The clearing's shot for a tab (Arte, 16/11): Almacén's chosen soldier as Soldados' (the Taller's too, cuadro 165: no
+        /// move between the two), the map of an expedition the
         /// valley's (the clearing's camera off), the others as they are.
         /// </summary>
-        static string ClearingView(string view) => view == BaseViews.Stash ? BaseViews.Barracks : view == BaseViews.RunMap ? BaseViews.Geoscape : view == BaseViews.Upgrades ? BaseViews.Facilities : view;
+        static string ClearingView(string view) => view == BaseViews.Stash || view == BaseViews.Engineering ? BaseViews.Barracks : view == BaseViews.RunMap ? BaseViews.Geoscape : view == BaseViews.Upgrades ? BaseViews.Facilities : view;
 
         void Go(string to)
         {
@@ -417,6 +425,9 @@ namespace Bastion.UI.Strategy
         /// <summary>The Trueque: the ware into the pack of the soldier chosen on the right (or the first of one's own).</summary>
         public void OnBuy(string ware) => Order(new BuyWareCommand { Ware = ware, Soldier = p.Expedition(soldiers.Soldier)?.Kit?.Soldier ?? soldiers.Soldier });
         public void OnSell(string gear) => Order(new SellGearCommand { Gear = gear, Soldier = p.Expedition(soldiers.Soldier)?.Kit?.Soldier ?? soldiers.Soldier });
+        /// <summary>The Taller and the Chatarrero (cuadro 165): at the base, against the stash.</summary>
+        public void OnWorkshop(string ware) => Order(new WorkshopCommand { Ware = ware });
+        public void OnScrap(string gear) => Order(new ScrapGearCommand { Gear = gear });
 
         /// <summary>«Seguir» from a stop; pressed again with two, taken back.</summary>
         public void OnLeaveStop() => Order(new LeaveStopCommand { Ready = !(p.State?.Run?.Stop?.Leaving is bool[] l && p.Slot >= 0 && p.Slot < l.Length && l[p.Slot]) });
@@ -823,7 +834,7 @@ namespace Bastion.UI.Strategy
             var c = p.State;
             if (c?.LastReport != null) LocalMarks.Write(LocalMarks.Key("seenReport", c), new[] { ReportKey(c) });
             p.Joined = null;
-            p.Garden = null;
+            p.BackHome = null;
             Go(c?.Run != null ? BaseViews.RunMap : c?.Stash != null ? BaseViews.Stash : BaseViews.Squad);
         }
 

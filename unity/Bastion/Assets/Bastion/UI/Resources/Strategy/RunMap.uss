@@ -235,12 +235,22 @@
     padding: 10px 12px 10px;
 }
 
-.runmap-card {
+/* The card's column (cuadro 165): the stage's card and, under it, La Lata's trunk; at a stop, the trunk alone at its top. */
+.runmap-cardcol {
     width: 280px;
     flex-shrink: 0;
     margin-top: 47px;
     margin-right: 10px;
+}
+
+.runmap-card {
     padding: 12px 14px 14px;
+}
+
+/* La Lata's trunk (Baúl de La Lata, cuadro 165): «BAÚL» and its grid, as the pack's. */
+.runmap-trunk {
+    margin-top: 10px;
+    padding: 4px 12px 12px;
 }
 
 .rcard__kicker {

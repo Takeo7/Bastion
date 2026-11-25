@@ -296,21 +296,52 @@ namespace Bastion.UI.Strategy
         /// <summary>The free recruit's line while the debrief is to be read (FreeRecruit; BaseController keeps it).</summary>
         public string Joined;
 
-        /// <summary>The Huerto's line while the debrief is to be read (GardenLine; BaseController keeps it).</summary>
-        public string Garden;
+        /// <summary>What came home with the squad while the debrief is to be read (HomeLines; BaseController keeps it).</summary>
+        public string BackHome;
 
         /// <summary>
-        /// The Huerto's § back from an expedition (cuadros 164 and 165): the line the engine logs as one ends (Runs.EndRun,
-        /// RunTexts.Garden, with what fit), when it ended since `before`; or, with its report to read (`pending`), in the
-        /// fight that ended it (whoever comes in with it, no state of before). Null without the Huerto, or on an expedition.
+        /// What came home with an expedition ended since `before` (cuadro 165), the lines the engine logs as it ends
+        /// (Runs.EndRun), in their order: La Lata's trunk into the stash (RunTexts.TrunkHome, with what was lost) and the
+        /// Huerto's § (RunTexts.Garden, with what fit). Only those logged since `before` (an expedition with the trunk
+        /// empty logs none, and an older one's is still there); with no state of before, the report to read (`pending`) of
+        /// the fight that ended it, among the lines since it set out. One a line; null if none, or on an expedition.
         /// </summary>
-        public string GardenLine(CampaignState before, bool pending)
+        public string HomeLines(CampaignState before, bool pending)
         {
             var c = State;
-            if (c.Stash == null || c.Run != null || Runs.Level(c, UpgradeIds.Garden) == 0) return null;
-            if (before?.Run == null && !(pending && c.LastReport?.Run?.Ended != null)) return null;
-            var most = Runs.GardenSupplies.Max();
-            return c.Log.Select(e => e.Text).FirstOrDefault(t => t != null && Enumerable.Range(0, most + 1).Any(k => t == RunTexts.Garden(k)));
+            if (c.Stash == null || c.Run != null) return null;
+            List<LogEntry> fresh;
+            if (before?.Run != null) fresh = FreshLog(c, before);
+            // (With none, those since it set out, RunTexts.RunStarted: after the squad fell, recruits' lines come after the
+            // trunk's; the 0.14.10's independent review, 5.)
+            else if (before == null && pending && c.LastReport?.Run?.Ended != null) fresh = c.Log.TakeWhile(e => !Enumerable.Range(1, 20).Any(k => e.Text == RunTexts.RunStarted(k))).ToList();
+            else return null;
+            var texts = fresh.Select(e => e.Text).Where(t => t != null).ToList();
+            var lines = new List<string>();
+            // (Oldest first, as they happened: the trunk, then the Huerto.)
+            var trunk = texts.LastOrDefault(t => Enumerable.Range(0, 33).Any(k => t == RunTexts.TrunkHome(k)));
+            if (trunk != null) lines.Add(trunk);
+            var garden = texts.LastOrDefault(t => Enumerable.Range(0, Runs.GardenSupplies.Max() + 1).Any(k => t == RunTexts.Garden(k)));
+            if (garden != null) lines.Add(garden);
+            return lines.Count > 0 ? string.Join("\n", lines) : null;
+        }
+
+        /// <summary>
+        /// The log's entries since `before` (newest first): those over where before's newest three are now. The log is cut at
+        /// 40 and its lines repeat, so neither a count nor one line's text tells where the new ones end.
+        /// </summary>
+        static List<LogEntry> FreshLog(CampaignState c, CampaignState before)
+        {
+            var old = before.Log;
+            if (old.Count == 0) return c.Log.ToList();
+            var w = System.Math.Min(3, old.Count);
+            for (var k = 0; k + w <= c.Log.Count; k++)
+            {
+                var same = true;
+                for (var i = 0; i < w && same; i++) same = c.Log[k + i].Text == old[i].Text && c.Log[k + i].Day == old[i].Day;
+                if (same) return c.Log.Take(k).ToList();
+            }
+            return c.Log.ToList();
         }
 
         /// <summary>

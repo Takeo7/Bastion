@@ -190,6 +190,13 @@ namespace Bastion.UI.Strategy
                 v.Kit.BoardPulse = own && Campaign.CanSpendPoints(c, pick);
             }
             v.Stop = Stop(run, pick != null && mine.Contains(pick) ? pick : mine.FirstOrDefault(), mine);
+            // La Lata's trunk (cuadro 165), wherever the kits are sorted (Runs.TrunkOpen: on the map between stages and at the
+            // stops): the expedition's, both players' (Gears.ReachOf).
+            if (Runs.TrunkOpen(c))
+            {
+                v.Trunk = Grid(run.Trunk, GearPlaces.Trunk, null, true, 0, Against(c, pick));
+                v.TrunkHead = StrategyText.Runs.TrunkHead;
+            }
             return v;
         }
 
@@ -261,29 +268,39 @@ namespace Bastion.UI.Strategy
             {
                 case NodeKinds.Trade:
                     v.Purse = mine.Sum(s => Gears.Supplies(s.Kit.Pack)).ToString();
+                    // La Lata's trunk's § pay too, after the packs' (cuadro 167): said apart, when it has any.
+                    var inTrunk = run.Trunk != null ? Gears.Supplies(run.Trunk) : 0;
+                    if (inTrunk > 0) v.PurseTrunk = inTrunk.ToString();
                     if (buyer != null)
                     {
                         v.For = StrategyText.Runs.For(FirstName(buyer));
                         v.ForName = FirstName(buyer);
                     }
                     v.PurseNote = StrategyText.Runs.PurseOnly;
-                    var purse = mine.Sum(s => Gears.Supplies(s.Kit.Pack));
+                    var purse = mine.Sum(s => Gears.Supplies(s.Kit.Pack)) + inTrunk;
                     foreach (var w in stop.Wares ?? new List<Ware>())
+                    {
+                        var buy = new BuyWareCommand { Ware = w.Gear.Id, Soldier = buyer?.Id ?? "" };
+                        // Where it goes when not in the buyer's pack (cuadro 167, Gears.BuyTo): La Lata's trunk, marked.
+                        var to = buyer != null ? Gears.BuyTo(c, Slot, Connected, buy) : null;
                         v.Wares.Add(new WareView
                         {
                             Gear = Ware(c, w.Gear, buyer),
                             Price = w.Price.ToString(),
-                            Why = Gears.BuyWareRefusal(c, Slot, Connected, new BuyWareCommand { Ware = w.Gear.Id, Soldier = buyer?.Id ?? "" }),
+                            Why = Gears.BuyWareRefusal(c, Slot, Connected, buy),
                             // (U2: short of supplies, said by the price in red.)
                             Short = w.Price > purse,
+                            Tag = to == GearPlaces.Trunk ? StrategyText.Runs.ToTrunk : null,
+                            TagTip = to == GearPlaces.Trunk ? StrategyText.Runs.ToTrunkTip(FirstName(buyer)) : null,
                         });
+                    }
                     // The other side (M10, cuadro 141): what the same soldier wears and carries, at what the trader pays (the
                     // engine's price, «Buen trato» in it) and why not; never what has no price (the knife, §, the key).
                     if (buyer?.Kit != null)
                     {
                         var haggle = Runs.Level(c, UpgradeIds.Haggle) > 0;
                         v.Offers = new List<WareView>();
-                        v.OffersFrom = StrategyText.Runs.OffersFrom(FirstName(buyer));
+                        v.OffersFrom = Runs.TrunkOpen(c) ? StrategyText.Runs.OffersFromTrunk(FirstName(buyer)) : StrategyText.Runs.OffersFrom(FirstName(buyer));
                         foreach (var spot in Gears.OfKit(buyer))
                         {
                             var price = Content.SellPrice(spot.Gear, haggle);
@@ -298,6 +315,23 @@ namespace Bastion.UI.Strategy
                                 Note = spot.Slot != KitSlots.Pack ? StrategyText.Runs.WornOf(spot.Gear.Kind, spot.Gear.Type, spot.Gear.Count) : null,
                             });
                         }
+                        // What La Lata's trunk holds too (cuadro 167, Arturo: «Sí, las dos cosas»), after the soldier's, each marked
+                        // «BAÚL»; its § where the engine puts them (Gears.Sell).
+                        if (Runs.TrunkOpen(c))
+                            foreach (var p in run.Trunk.Items.OrderBy(p => p.Y).ThenBy(p => p.X))
+                            {
+                                var price = Content.SellPrice(p.Gear, haggle);
+                                var given = p.Gear.Issued == true;
+                                if (price <= 0 && !given) continue;
+                                v.Offers.Add(new WareView
+                                {
+                                    Gear = Ware(c, p.Gear, buyer),
+                                    Price = given ? null : "+" + price,
+                                    Why = given ? RunTexts.NotForSale : Gears.SellRefusal(c, Slot, Connected, new SellGearCommand { Soldier = buyer.Id, Gear = p.Gear.Id }),
+                                    Tag = StrategyText.Runs.TrunkTag,
+                                    TagTip = StrategyText.Runs.TrunkTagTip,
+                                });
+                            }
                         if (v.Offers.Count == 0) v.OffersFrom = StrategyText.Runs.NothingToOffer(FirstName(buyer));
                         if (mine.Count > 1) v.OffersOther = StrategyText.Runs.OffersOther;
                     }

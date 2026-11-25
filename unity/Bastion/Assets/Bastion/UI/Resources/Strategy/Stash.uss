@@ -373,3 +373,41 @@
     padding-left: 0;
     margin-top: 4px;
 }
+
+/* The Taller and the Chatarrero (cuadros 164 and 165): a plate where the Almacén's kit is, as wide as the Trueque's side. */
+.workshop {
+    width: 470px;
+    bottom: auto;
+    max-height: 96%;
+}
+
+.workshop__head {
+    margin: 2px 0 6px;
+    font-size: 17px;
+    color: var(--t-text);
+}
+
+.workshop__head--next {
+    margin-top: 16px;
+}
+
+.workshop__sub {
+    margin-bottom: 4px;
+}
+
+.workshop__none {
+    font-size: 13px;
+    white-space: normal;
+}
+
+/* «HACER 15 [caja]»: Mejoras' key, a row's height. */
+.workshop__make {
+    flex-shrink: 0;
+    height: 32px;
+}
+
+/* Short of § (U2): the price on the key red, why on hover. */
+.workshop__price--short .supplies-mark__value,
+.upgrade__button:disabled .workshop__price--short .supplies-mark__value {
+    color: #c8402e;
+}

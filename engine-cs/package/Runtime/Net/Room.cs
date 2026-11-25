@@ -660,6 +660,11 @@ namespace Bastion.Net
                 // M10 (cuadro 141): a sale at the Trade, as a purchase: its soldier and its gear by their ids.
                 case SellGearCommand c:
                     return Id(c.Soldier) && Id(c.Gear);
+                // The base's Taller and Chatarrero (cuadros 164 and 165, 0.14.10): one of the workshop's wares, a gear by its id.
+                case WorkshopCommand c:
+                    return Has(Content.WorkshopWares, c.Ware);
+                case ScrapGearCommand c:
+                    return Id(c.Gear);
                 default:
                     // levelUp, cancelMission, recruit, advance, launch, vote, withdraw; startRun, endRun, leaveStop: nothing
                     // past their types.
@@ -687,8 +692,8 @@ namespace Bastion.Net
             return s.Length >= 1 && s.Length <= 24 && s[0] >= 'a' && s[0] <= 'z' && s.All((ch) => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'));
         }
 
-        /// <summary>Where a gear goes: the stash, or a soldier's id.</summary>
-        private static bool GearTo(string? to) => to == GearPlaces.Stash || Id(to);
+        /// <summary>Where a gear goes: the stash, La Lata's trunk (0.14.10), or a soldier's id.</summary>
+        private static bool GearTo(string? to) => to == GearPlaces.Stash || to == GearPlaces.Trunk || Id(to);
 
         /// <summary>A cell of a gear grid: the stash at its biggest is 10×12, a pack 4×5 (H0-DISENO §2–3); room to spare.</summary>
         private static bool GridCell(int x, int y) => x >= 0 && x <= 31 && y >= 0 && y <= 31;

@@ -54,6 +54,18 @@ namespace Bastion.Engine
         public const string EndFromRefugeOrTrade = "Solo se vuelve a la base desde un Refugio o un Trueque, o al superar el capítulo.";
         /// <summary>Huerto (cuadro 165): what the base gave back on coming home, what fitted of it (Gameplay's words, Lore's yes, 25/11).</summary>
         public static string Garden(int supplies) => supplies > 0 ? $"El huerto deja {supplies} § en el almacén." : "El huerto no deja nada: el almacén está lleno.";
+        // The base's next three (0.14.10, cuadro 165; Lore, 25/11, TEXTOS.md). The Chatarrero's verb is «cambiar», as the Trueque's.
+        public const string NoTrunk = "La Lata no lleva baúl.";
+        public static string TrunkHome(int lost) => lost <= 0 ? "Lo del baúl pasa al almacén." : lost == 1 ? "Lo del baúl pasa al almacén, menos 1 cosa, que no cabe y se pierde." : $"Lo del baúl pasa al almacén, menos {lost} cosas, que no caben y se pierden.";
+        public const string WorkshopAtBase = "El taller está en la base.";
+        public const string NoWorkshop = "Hace falta la mejora «Taller».";
+        public const string WorkshopLevel = "Hace falta el «Taller» de nivel 2.";
+        public const string NoWorkshopWare = "El taller no hace eso.";
+        public static string Made(string what, int supplies) => $"El taller hace {what} por {supplies} §.";
+        public const string ScrapAtBase = "El chatarrero está en la base.";
+        public const string NoScrap = "Hace falta la mejora «Chatarrero».";
+        public const string ScrapStashOnly = "El chatarrero solo cambia lo del almacén.";
+        public static string Scrapped(string what, int supplies) => $"El chatarrero da {supplies} § por {what}.";
         public const string NotAtStop = "No estáis en una parada.";
         public const string NothingToAnswer = "Aquí no hay nada que responder.";
         public const string Answered = "Eso ya está respondido.";
@@ -70,7 +82,15 @@ namespace Bastion.Engine
         /// <summary>M10: what a soldier gave the Trueque, for the log: «Anja cambia un fusil de asalto por 45 §.» (Lore.GearA).</summary>
         public static string Sold(string name, string what, int supplies) => $"{name} cambia {what} por {supplies} §.";
         /// <summary>M10: the § of what is offered fit in no pack of that player's (Gears.Till): said of the §, not of the thing (PackFull).</summary>
-        public static string SuppliesNoRoom(string name) => $"Los § no caben en la mochila de {name} ni en las de tus otros soldados.";
+        /// `trunk`: with La Lata's trunk, which Gears.Till tries last (cuadro 167).
+        public static string SuppliesNoRoom(string name, bool trunk = false) => trunk
+            ? $"Los § no caben en la mochila de {First(name)}, ni en las de tus otros soldados, ni en el baúl."
+            : $"Los § no caben en la mochila de {First(name)} ni en las de tus otros soldados.";
+        /// <summary>
+        /// A ware bought fits nowhere (cuadro 167, Gears.Shelf: the buyer's pack, then La Lata's trunk), said of both.
+        /// `trunk`: with a trunk; without one, PackFull.
+        /// </summary>
+        public static string NoRoomToBuy(string name, bool trunk) => trunk ? $"No cabe en la mochila de {First(name)} ni en el baúl." : PackFull(name);
         public const string NoBeds = "No caben más soldados en el Bastión.";
         public const string Pending = "Ya hay una propuesta pendiente.";
 
@@ -81,7 +101,13 @@ namespace Bastion.Engine
         public static string SwapNoRoom(Gear old, Gear moved) => $"{Capital(The(old))} no cabe donde estaba {The(moved)}.";
         public static string SplitCount(int count) => count == 2 ? "Solo se puede partir 1." : $"Se parten de 1 a {count - 1}.";
         public static string ModsFull(int slots) => $"Lleva ya {slots} accesorios: quita uno antes.";
-        public static string PackFull(string name) => $"No cabe en la mochila de {name}.";
+        public static string PackFull(string name) => $"No cabe en la mochila de {First(name)}.";
+
+        /// <summary>
+        /// A soldier's first name, for the whys shown on the Trueque and the gear (UI, 25/11: «→ Anja» above, «la mochila de
+        /// Anja» in its helps): «Anja Kowalska» → «Anja». The log keeps the whole name.
+        /// </summary>
+        private static string First(string name) => string.IsNullOrEmpty(name) ? name : name.Split(' ')[0];
 
         // ---------------------------------------------------------- proposals, log
 

@@ -36,6 +36,7 @@ namespace Bastion.UI.Strategy
         StashScreen stash;
         RunMapScreen runMap;
         UpgradesScreen upgrades;
+        WorkshopScreen workshop;
         /// <summary>The runs' grids (Almacén; the map's kits between nodes), one thing dragged at a time across them.</summary>
         GearBoard gear;
         readonly GearRelay gearRelay = new GearRelay();
@@ -134,6 +135,7 @@ namespace Bastion.UI.Strategy
             // Almacén's and the map's soldiers by their busts (Arturo, 18/11 T5).
             stash.Kits.PortraitOf = runMap.Kits.PortraitOf = id => PortraitOf?.Invoke(id);
             upgrades = new UpgradesScreen(root.Q("view"), tips, relay);
+            workshop = new WorkshopScreen(root.Q("view"), tips, Icon, relay);
             skillBoard = new SkillBoardModal(root.Q("board"), relay, s => Sound?.Invoke(s), tips) { PortraitOf = id => PortraitOf?.Invoke(id) };
             toast = root.Q<Label>("toast");
             Ui.Show(toast, false);
@@ -257,9 +259,17 @@ namespace Bastion.UI.Strategy
             soldiers.Show(view == Bastion.Engine.BaseViews.Barracks);
             squad.Show(view == Bastion.Engine.BaseViews.Squad);
             debrief.Show(view == Bastion.Engine.BaseViews.Debrief);
-            stash.Show(view == Bastion.Engine.BaseViews.Stash);
+            // (The Taller's tab, cuadro 165: the Almacén's grid, its plate where the kit is.)
+            stash.Show(view == Bastion.Engine.BaseViews.Stash || view == Bastion.Engine.BaseViews.Engineering, view == Bastion.Engine.BaseViews.Stash);
+            workshop.Show(view == Bastion.Engine.BaseViews.Engineering);
             runMap.Show(view == Bastion.Engine.BaseViews.RunMap);
             upgrades.Show(view == Bastion.Engine.BaseViews.Upgrades);
+            Dress();
+        }
+
+        public void SetWorkshop(WorkshopView v)
+        {
+            workshop.Set(v);
             Dress();
         }
 

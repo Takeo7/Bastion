@@ -72,6 +72,10 @@ namespace Bastion.UI.Strategy
         void OnBuy(string ware);
         /// <summary>The Trueque's other side (M10, cuadro 141): that thing of the chosen soldier's, worn or in the pack, for §.</summary>
         void OnSell(string gear);
+        /// <summary>The Taller (cuadro 165): one of its wares made (WorkshopIds), into the stash.</summary>
+        void OnWorkshop(string ware);
+        /// <summary>The Chatarrero (cuadro 165): a gear of the stash offered for §.</summary>
+        void OnScrap(string gear);
         void OnLeaveStop();
         /// <summary>Mejoras: the next level of one (a vote with two).</summary>
         void OnUpgrade(string id);
@@ -86,6 +90,8 @@ namespace Bastion.UI.Strategy
         public void OnEndRun() { }
         public void OnBuy(string ware) { }
         public void OnSell(string gear) { }
+        public void OnWorkshop(string ware) { }
+        public void OnScrap(string gear) { }
         public void OnLeaveStop() { }
         public void OnUpgrade(string id) { }
         public void OnMenu() { }
@@ -125,6 +131,8 @@ namespace Bastion.UI.Strategy
         public void OnEndRun() => Target.OnEndRun();
         public void OnBuy(string ware) => Target.OnBuy(ware);
         public void OnSell(string gear) => Target.OnSell(gear);
+        public void OnWorkshop(string ware) => Target.OnWorkshop(ware);
+        public void OnScrap(string gear) => Target.OnScrap(gear);
         public void OnLeaveStop() => Target.OnLeaveStop();
         public void OnUpgrade(string id) => Target.OnUpgrade(id);
         public void OnMenu() => Target.OnMenu();

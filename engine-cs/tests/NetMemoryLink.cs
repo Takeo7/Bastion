@@ -102,14 +102,15 @@ namespace Bastion.Engine.Tests
         /// returns once done: a loaded machine (Unity compiling, the other tests, a pause of the collector) can hold
         /// the network's threads up a second or two, never ten.
         /// </summary>
-        public static async Task Until(Func<bool> done, Action? step = null, int ms = 10_000)
+        public static async Task Until(Func<bool> done, Action? step = null, int ms = 10_000, string? what = null)
         {
             var until = DateTime.UtcNow.AddMilliseconds(ms);
             while (true)
             {
                 step?.Invoke();
                 if (done()) return;
-                if (DateTime.UtcNow > until) throw new TimeoutException("Wait.Until: never happened.");
+                // `what`: which wait it was, for a test that fails once in a chain (0.14.9's) and passes again.
+                if (DateTime.UtcNow > until) throw new TimeoutException($"Wait.Until: never happened{(what != null ? $" ({what})" : "")}.");
                 await Task.Delay(5);
             }
         }

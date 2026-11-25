@@ -234,7 +234,38 @@ namespace Bastion.Engine
             [UpgradeIds.Garden] = new[] { 150, 250 },
             [UpgradeIds.Radio] = new[] { 120 },
             [UpgradeIds.Kit] = new[] { 100, 150 },
+            // The next three (0.14.10).
+            [UpgradeIds.Trunk] = new[] { 120, 200 },
+            [UpgradeIds.Workshop] = new[] { 100, 200 },
+            [UpgradeIds.Scrap] = new[] { 120 },
         };
+
+        /// <summary>Baúl de La Lata: its rows by level, 4 wide (cuadro 165: 4×2, 4×4).</summary>
+        public static readonly IReadOnlyList<int> TrunkRows = new[] { 2, 4 };
+
+        /// <summary>
+        /// Taller (cuadro 165): what it makes, at the Trade's price (Content.TradeWares), and from which level: magazines,
+        /// arrows (a bundle, Looting.BoxArrows) and molotovs; at level 2, the four accessories at 45.
+        /// </summary>
+        public static readonly IReadOnlyDictionary<string, WorkshopWareDef> WorkshopWares = new Dictionary<string, WorkshopWareDef>
+        {
+            [WorkshopIds.Mags] = new WorkshopWareDef { Kind = GearKinds.Mags, Type = null, Count = 1, Price = 15, Level = 1 },
+            [WorkshopIds.Arrows] = new WorkshopWareDef { Kind = GearKinds.Arrows, Type = null, Count = Looting.BoxArrows, Price = 15, Level = 1 },
+            [WorkshopIds.Molotov] = new WorkshopWareDef { Kind = GearKinds.Item, Type = ItemIds.Molotov, Count = 1, Price = 10, Level = 1 },
+            [WorkshopIds.Scope] = new WorkshopWareDef { Kind = GearKinds.Mod, Type = WeaponModIds.Scope, Count = 1, Price = 45, Level = 2 },
+            [WorkshopIds.Silencer] = new WorkshopWareDef { Kind = GearKinds.Mod, Type = WeaponModIds.Silencer, Count = 1, Price = 45, Level = 2 },
+            [WorkshopIds.Stock] = new WorkshopWareDef { Kind = GearKinds.Mod, Type = WeaponModIds.Stock, Count = 1, Price = 45, Level = 2 },
+            [WorkshopIds.ExtMag] = new WorkshopWareDef { Kind = GearKinds.Mod, Type = WeaponModIds.ExtMag, Count = 1, Price = 45, Level = 2 },
+        };
+
+        /// <summary>
+        /// Chatarrero (cuadro 165): what it pays for a gear, half what a Trade does without «Buen trato» (SellPrice), down to
+        /// a 5. 0: it doesn't take it (§, the knife, what a mission gives, what the base gave, a pile worth too little).
+        /// </summary>
+        public static int ScrapPrice(Gear g)
+        {
+            return (int)Math.Floor(SellPrice(g, false) / 2.0 / 5) * 5;
+        }
 
         // ---------------------------------------------------------------- the Trade
 

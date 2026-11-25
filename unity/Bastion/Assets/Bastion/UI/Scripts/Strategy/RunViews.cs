@@ -109,6 +109,12 @@ namespace Bastion.UI.Strategy
         /// <summary>The stop the squad is at (H4), over the map; null, none.</summary>
         public StopView Stop;
         /// <summary>
+        /// La Lata's trunk (Baúl de La Lata, cuadro 165), while it can be reached (Runs.TrunkOpen: on the map between stages
+        /// and at the stops); null without it. Its head, «BAÚL».
+        /// </summary>
+        public GearGridView Trunk;
+        public string TrunkHead;
+        /// <summary>
         /// A stage proposed to the vote (two players, ChooseNodeAction): its id, whose («Propuesta de Ana», «Tu propuesta») and
         /// in whose colour, on the map itself (cuadro 132); null, none.
         /// </summary>
@@ -199,6 +205,8 @@ namespace Bastion.UI.Strategy
         /// <summary>The Trueque: what is on offer, and the supplies the player's soldiers carry.</summary>
         public List<WareView> Wares = new List<WareView>();
         public string Purse;
+        /// <summary>The § in La Lata's trunk, which pay too (cuadro 167); null with none.</summary>
+        public string PurseTrunk;
         /// <summary>Whose pack a ware goes into («Va a la mochila de Rafael»: the soldier chosen on the right).</summary>
         public string For;
         /// <summary>The same, by its name only, by the wares' head (U2: «→ Rafael»); `For` on hover.</summary>
@@ -247,6 +255,29 @@ namespace Bastion.UI.Strategy
         public string Note;
         /// <summary>Short of supplies for it (U2): its price red, the reason on hover rather than under its name.</summary>
         public bool Short;
+        /// <summary>
+        /// On the side offered, where it is when not on the soldier (cuadro 167: La Lata's trunk, «BAÚL»), a mark by its name
+        /// as «PUESTO», with its help; not asked before it goes, as what is worn is.
+        /// </summary>
+        public string Tag;
+        public string TagTip;
+    }
+
+    /// <summary>
+    /// The Taller and the Chatarrero (cuadros 164 and 165), the base's tab beside the Almacén, whose grid stays on the left:
+    /// what the Taller makes, each with «Hacer» and its price, from the stash's §; and what of the stash the Chatarrero takes,
+    /// each with what it pays and «Cambiar». Each list null without its upgrade.
+    /// </summary>
+    [Serializable]
+    public sealed class WorkshopView
+    {
+        public string MakesHead;
+        public List<WareView> Makes;
+        public string OffersHead;
+        public string OffersSub;
+        public List<WareView> Offers;
+        /// <summary>Nothing in the stash the Chatarrero takes.</summary>
+        public string OffersNone;
     }
 
     /// <summary>Mejoras (H2): the base's six, each with its level, what the next costs and «Mejorar» (a vote with two).</summary>

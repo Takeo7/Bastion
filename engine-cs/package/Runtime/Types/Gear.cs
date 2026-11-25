@@ -68,6 +68,8 @@ namespace Bastion.Engine
     public static class GearPlaces
     {
         public const string Stash = "stash";
+        /// <summary>La Lata's trunk (RunState.Trunk; cuadro 165).</summary>
+        public const string Trunk = "trunk";
     }
 
     /// <summary>One thing someone can carry: unique in the campaign, so it can go stash ↔ soldier ↔ pack ↔ floor.</summary>

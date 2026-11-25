@@ -362,6 +362,21 @@ namespace Bastion.Engine
         public string Gear { get; set; } = "";
     }
 
+    /// <summary>Taller (cuadros 164 and 165): at the base, one of the workshop's wares made, paid with the stash's §, into the stash.</summary>
+    public sealed class WorkshopCommand : CampaignCommand
+    {
+        public override string Type => "workshop";
+        /// <summary>WorkshopIds.</summary>
+        public string Ware { get; set; } = "";
+    }
+
+    /// <summary>Chatarrero (cuadros 164 and 165): at the base, a gear of the stash offered for § (Content.ScrapPrice), into the stash.</summary>
+    public sealed class ScrapGearCommand : CampaignCommand
+    {
+        public override string Type => "scrapGear";
+        public string Gear { get; set; } = "";
+    }
+
     /// <summary>A ware of the Trade, paid with the supplies in the packs of the buyer's soldiers, into `soldier`'s pack.</summary>
     public sealed class BuyWareCommand : CampaignCommand
     {

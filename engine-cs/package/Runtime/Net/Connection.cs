@@ -162,7 +162,10 @@ namespace Bastion.Net
         private void Shut(string reason, bool drain)
         {
             if (Interlocked.Exchange(ref closed, 1) != 0) return;
-            if (drain && !outgoing.IsEmpty)
+            // What is still to go: queued, or taken by WriteLoop and being written (pending goes down once it is out). With the
+            // queue alone, a frame half written was cut by Kill: the room's «closing» lost, the client rejoining instead of
+            // told the host closed (NetRoomTests' host over TCP, once in the 0.14.9's chain).
+            if (drain && (Interlocked.Read(ref pending) > 0 || !outgoing.IsEmpty))
             {
                 waiting.Release();
                 _ = Task.Run(async () =>

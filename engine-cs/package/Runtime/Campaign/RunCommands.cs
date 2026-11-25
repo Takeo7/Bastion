@@ -35,6 +35,10 @@ namespace Bastion.Engine
                     return Done(Gears.BuyWareRefusal(c, slot, connected, m), () => Gears.BuyWare(c, slot, connected, m));
                 case SellGearCommand m:
                     return Done(Gears.SellRefusal(c, slot, connected, m), () => Gears.Sell(c, slot, connected, m));
+                case WorkshopCommand m:
+                    return Done(Gears.WorkshopRefusal(c, m), () => Gears.Workshop(c, m));
+                case ScrapGearCommand m:
+                    return Done(Gears.ScrapRefusal(c, m), () => Gears.Scrap(c, m));
                 case SquadCommand m:
                     return Done(SquadRefusal(c, slot, connected, m), () => Squad(c, m));
                 case LeaveStopCommand m:

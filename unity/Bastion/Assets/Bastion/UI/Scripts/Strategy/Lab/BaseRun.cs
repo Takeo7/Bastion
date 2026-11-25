@@ -314,6 +314,9 @@ namespace Bastion.UI.Strategy
                 // «ofrece:g36»: that thing of the chosen soldier's offered at the Trueque (M10).
                 case "ofrece": control.OnSell(S(1)); return true;
                 case "leave": control.OnLeaveStop(); return true;
+                // The Taller and the Chatarrero (cuadro 165): «hacer:mags» (WorkshopIds), «chatarra:g36» (a gear of the stash).
+                case "hacer": control.OnWorkshop(S(1)); return true;
+                case "chatarra": control.OnScrap(S(1)); return true;
                 case "choice":
                     control.OpenChoice(S(1));
                     Debug.Log($"[base-run] choice:{S(1)} → {control.OpenNow()}");

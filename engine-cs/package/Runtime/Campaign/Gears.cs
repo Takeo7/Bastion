@@ -20,6 +20,8 @@ namespace Bastion.Engine
         /// <summary>In a grid: the grid, and where in it.</summary>
         public GearGrid? Grid { get; set; }
         public Placed? Placed { get; set; }
+        /// <summary>In La Lata's trunk (RunState.Trunk; cuadro 165), not the stash.</summary>
+        public bool Trunk { get; set; }
     }
 
     public static class Gears
@@ -278,12 +280,16 @@ namespace Bastion.Engine
             foreach (var p in s.Kit.Pack.Items) yield return new GearSpot { Gear = p.Gear, Soldier = s, Slot = KitSlots.Pack, Grid = s.Kit.Pack, Placed = p };
         }
 
-        /// <summary>Every gear of the campaign: the stash's, then the living soldiers'.</summary>
+        /// <summary>Every gear of the campaign: the stash's, La Lata's trunk's, then the living soldiers'.</summary>
         public static IEnumerable<GearSpot> All(CampaignState c)
         {
             if (c.Stash != null)
             {
                 foreach (var p in c.Stash.Items) yield return new GearSpot { Gear = p.Gear, Slot = KitSlots.Pack, Grid = c.Stash, Placed = p };
+            }
+            if (c.Run?.Trunk != null)
+            {
+                foreach (var p in c.Run.Trunk.Items) yield return new GearSpot { Gear = p.Gear, Slot = KitSlots.Pack, Grid = c.Run.Trunk, Placed = p, Trunk = true };
             }
             foreach (var s in c.Soldiers.Where((x) => x.Alive))
             {
@@ -326,13 +332,25 @@ namespace Bastion.Engine
             return null;
         }
 
-        /// <summary>A command's `to`: the stash (null soldier) or a living soldier.</summary>
-        private static string? Target(CampaignState c, string to, out CampaignSoldier? soldier)
+        /// <summary>A command's `to`: the stash (null soldier), La Lata's trunk (`trunk`) or a living soldier.</summary>
+        private static string? Target(CampaignState c, string to, out CampaignSoldier? soldier, out bool trunk)
         {
             soldier = null;
+            trunk = to == GearPlaces.Trunk;
             if (to == GearPlaces.Stash) return null;
+            if (trunk) return c.Run?.Trunk == null ? RunTexts.NoTrunk : null;
             soldier = c.Soldiers.FirstOrDefault((x) => x.Id == to && x.Alive);
             return soldier == null || soldier.Kit == null ? RunTexts.NoSoldier : null;
+        }
+
+        /// <summary>
+        /// Reach of where a gear is, or of a `to` (`trunk`): La Lata's trunk, anyone's while a run goes (shared, as the stash;
+        /// a fight, Busy's); else Reach.
+        /// </summary>
+        private static string? ReachOf(CampaignState c, int slot, IReadOnlyList<int> connected, CampaignSoldier? s, bool trunk)
+        {
+            if (trunk) return c.Run?.Trunk == null ? RunTexts.NoTrunk : null;
+            return Reach(c, slot, connected, s);
         }
 
         /// <summary>
@@ -372,9 +390,9 @@ namespace Bastion.Engine
             if (error != null) return (error, null);
             var from = Find(c, cmd.Gear);
             if (from == null) return (RunTexts.NoGear, null);
-            error = Reach(c, slot, connected, from.Soldier);
+            error = ReachOf(c, slot, connected, from.Soldier, from.Trunk);
             if (error != null) return (error, null);
-            error = Target(c, cmd.To, out var to) ?? Reach(c, slot, connected, to);
+            error = Target(c, cmd.To, out var to, out var trunk) ?? ReachOf(c, slot, connected, to, trunk);
             if (error != null) return (error, null);
             var g = from.Gear;
             var soldiers = new[] { from.Soldier, to };
@@ -382,7 +400,7 @@ namespace Bastion.Engine
             if (!KitSlots.All.Contains(where)) return (RunTexts.NoSlot, null);
             if (where == KitSlots.Pack)
             {
-                var grid = to == null ? c.Stash! : to.Kit!.Pack;
+                var grid = trunk ? c.Run!.Trunk! : to == null ? c.Stash! : to.Kit!.Pack;
                 var there = At(grid, cmd.X, cmd.Y);
                 // Onto an equal pile: it fills up, and the rest stays where it was.
                 if (there != null && SamePile(there.Gear, g))
@@ -462,9 +480,9 @@ namespace Bastion.Engine
             if (error != null) return (error, null);
             var from = Find(c, cmd.Gear);
             if (from == null) return (RunTexts.NoGear, null);
-            error = Reach(c, slot, connected, from.Soldier);
+            error = ReachOf(c, slot, connected, from.Soldier, from.Trunk);
             if (error != null) return (error, null);
-            error = Target(c, cmd.To, out var to) ?? Reach(c, slot, connected, to);
+            error = Target(c, cmd.To, out var to, out var trunk) ?? ReachOf(c, slot, connected, to, trunk);
             if (error != null) return (error, null);
             var g = from.Gear;
             if (Content.PileOf(g.Kind, g.Type) <= 1 || g.Count < 2) return (RunTexts.NotAPile, null);
@@ -474,7 +492,7 @@ namespace Bastion.Engine
             Gear? onto;
             if (where == KitSlots.Pack)
             {
-                var grid = to == null ? c.Stash! : to.Kit!.Pack;
+                var grid = trunk ? c.Run!.Trunk! : to == null ? c.Stash! : to.Kit!.Pack;
                 onto = At(grid, cmd.X, cmd.Y)?.Gear;
                 if (onto == null)
                 {
@@ -504,7 +522,7 @@ namespace Bastion.Engine
             var error = Busy(c);
             if (error != null) return error;
             var from = Find(c, cmd.Gear);
-            return from == null ? RunTexts.NoGear : Reach(c, slot, connected, from.Soldier);
+            return from == null ? RunTexts.NoGear : ReachOf(c, slot, connected, from.Soldier, from.Trunk);
         }
 
         /// <summary>DropGearCommand, once DropRefusal has let it.</summary>
@@ -524,7 +542,7 @@ namespace Bastion.Engine
             var mod = Find(c, cmd.Mod);
             var weapon = Find(c, cmd.Weapon);
             if (mod == null || weapon == null) return RunTexts.NoGear;
-            error = Reach(c, slot, connected, mod.Soldier) ?? Reach(c, slot, connected, weapon.Soldier);
+            error = ReachOf(c, slot, connected, mod.Soldier, mod.Trunk) ?? ReachOf(c, slot, connected, weapon.Soldier, weapon.Trunk);
             if (error != null) return error;
             if (mod.Gear.Kind != GearKinds.Mod) return RunTexts.NotAMod;
             if (weapon.Gear.Kind != GearKinds.Weapon) return RunTexts.NotAWeapon;
@@ -579,7 +597,7 @@ namespace Bastion.Engine
             if (c.Run == null) return RunTexts.BetweenNodes;
             var med = Find(c, cmd.Gear);
             if (med == null) return RunTexts.NoGear;
-            error = Reach(c, slot, connected, med.Soldier);
+            error = ReachOf(c, slot, connected, med.Soldier, med.Trunk);
             if (error != null) return error;
             if (med.Gear.Kind != GearKinds.Medicine) return RunTexts.NotUsable;
             var patient = c.Soldiers.FirstOrDefault((x) => x.Id == cmd.Soldier && x.Alive);
@@ -601,24 +619,46 @@ namespace Bastion.Engine
         // ------------------------------------------------------------------ trade
 
         /// <summary>
-        /// The packs a player pays a ware from: the buyer's first, then the rest of the squad's soldiers they control, in
-        /// the squad's order.
+        /// Where a player's § are at a Trade, to pay a ware from and to take a sale's: the buyer's pack first, then the rest of
+        /// the squad's soldiers they control, in the squad's order, and La Lata's trunk last (cuadro 167: it pays too).
         /// </summary>
         private static List<GearGrid> Purse(CampaignState c, int slot, IReadOnlyList<int> connected, CampaignSoldier buyer)
         {
             var others = c.Run!.Squad.Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id))
                 .Where((s) => s != null && s != buyer && s.Alive && s.Kit != null && Runs.Controls(c, slot, connected, s))
                 .Select((s) => s!.Kit!.Pack);
-            return new[] { buyer.Kit!.Pack }.Concat(others).ToList();
+            var grids = new[] { buyer.Kit!.Pack }.Concat(others).ToList();
+            if (c.Run.Trunk != null) grids.Add(c.Run.Trunk);
+            return grids;
         }
 
         /// <summary>
-        /// M10 (cuadro 141): where a sale's § go, with `sold` gone from the pack it was in: the seller's pack, else the rest of
-        /// the squad's soldiers its player controls (Purse's). Null if none has room.
+        /// M10 (cuadro 141): where a sale's § go, with `sold` gone from where it was: the seller's pack, else the rest of the
+        /// squad's soldiers its player controls, else La Lata's trunk (Purse's order). Null if none has room.
         /// </summary>
         private static GearGrid? Till(CampaignState c, int slot, IReadOnlyList<int> connected, CampaignSoldier seller, Gear sold, int price)
         {
             return Purse(c, slot, connected, seller).FirstOrDefault((grid) => TakesSupplies(grid, sold, price));
+        }
+
+        /// <summary>
+        /// What `seller` offers at a Trade, where it is: worn or in its pack, or in La Lata's trunk (Arturo, cuadro 167: «Sí,
+        /// las dos cosas»), the § to its player's packs as ever.
+        /// </summary>
+        private static GearSpot? Offered(CampaignState c, CampaignSoldier seller, string id)
+        {
+            return OfKit(seller).FirstOrDefault((x) => x.Gear.Id == id) ?? All(c).FirstOrDefault((x) => x.Trunk && x.Gear.Id == id);
+        }
+
+        /// <summary>
+        /// Where a ware bought goes (cuadro 167): the buyer's pack, else La Lata's trunk; never a partner's pack (Producto: the
+        /// partners' packs only take a sale's §). With `emptied` gone (the piles paying it empties). Null: nowhere.
+        /// </summary>
+        private static GearGrid? Shelf(CampaignState c, CampaignSoldier buyer, Gear g, ICollection<Gear> emptied)
+        {
+            var grids = new List<GearGrid> { buyer.Kit!.Pack };
+            if (c.Run?.Trunk != null) grids.Add(c.Run.Trunk);
+            return grids.FirstOrDefault((grid) => CanStow(grid, g, emptied));
         }
 
         /// <summary>
@@ -649,11 +689,11 @@ namespace Bastion.Engine
             var seller = c.Soldiers.FirstOrDefault((x) => x.Id == cmd.Soldier && x.Alive);
             var error = seller == null ? RunTexts.NoSoldier : Reach(c, slot, connected, seller);
             if (error != null) return error;
-            var spot = OfKit(seller!).FirstOrDefault((x) => x.Gear.Id == cmd.Gear);
+            var spot = Offered(c, seller!, cmd.Gear);
             if (spot == null) return RunTexts.NoGear;
             var price = Content.SellPrice(spot.Gear, Runs.Level(c, UpgradeIds.Haggle) > 0);
             if (price <= 0) return RunTexts.NotForSale;
-            return Till(c, slot, connected, seller!, spot.Gear, price) == null ? RunTexts.SuppliesNoRoom(seller!.Name) : null;
+            return Till(c, slot, connected, seller!, spot.Gear, price) == null ? RunTexts.SuppliesNoRoom(seller!.Name, run.Trunk != null) : null;
         }
 
         /// <summary>
@@ -664,12 +704,66 @@ namespace Bastion.Engine
         public static void Sell(CampaignState c, int slot, IReadOnlyList<int> connected, SellGearCommand cmd)
         {
             var seller = c.Soldiers.First((x) => x.Id == cmd.Soldier);
-            var spot = OfKit(seller).First((x) => x.Gear.Id == cmd.Gear);
+            var spot = Offered(c, seller, cmd.Gear)!;
             var price = Content.SellPrice(spot.Gear, Runs.Level(c, UpgradeIds.Haggle) > 0);
             var till = Till(c, slot, connected, seller, spot.Gear, price)!;
             KeepDamage(c, new[] { seller }, () => Lift(spot));
             foreach (var n in SupplyPiles(price)) Stow(till, NewGear(c, GearKinds.Supplies, null, n));
             Campaign.RunsLog(c, RunTexts.Sold(seller.Name, Lore.GearA(spot.Gear.Kind, spot.Gear.Type, spot.Gear.Count), price), LogTones.Good);
+        }
+
+        // ----------------------------------------------------- the base: Taller and Chatarrero
+
+        /// <summary>
+        /// Why the Taller can't make that ware (WorkshopCommand; cuadro 165), or null: only at the base, with the upgrade at the
+        /// ware's level, the stash's § enough, and room for it once paid.
+        /// </summary>
+        public static string? WorkshopRefusal(CampaignState c, WorkshopCommand cmd)
+        {
+            if (c.Stash == null) return RunTexts.NoSlot;
+            if (c.Run != null) return RunTexts.WorkshopAtBase;
+            if (!Content.WorkshopWares.TryGetValue(cmd.Ware, out var ware)) return RunTexts.NoWorkshopWare;
+            var level = Runs.Level(c, UpgradeIds.Workshop);
+            if (level < ware.Level) return level == 0 ? RunTexts.NoWorkshop : RunTexts.WorkshopLevel;
+            var have = Supplies(c.Stash);
+            if (have < ware.Price) return RunTexts.Missing(ware.Price - have);
+            var emptied = SuppliesFor(new[] { c.Stash }, ware.Price).Where((x) => x.Take == x.Pile.Gear.Count).Select((x) => x.Pile.Gear).ToList();
+            return CanStow(c.Stash, new Gear { Kind = ware.Kind, Type = ware.Type, Count = ware.Count }, emptied) ? null : RunTexts.StashFull;
+        }
+
+        /// <summary>WorkshopCommand, once WorkshopRefusal has let it: paid from the stash, into it; the log says so.</summary>
+        public static void Workshop(CampaignState c, WorkshopCommand cmd)
+        {
+            var ware = Content.WorkshopWares[cmd.Ware];
+            PaySupplies(new[] { c.Stash! }, ware.Price);
+            Stow(c.Stash!, NewGear(c, ware.Kind, ware.Type, ware.Count));
+            Campaign.RunsLog(c, RunTexts.Made(Lore.GearA(ware.Kind, ware.Type, ware.Count), ware.Price), LogTones.Good);
+        }
+
+        /// <summary>
+        /// Why the Chatarrero won't take that gear (ScrapGearCommand; cuadro 165), or null: only at the base, with the upgrade,
+        /// a gear of the stash, one it pays for (Content.ScrapPrice), and room for its § once it is gone.
+        /// </summary>
+        public static string? ScrapRefusal(CampaignState c, ScrapGearCommand cmd)
+        {
+            if (c.Stash == null) return RunTexts.NoSlot;
+            if (c.Run != null) return RunTexts.ScrapAtBase;
+            if (Runs.Level(c, UpgradeIds.Scrap) == 0) return RunTexts.NoScrap;
+            var spot = Find(c, cmd.Gear);
+            if (spot == null || spot.Grid != c.Stash) return RunTexts.ScrapStashOnly;
+            var price = Content.ScrapPrice(spot.Gear);
+            if (price <= 0) return RunTexts.NotForSale;
+            return TakesSupplies(c.Stash, spot.Gear, price) ? null : RunTexts.StashFull;
+        }
+
+        /// <summary>ScrapGearCommand, once ScrapRefusal has let it: the gear gone, its § into the stash; the log says so.</summary>
+        public static void Scrap(CampaignState c, ScrapGearCommand cmd)
+        {
+            var spot = Find(c, cmd.Gear)!;
+            var price = Content.ScrapPrice(spot.Gear);
+            Lift(spot);
+            foreach (var n in SupplyPiles(price)) Stow(c.Stash!, NewGear(c, GearKinds.Supplies, null, n));
+            Campaign.RunsLog(c, RunTexts.Scrapped(Lore.GearA(spot.Gear.Kind, spot.Gear.Type, spot.Gear.Count), price), LogTones.Good);
         }
 
         /// <summary>Why `slot` can't buy that ware for that soldier (BuyWareCommand), or null.</summary>
@@ -686,20 +780,43 @@ namespace Bastion.Engine
             var purse = Purse(c, slot, connected, buyer!);
             var have = purse.Sum(Supplies);
             if (have < ware.Price) return RunTexts.Missing(ware.Price - have);
-            // What paying empties leaves room.
-            var emptied = SuppliesFor(purse, ware.Price).Where((x) => x.Take == x.Pile.Gear.Count).Select((x) => x.Pile.Gear).ToList();
-            return CanStow(buyer!.Kit!.Pack, ware.Gear, emptied) ? null : RunTexts.PackFull(buyer.Name);
+            return WhereBought(c, slot, connected, buyer!, ware) != null ? null : RunTexts.NoRoomToBuy(buyer!.Name, run.Trunk != null);
         }
 
-        /// <summary>BuyWareCommand, once BuyWareRefusal has let it: paid, off the list, into the buyer's pack.</summary>
+        /// <summary>
+        /// Where a ware will go once bought (cuadro 167), for the screen before buying it: the buyer's id (its pack) or `trunk`
+        /// (La Lata's); null if it can't be bought.
+        /// </summary>
+        public static string? BuyTo(CampaignState c, int slot, IReadOnlyList<int> connected, BuyWareCommand cmd)
+        {
+            if (BuyWareRefusal(c, slot, connected, cmd) != null) return null;
+            var ware = c.Run!.Stop!.Wares!.First((w) => w.Gear.Id == cmd.Ware);
+            var buyer = c.Soldiers.First((x) => x.Id == cmd.Soldier);
+            var grid = WhereBought(c, slot, connected, buyer, ware)!;
+            return grid == c.Run.Trunk ? GearPlaces.Trunk : buyer.Id;
+        }
+
+        /// <summary>Where a ware bought goes (Shelf), with what paying for it empties (the piles it takes whole) gone.</summary>
+        private static GearGrid? WhereBought(CampaignState c, int slot, IReadOnlyList<int> connected, CampaignSoldier buyer, Ware ware)
+        {
+            var purse = Purse(c, slot, connected, buyer);
+            var emptied = SuppliesFor(purse, ware.Price).Where((x) => x.Take == x.Pile.Gear.Count).Select((x) => x.Pile.Gear).ToList();
+            return Shelf(c, buyer, ware.Gear, emptied);
+        }
+
+        /// <summary>
+        /// BuyWareCommand, once BuyWareRefusal has let it: paid (Purse's order, La Lata's trunk last), off the list, into the
+        /// buyer's pack, else La Lata's trunk (cuadro 167; Shelf).
+        /// </summary>
         public static void BuyWare(CampaignState c, int slot, IReadOnlyList<int> connected, BuyWareCommand cmd)
         {
             var wares = c.Run!.Stop!.Wares!;
             var ware = wares.First((w) => w.Gear.Id == cmd.Ware);
             var buyer = c.Soldiers.First((x) => x.Id == cmd.Soldier);
+            var grid = WhereBought(c, slot, connected, buyer, ware)!;
             PaySupplies(Purse(c, slot, connected, buyer), ware.Price);
             wares.Remove(ware);
-            KeepDamage(c, new[] { buyer }, () => Stow(buyer.Kit!.Pack, ware.Gear));
+            KeepDamage(c, new[] { buyer }, () => Stow(grid, ware.Gear));
         }
     }
 }

@@ -53,6 +53,11 @@ namespace Bastion.UI.Strategy
         /// <summary>The squad's tabs and kits on the right (their busts: StrategyRoot).</summary>
         public KitPanel Kits => squad;
         readonly VisualElement card;
+        /// <summary>La Lata's trunk (cuadro 165), under the card (at a stop, in its place): its head and its grid.</summary>
+        readonly VisualElement trunk;
+        readonly Label trunkHead;
+        readonly VisualElement trunkGrid;
+        readonly GearBoard board;
         readonly StopPlate stop;
         readonly TooltipLayer tips;
         readonly Func<string, Sprite> icon;
@@ -89,6 +94,7 @@ namespace Bastion.UI.Strategy
             this.tips = tips;
             this.icon = icon;
             this.handlers = handlers;
+            this.board = board;
             backdrop = Ui.El("runmap", view);
             var plate = Ui.El("runmap-plate", backdrop);
             var top = Ui.El("runmap-top", plate);
@@ -116,7 +122,13 @@ namespace Bastion.UI.Strategy
             // botón, que salga directamente»): its places, its pack and its board with the points to spend, no «Equipo ▸».
             // (gear-anchor: a kit place's list opens to its left, over the map, the stage's card not covered; U4, cuadro 163.)
             side = Ui.El("runmap-side gear-anchor", view);
-            card = Ui.El("panel runmap-card", side);
+            // The card's column: the card and, under it, La Lata's trunk (cuadro 165), where the kits are sorted; at a stop
+            // the card goes and the trunk is at its top, beside the pack.
+            var column = Ui.El("runmap-cardcol", side);
+            card = Ui.El("panel runmap-card", column);
+            trunk = Ui.El("panel runmap-trunk", column);
+            trunkHead = Ui.Text("", "stash-label muted font-title runmap-trunk__head", trunk);
+            trunkGrid = Ui.El("stash-pack", trunk);
             squad = new KitPanel(side, "panel runmap-squad", tips, handlers, board) { Icon = icon };
             Show(false);
         }
@@ -143,6 +155,12 @@ namespace Bastion.UI.Strategy
             homeNote.text = v.HomeNote ?? "";
             Ui.Show(homeNote, !string.IsNullOrEmpty(v.HomeNote));
             squad.Set(v.Squad, v.Kit, v.SquadHead);
+            Ui.Show(trunk, v.Trunk != null);
+            if (v.Trunk != null)
+            {
+                trunkHead.text = (v.TrunkHead ?? "").ToUpperInvariant();
+                board.SetGrid(trunkGrid, v.Trunk);
+            }
             // A stop over the map, the sheet dimmed under it; its plate is what to look at, not a stage's card.
             stop.Set(v.Stop);
             field.EnableInClassList("runmap-field--under", v.Stop != null);
@@ -405,9 +423,9 @@ namespace Bastion.UI.Strategy
             if (!on) return;
             if (n == null)
             {
-                // A choice to make, none marked: what to do, no key (cuadro 135).
-                Ui.Text(StrategyText.Runs.PickHead.ToUpperInvariant(), "rcard__name font-title", card);
-                Ui.Text(StrategyText.Runs.PickHint(Bastion.Client.GameInput.Touch), "rcard__body rcard__hint", card);
+                // A choice to make, none marked: what to do, no key (cuadro 135); its words only on hover (Producto, cuadro 167:
+                // «ELIGE UNA ETAPA» alone, as the rest of the tanda of less text).
+                tips.Attach(Ui.Text(StrategyText.Runs.PickHead.ToUpperInvariant(), "rcard__name font-title", card), StrategyText.Runs.PickHint(Bastion.Client.GameInput.Touch));
                 return;
             }
             Ui.Text((n.Kicker ?? "").ToUpperInvariant(), "rcard__kicker font-title", card);

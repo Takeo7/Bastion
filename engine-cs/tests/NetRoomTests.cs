@@ -942,10 +942,10 @@ namespace Bastion.Engine.Tests
             var closed = false;
             session.HostClosed += () => closed = true;
             session.Connect("Ana");
-            await Wait.Until(() => session.Slot == 0, session.Pump);
+            await Wait.Until(() => session.Slot == 0, session.Pump, what: "la bienvenida");
             Assert.NotNull(tokens.Token);
             host.Stop();
-            await Wait.Until(() => closed, session.Pump);
+            await Wait.Until(() => closed, session.Pump, what: "el «closing» del anfitrión");
             session.Stop();
         }
     }

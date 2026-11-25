@@ -782,6 +782,14 @@ namespace Bastion.UI.Gear
             return false;
         }
 
+        /// <summary>Shown: neither it nor any element round it hidden (Ui.Show's display, or a sheet's).</summary>
+        static bool Shown(VisualElement e)
+        {
+            for (var x = e; x != null; x = x.parent)
+                if (x.style.display == DisplayStyle.None || x.resolvedStyle.display == DisplayStyle.None) return false;
+            return true;
+        }
+
         /// <summary>
         /// Where a thing sent from `from` may go, best first: the other side's (another owner's: the stash, the floor, the
         /// soldier, never a partner's «give»); with none shown, its own soldier's other places. On a soldier, its empty
@@ -790,7 +798,9 @@ namespace Bastion.UI.Gear
         /// </summary>
         IEnumerable<GearMove> Sends(GearItemView g, Target from)
         {
-            var live = targets.FindAll(t => t.Element != null && t.Element.panel != null && (t.Kind == TargetKind.Grid || t.Kind == TargetKind.Slot) && t.Mine && t.Slot != "give");
+            // (Only what is on screen: the Taller's tab hides the chosen soldier's kit, still the board's; the 0.14.10's
+            // independent review, 2.)
+            var live = targets.FindAll(t => t.Element != null && t.Element.panel != null && Shown(t.Element) && (t.Kind == TargetKind.Grid || t.Kind == TargetKind.Slot) && t.Mine && t.Slot != "give");
             var there = live.FindAll(t => t.Owner != from.Owner);
             // Nothing at its feet in combat: dropped there all the same.
             if (there.Count == 0 && Ground != null && from.Kind == TargetKind.Grid && from.Owner != Ground)

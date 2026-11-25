@@ -155,6 +155,11 @@ namespace Bastion.Engine
         /// done); missing, one started before, from the map after any stage as it did (Runs.EndRunRefusal).
         /// </summary>
         public bool? HomeFromRefuge { get; set; }
+        /// <summary>
+        /// Baúl de La Lata (cuadros 164 and 165): what goes out with the squad besides the packs, used between stages (not in a
+        /// fight); home, into the stash, the squad fallen too. Null: no Baúl when the run started.
+        /// </summary>
+        public GearGrid? Trunk { get; set; }
     }
 
     /// <summary>The stop the squad is at (RunState.stop).</summary>
@@ -200,6 +205,30 @@ namespace Bastion.Engine
         public int Price { get; set; }
     }
 
+    /// <summary>WorkshopCommand.ware: what the Taller makes.</summary>
+    public static class WorkshopIds
+    {
+        public const string Mags = "mags";
+        public const string Arrows = "arrows";
+        public const string Molotov = "molotov";
+        public const string Scope = "scope";
+        public const string Silencer = "silencer";
+        public const string Stock = "stock";
+        public const string ExtMag = "extMag";
+
+        public static readonly IReadOnlyList<string> All = new[] { Mags, Arrows, Molotov, Scope, Silencer, Stock, ExtMag };
+    }
+
+    /// <summary>One of the Taller's wares (Content.WorkshopWares): the gear it makes, its price in §, and from which level.</summary>
+    public sealed class WorkshopWareDef
+    {
+        public string Kind { get; set; } = ""; // GearKinds
+        public string? Type { get; set; }
+        public int Count { get; set; } = 1;
+        public int Price { get; set; }
+        public int Level { get; set; } = 1;
+    }
+
     /// <summary>The base's upgrades (CampaignState.upgrades, Content.UpgradePrices), paid with the stash's supplies.</summary>
     public static class UpgradeIds
     {
@@ -227,8 +256,14 @@ namespace Bastion.Engine
         public const string Radio = "radio";
         /// <summary>Botiquín de salida: out with a first aid kit in the belt, and a molotov at level 2 (Runs.Issue; Gear.Issued).</summary>
         public const string Kit = "kit";
+        /// <summary>Baúl de La Lata (cuadros 164 and 165): a stash that goes out with the squad, 4×2, 4×4 (RunState.Trunk).</summary>
+        public const string Trunk = "trunk";
+        /// <summary>Taller: at the base, magazines, arrows and molotovs made with the stash's §; accessories at level 2 (WorkshopCommand).</summary>
+        public const string Workshop = "workshop";
+        /// <summary>Chatarrero: at the base, what is in the stash offered for § at half what a Trade pays (ScrapGearCommand).</summary>
+        public const string Scrap = "scrap";
 
-        public static readonly IReadOnlyList<string> All = new[] { Squad, Stash, Pack, Mend, Sight, Haggle, Training, Route, Engine, Garden, Radio, Kit };
+        public static readonly IReadOnlyList<string> All = new[] { Squad, Stash, Pack, Mend, Sight, Haggle, Training, Route, Engine, Garden, Radio, Kit, Trunk, Workshop, Scrap };
     }
 
     // ------------------------------------------------------- the runs' votes

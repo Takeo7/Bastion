@@ -126,12 +126,34 @@ namespace Bastion.UI.Strategy
             /// </summary>
             public const string PurseBefore = "Tus soldados llevan";
             public const string PurseAfter = ".";
+            /// <summary>
+            /// The trunk's § beside the packs' (cuadro 167: they pay too, after them): «Tus soldados llevan 35 [caja], y el baúl,
+            /// 30 [caja].» (Lore: the commas for the verb left out).
+            /// </summary>
+            public const string PurseTrunk = ", y el baúl,";
 
             public static string For(string name) => $"Lo que cambies va a la mochila de {name}.";
             // M10 (cuadro 141), the Trueque's two sides (UI's, Lore's yes, 23/11). The § go where Gears.Sell puts them.
             public const string Wares = "Lo que te ofrece";
             public const string Offers = "Lo que le ofreces";
+            // The Taller and the Chatarrero (cuadros 164 and 165; Lore's TEXTOS.md): the titles, «Hacer» with its price, and the
+            // Chatarrero's as the Trueque's side offered. The tab is the Taller's name, the Chatarrero's with that one alone.
+            public const string WorkshopHead = "Taller";
+            public const string ScrapHead = "Chatarrero";
+            public const string Make = "Hacer";
+            /// <summary>Nothing in the stash the Chatarrero takes (Lore, 25/11: the Chatarrero's verb, as the Trueque's line).</summary>
+            public const string ScrapNone = "En el almacén no hay nada que se pueda cambiar.";
+            /// <summary>La Lata's trunk's head, as «MOCHILA» and «ALMACÉN» (Lore).</summary>
+            public const string TrunkHead = "Baúl";
+            /// <summary>The Trueque's mark on what is offered from the trunk (cuadro 167; Arturo's word), and its help (mine, for Lore).</summary>
+            public const string TrunkTag = "BAÚL";
+            public const string TrunkTagTip = "Está en el baúl de La Lata.";
+            /// <summary>A ware that won't fit the buyer's pack (cuadro 167, Gears.BuyTo): where it goes instead, and why (mine, for Lore).</summary>
+            public const string ToTrunk = "→ BAÚL";
+            public static string ToTrunkTip(string buyer) => $"No cabe en la mochila de {buyer}: va al baúl de La Lata.";
             public static string OffersFrom(string name) => $"Lo que lleva {name}, puesto y en la mochila. Los § van a su mochila; si no caben, a la de otro de tus soldados.";
+            /// <summary>With La Lata's trunk (cuadro 167; Gears.Sell): its things too, and the § into it when no pack has room (mine, for Lore).</summary>
+            public static string OffersFromTrunk(string name) => $"Lo que lleva {name}, puesto y en la mochila, y lo del baúl. Los § van a su mochila; si no caben, a la de otro de tus soldados, y si no, al baúl.";
             public const string Worn = "Lo lleva puesto";
             /// <summary>
             /// Worn, agreeing with the thing (Lore, 24/11: «2 botiquines · Lo lleva puesto» didn't): «Lo lleva puesto», «La lleva

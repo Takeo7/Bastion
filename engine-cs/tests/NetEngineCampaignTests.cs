@@ -345,6 +345,34 @@ namespace Bastion.Engine.Tests
             Assert.Equal(gear, host.Saved().Soldiers.Single((s) => s.Id == soldier).Kit!.Melee!.Id);
         }
 
+        /// <summary>
+        /// The base's Taller and Chatarrero (0.14.10, Gameplay's): a ware the workshop doesn't have, or a gear's id out of
+        /// size, is a malformed message the room turns away with its line, before the engine; the trunk as a gear's place
+        /// passes the room's check.
+        /// </summary>
+        [Fact]
+        public void TheWorkshopAndTheScrapAreCheckedByTheRoom()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            host.Say(ana, new { t = "newCampaign" });
+            CampaignSent(ana);
+            host.Say(ana, Ccmd(new { type = "workshop", ware = "noEsUnaMercancia" }));
+            Assert.Equal("Mensaje no válido.", (string?)ana.Take("error").Single()["message"]);
+            host.Say(ana, Ccmd(new { type = "scrapGear", gear = "" }));
+            Assert.Equal("Mensaje no válido.", (string?)ana.Take("error").Single()["message"]);
+            host.Say(ana, Ccmd(new { type = "scrapGear", gear = new string('g', 40) }));
+            Assert.Equal("Mensaje no válido.", (string?)ana.Take("error").Single()["message"]);
+            Assert.Single(host.Log, "[sala] Ana: mensaje no válido (ccmd workshop)");
+            // (One line for each kind: the second malformed scrapGear is turned away without another.)
+            Assert.Single(host.Log, "[sala] Ana: mensaje no válido (ccmd scrapGear)");
+            // Well formed, they reach the engine (whatever it answers, not the room's «no válido»).
+            host.Say(ana, Ccmd(new { type = "workshop", ware = Content.WorkshopWares.Keys.First() }));
+            host.Say(ana, Ccmd(new { type = "scrapGear", gear = "g1" }));
+            host.Say(ana, Ccmd(new { type = "moveGear", gear = "g1", to = "trunk", slot = "pack", x = 0, y = 0 }));
+            Assert.Empty(ana.Take("error"));
+        }
+
         [Fact]
         public void ACampaignOfBeforeTheRunsIsKeptAsideWhenTheHostOpens()
         {

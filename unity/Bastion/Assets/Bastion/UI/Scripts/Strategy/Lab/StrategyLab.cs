@@ -1156,6 +1156,8 @@ namespace Bastion.UI.Strategy
         public void OnEndRun() => Debug.Log("[estrategia] volver a la base");
         public void OnBuy(string ware) => Debug.Log("[estrategia] cambiar " + ware);
         public void OnSell(string gear) => Debug.Log("[estrategia] ofrecer " + gear);
+        public void OnWorkshop(string ware) => Debug.Log("[estrategia] hacer " + ware);
+        public void OnScrap(string gear) => Debug.Log("[estrategia] al chatarrero " + gear);
         public void OnLeaveStop() => Debug.Log("[estrategia] seguir");
         public void OnUpgrade(string id) => Debug.Log("[estrategia] mejorar " + id);
     }

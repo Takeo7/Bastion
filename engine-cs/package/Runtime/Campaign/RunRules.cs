@@ -387,6 +387,8 @@ namespace Bastion.Engine
                 // N9, Supervivencia: out with the wounds they came home with (CampaignSoldier.Hurt).
                 Hp = going.ToDictionary((s) => s.Id, (s) => Math.Max(1, MaxHp(s) - (Levels.Of(c).Wounds ? s.Hurt ?? 0 : 0))),
                 HomeFromRefuge = true,
+                // Baúl de La Lata (cuadro 165): empty, as big as the upgrade.
+                Trunk = Level(c, UpgradeIds.Trunk) > 0 ? new GearGrid { W = PackW, H = Content.TrunkRows[Math.Min(Level(c, UpgradeIds.Trunk), Content.TrunkRows.Count) - 1] } : null,
             };
             Issue(c, going);
             Campaign.RunsLog(c, RunTexts.RunStarted(chapter));
@@ -452,6 +454,12 @@ namespace Bastion.Engine
         /// <summary>Whether the squad is at a Refuge's stop (G22: the way home).</summary>
         public static bool AtRefuge(RunState run) => run.Phase == RunPhases.Stop && RunMap.Node(run, run.At)?.Kind == NodeKinds.Refuge;
 
+        /// <summary>
+        /// Whether La Lata's trunk can be used now (Baúl, cuadro 165): a run with it, between its stages, at its stops and on
+        /// the map (gear moves there, Gears.Busy), not in a fight.
+        /// </summary>
+        public static bool TrunkOpen(CampaignState c) => c.Run?.Trunk != null && c.Run.Phase != RunPhases.Fight;
+
         /// <summary>Whether the squad is at a Trade's stop (Ruta de vuelta: the way home too).</summary>
         public static bool AtTrade(RunState run) => run.Phase == RunPhases.Stop && RunMap.Node(run, run.At)?.Kind == NodeKinds.Trade;
 
@@ -468,6 +476,13 @@ namespace Bastion.Engine
                     var hurt = MaxHp(s!) - HpOf(c, s!);
                     s!.Hurt = hurt > 0 ? hurt : (int?)null;
                 }
+            // Baúl de La Lata (cuadro 165): what it holds into the stash, the squad fallen too; what finds no room, lost.
+            if (c.Run?.Trunk != null && c.Run.Trunk.Items.Count > 0 && c.Stash != null)
+            {
+                var lost = 0;
+                foreach (var p in c.Run.Trunk.Items.ToList()) if (Gears.Stow(c.Stash, p.Gear) > 0) lost++;
+                Campaign.RunsLog(c, RunTexts.TrunkHome(lost), lost > 0 ? LogTones.Bad : LogTones.Good);
+            }
             c.Run = null;
             c.Squad = c.Squad.Where((id) => c.Soldiers.Any((s) => s.Id == id && s.Alive)).ToList();
             Campaign.RunsLog(c, line ?? (Levels.Of(c).Wounds ? RunTexts.RunEndedHurt : RunTexts.RunEnded), LogTones.Good);
