@@ -130,9 +130,9 @@ namespace Bastion.Engine.Tests
             // fight, `gearMoved` and `gearUsed`, since 16/11; El Toro's `roared`, `charged`, `knockedDown` and `gotUp`, H6; a
             // run's Rescate's `survivorFound`, N2; La Lata's `boarded` and `alighted`, T24; La llave's `unlocked`, G23.1; El
             // herido's `carried` and `setDown`, G23.3; Evacuación's `civilianFound`, `civilianPanicked` and `civilianHid`, G23.6;
-            // Las cargas' `chargePlaced`, `chargesTick` and `chargesBlown`).
+            // Las cargas' `chargePlaced`, `chargesTick` and `chargesBlown`; La Camilla's `downed`, 0.14.11).
             var converter = new TagConverter<GameEvent>("t", (e) => e.T);
-            Assert.Equal(99, converter.Tags.Count);
+            Assert.Equal(100, converter.Tags.Count);
         }
 
         [Fact]

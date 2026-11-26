@@ -398,7 +398,8 @@ namespace Bastion.UI.Combat
                 var hiding = u.Captive && v.Run != null && v.Mission.Guarded != true;
                 Tag(u.Captive && u.Lame != true, UnitWords.Agree(u, hiding ? "ESCONDIDO" : "CAUTIVO"), hiding ? "hide" : "data");
                 // El herido (U25; Lore's): on the floor, their broken leg; whoever carries them, «CARGANDO».
-                Tag(u.Lame == true && u.CarriedBy == null, Lore.WoundedText.FloorTag, "stun");
+                // (La Camilla's downed, 0.14.11: Lore's «MALHERIDO», what to do on hover.)
+                Tag(u.Lame == true && u.CarriedBy == null, Lore.WoundedText.FloorTagOf(u), "stun", u.Downed == true ? Lore.StretcherText.TagHelp(UnitWords.Female(u) ? Sexes.F : Sexes.M) : null);
                 Tag(u.Carrying != null, Lore.WoundedText.CarrierTag, "data");
                 Tag(u.Objective, "OBJETIVO", "stun");
                 // Saqueadores' guards (U28; Lore's words): «DESPREVENIDO» while their camp sleeps (the Golpe silencioso's
@@ -794,7 +795,8 @@ namespace Bastion.UI.Combat
                     // (El herido carried, U25: not alive in the engine's sense while on someone's back, never fallen.) Fallen as
                     // soon as their health is gone, with the bar, not once their death has played (R19 of Red, 23/11: a jump that
                     // kills, «CAÍDO» 2.6 s after the bar emptied); only mid-playback is anyone alive at 0.
-                    Dead = (!u.Alive || u.Hp <= 0) && !u.Evacuated && u.CarriedBy == null,
+                    // (La Camilla's downed lies alive at 0, 0.14.11: not fallen till they die.)
+                    Dead = (!u.Alive || (u.Hp <= 0 && u.Downed != true && !Downing(u.Id))) && !u.Evacuated && u.CarriedBy == null,
                     Female = u.Appearance?.Sex == "f",
                     // Inside La Lata (T24) it plays on (Bajar, Evacuar): not greyed as one already gone.
                     Evacuated = u.Evacuated && u.Aboard != true,
@@ -837,7 +839,8 @@ namespace Bastion.UI.Combat
             Tag(u.Captive && u.Lame != true, UnitWords.Agree(u, hiding ? "ESCONDIDO" : "CAUTIVO"), hiding ? "hide" : "data", hiding ? "state:hide" : "state:captive");
             // El herido (U25): on their bust, «PIERNA ROTA» on the floor; «CARGANDO» on whoever carries them.
             // (The bust's short ones, Lore's: «A BORDO»'s width at most.)
-            Tag(u.Lame == true && u.CarriedBy == null && u.Alive, Lore.WoundedText.FloorTagShort, "stun", "state:down");
+            // (La Camilla's downed too, 0.14.11: «NO ANDA» on both, Lore's; what to do on hover.)
+            Tag(u.Lame == true && u.CarriedBy == null && u.Alive, Lore.WoundedText.FloorTagShort, "stun", "state:down", u.Downed == true ? Lore.StretcherText.TagHelp(UnitWords.Female(u) ? Sexes.F : Sexes.M) : null);
             Tag(u.Carrying != null, Lore.WoundedText.CarrierTagShort, "data", "state:carry");
             Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi", "state:disoriented");
             Tag(u.Panicked, "PÁNICO", "psi", "state:panic");
@@ -1055,6 +1058,8 @@ namespace Bastion.UI.Combat
             }
             // The hordes on the way are not said on the card (playtest 19/10 #20); a flare drop, still.
             var alert = m.Reinforcements.Any(r => !r.Landed && r.Horde != true && r.Pos != null) ? "VIENEN MÁS" : null;
+            // La Camilla's downed soldier still outside La Lata (0.14.11): what to do, first, in El herido's words (Lore's).
+            if (Rules.DownedOf(s) is Unit downed && downed.Aboard != true) alert = Lore.WoundedText.Bring(downed.Name.Split(' ')[0]);
             // The noise meter (Ana's notes, Arturo 29/10): the horde's next wave as dB, 40 quiet and 90 as it comes (Math.round).
             var fill = Rules.HordeFill(s);
             var turnsLeft = m.TurnsLeft ?? -1;

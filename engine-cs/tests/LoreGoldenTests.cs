@@ -3309,14 +3309,14 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Llevad a Marta Gil a La Lata", Lore.WoundedText.Bring("Marta Gil"));
             Assert.Equal("Salid en La Lata", Lore.WoundedText.Leave);
             Assert.Equal("Sin recluta ni recompensa: salid en La Lata", Lore.WoundedText.DeadObjective);
-            Assert.Equal("No anda: se le lleva a hombros. Cargar, dejar y pasar cuestan una acción, siempre desde una casilla de al lado; recibir no cuesta nada. Cargando, se anda como mucho 6 casillas por turno y no se dispara el arma larga. Si cae quien carga, queda en el suelo, y ahí le pueden morder. La Lata no sale mientras siga fuera con vida.", Lore.WoundedText.ObjectiveTip);
-            Assert.Equal("Carga a hombros a quien tiene la pierna rota, desde una casilla de al lado. La primera vez, se une a la escuadra. Cargando, andas como mucho 6 casillas por turno y no disparas el arma larga; la pistola, sí.", Content.Abilities[AbilityIds.Carry].Description);
+            Assert.Equal("No anda: se le lleva a hombros. La primera vez que se le carga, se une a la escuadra. Cargar, dejar y pasar cuestan una acción, siempre desde una casilla de al lado; recibir no cuesta nada. Cargando, se anda como mucho 6 casillas por turno y no se dispara el arma larga. Si cae quien carga, queda en el suelo, y ahí le pueden morder. La Lata no sale mientras siga fuera con vida.", Lore.WoundedText.ObjectiveTip);
+            Assert.Equal("Carga a hombros a quien no puede andar, desde una casilla de al lado. Cargando, andas como mucho 6 casillas por turno y no disparas el arma larga; la pistola, sí.", Content.Abilities[AbilityIds.Carry].Description);
             Assert.Equal("Dejar", Content.Abilities[AbilityIds.SetDown].Name);
             Assert.Equal("Deja a quien llevas a hombros en una casilla libre de al lado. En una casilla de La Lata, sube a bordo en el acto.", Lore.WoundedText.SetDownHelp);
             Assert.Equal("Subir a Marta Gil a La Lata", Lore.WoundedText.SetDownAboardAction("Marta Gil"));
             Assert.Equal("Pasa a quien llevas a hombros a alguien de la escuadra que tengas al lado y no cargue a nadie. Recibir no cuesta nada.", Content.Abilities[AbilityIds.Pass].Description);
             Assert.Equal("No hay nadie a quien cargar.", Lore.WoundedText.NobodyToCarry);
-            Assert.Equal("Ponte al lado de quien tiene la pierna rota.", Lore.WoundedText.NotBeside);
+            Assert.Equal("Ponte al lado de quien no puede andar.", Lore.WoundedText.NotBeside);
             Assert.Equal("No anda: se le carga a hombros, con «Cargar».", Lore.WoundedText.NoTalk);
             Assert.Equal("No se sale sin quien pide ayuda en la zona marcada.", Lore.WoundedText.NotWithout(null));
             Assert.Equal("No se sale sin Marta Gil.", Lore.WoundedText.NotWithout("Marta Gil"));
@@ -3329,6 +3329,26 @@ namespace Bastion.Engine.Tests
             // On the busts, no longer than «A BORDO».
             Assert.True(Lore.WoundedText.CarrierTagShort.Length <= Lore.BoardText.AboardTag.Length);
             Assert.True(Lore.WoundedText.FloorTagShort.Length <= Lore.BoardText.AboardTag.Length);
+            // La Camilla (0.14.11): carried as El herido's wounded, its words agreeing with them.
+            Assert.Equal("PIERNA ROTA", Lore.WoundedText.FloorTagOf(new Unit { Lame = true }));
+            Assert.Equal("MALHERIDA", Lore.WoundedText.FloorTagOf(new Unit { Lame = true, Downed = true, Appearance = new Appearance { Sex = Sexes.F } }));
+            Assert.Equal("MALHERIDO", Lore.WoundedText.FloorTagOf(new Unit { Lame = true, Downed = true, Appearance = new Appearance { Sex = Sexes.M } }));
+            Assert.Equal("MALHERIDO", Lore.WoundedText.FloorTagOf(new Unit { Lame = true, Downed = true }));
+            Assert.Equal("Está malherida: no puede hacer nada.", Lore.StretcherText.NoPack(Sexes.F));
+            Assert.Equal("Está malherido: no puede hacer nada.", Lore.StretcherText.NoPack(Sexes.M));
+            Assert.Equal("Está malherida: en combate no se cura. Hay que llevarla a La Lata.", Lore.StretcherText.NoMedicine(Sexes.F));
+            Assert.Equal("Está malherido: en combate no se cura. Hay que llevarlo a La Lata.", Lore.StretcherText.NoMedicine(Sexes.M));
+            Assert.Equal("Anja Kowalska cae malherida: hay que llevarla a hombros a La Lata.", Lore.StretcherText.Downed("Anja Kowalska", Sexes.F));
+            Assert.Equal("Pierre Lambert cae malherido: hay que llevarlo a hombros a La Lata.", Lore.StretcherText.Downed("Pierre Lambert", Sexes.M));
+            Assert.Equal("Anja Kowalska ha caído malherida", Lore.StretcherText.Fallen("Anja Kowalska", Sexes.F));
+            Assert.Equal("Erik Nilsson ha caído malherido", Lore.StretcherText.Fallen("Erik Nilsson", Sexes.M));
+            Assert.Equal("No anda ni actúa. Llevadla a hombros a La Lata: si la vuelven a herir, o se queda fuera, muere.", Lore.StretcherText.TagHelp(Sexes.F));
+            Assert.Equal("No anda ni actúa. Llevadlo a hombros a La Lata: si lo vuelven a herir, o se queda fuera, muere.", Lore.StretcherText.TagHelp(Sexes.M));
+            Assert.Equal("Anja Kowalska vuelve malherida en la Camilla, con 1 de salud.", Lore.StretcherText.Home("Anja Kowalska", Sexes.F));
+            Assert.Equal("Pierre Lambert vuelve malherido en la Camilla, con 1 de salud.", Lore.StretcherText.Home("Pierre Lambert", Sexes.M));
+            Assert.Equal("La Camilla ya se ha usado en esta expedición.", Lore.StretcherText.Spent);
+            Assert.Equal("Camilla", Lore.UpgradeNames[UpgradeIds.Stretcher]);
+            Assert.Equal("Una vez por expedición, el primer soldado que cae no muere: queda malherido en el suelo. Si lo lleváis a hombros a La Lata, sale del combate con 1 de salud. Si lo vuelven a herir antes, o se queda fuera cuando sale La Lata, muere.", Lore.UpgradeLine(UpgradeIds.Stretcher));
             // G23.4, Separados (cuadros 71, 94 and 95): a group by its soldiers' first names.
             Assert.Equal("Separados", Lore.StageName(NodeKinds.Split));
             Assert.Equal("La escuadra empieza partida en dos grupos, a los dos lados de La Lata. Hay recompensa si La Lata sale con alguien de cada grupo a bordo; quien no haya subido se queda fuera. La ocultación es de toda la escuadra: se pierde para los dos grupos a la vez.", Lore.StageLine(NodeKinds.Split));

@@ -561,6 +561,17 @@ namespace Bastion.Engine
         public bool? Fell { get; set; }
     }
 
+    /// <summary>
+    /// La Camilla (cuadros 164 and 165): `unit`, of the squad, falls but lives, on the floor where it is (Unit.Downed, Lame):
+    /// the expedition's Camilla spent (MissionState.Stretcher false). `by`: who felled it, if anyone.
+    /// </summary>
+    public sealed class DownedEvent : GameEvent
+    {
+        public override string T => "downed";
+        public string Unit { get; set; } = "";
+        public string? By { get; set; }
+    }
+
     /// <summary>Down out of La Lata (T24, AbilityIds.GetOut): `unit` on `tile`, a free one of its zone, an action spent.</summary>
     public sealed class AlightedEvent : GameEvent
     {

@@ -103,10 +103,11 @@ namespace Bastion.Engine
         /// </summary>
         public static Unit? CarryTarget(GameState s, Unit u, Pos? from = null)
         {
-            from ??= u.Pos;
-            var w = Rules.WoundedOf(s);
-            if (w == null || !w.Alive || w.CarriedBy != null || u.Team != Teams.Xcom || u.Captive || u.Lame == true || u.Id == w.Id || u.Carrying != null) return null;
-            return Aim.Adjacent(from, w.Pos) && from.Z == w.Pos.Z && Looting.ReachesToSearch(s, from, w.Pos) ? w : null;
+            var at = from ?? u.Pos;
+            if (u.Team != Teams.Xcom || u.Captive || u.Lame == true || u.Carrying != null) return null;
+            // La Camilla's downed too (Rules.Carriable): El herido's wounded first, both beside.
+            return Rules.Carriable(s).FirstOrDefault((w) => w.Alive && w.CarriedBy == null && w.Id != u.Id
+                && Aim.Adjacent(at, w.Pos) && at.Z == w.Pos.Z && Looting.ReachesToSearch(s, at, w.Pos));
         }
 
         /// <summary>G23.3: the free tiles beside `u`, on its floor, it can set the wounded down on (reached as a box is searched).</summary>
@@ -130,11 +131,12 @@ namespace Bastion.Engine
         /// <summary>
         /// G23.3 El herido: what of carrying them `u` has in this fight (not in AbilitiesOf, which knows no fight: the bar
         /// would show them in every one): Cargar to one of the squad that carries nobody, Dejar and Pasar to one that
-        /// does; none outside the stage, nor for the wounded themselves.
+        /// does; none outside the stage, nor for the wounded themselves. La Camilla: in any fight, while its downed is to
+        /// save (Rules.DownedOf).
         /// </summary>
         public static List<string> CarryAbilities(GameState s, Unit u)
         {
-            if (s.Mission.Wounded != true || u.Team != Teams.Xcom || u.Captive || u.Lame == true || u.Template == TemplateIds.Vip
+            if ((s.Mission.Wounded != true && Rules.DownedOf(s) == null) || u.Team != Teams.Xcom || u.Captive || u.Lame == true || u.Template == TemplateIds.Vip
                 || Content.Templates[u.Template].Team != Teams.Xcom || u.Automaton != null) return new List<string>();
             return u.Carrying != null ? new List<string> { AbilityIds.SetDown, AbilityIds.Pass } : new List<string> { AbilityIds.Carry };
         }
@@ -283,6 +285,8 @@ namespace Bastion.Engine
         /// <summary>Why the ability cannot be used right now (ignoring targets), or null if it can.</summary>
         public static string? AbilityBlocker(GameState s, Unit u, string ability)
         {
+            // La Camilla's downed does nothing, not even what is free (De un vistazo; Producto's review of 26/11, C3).
+            if (u.Downed == true) return Lore.StretcherText.NoPack(u.Appearance?.Sex);
             if (!AbilitiesOf(u).Contains(ability) && !CarryAbilities(s, u).Contains(ability) && !ChargeAbilities(s, u).Contains(ability)) return "No tiene esa habilidad.";
             var def = Content.Abilities[ability];
             var need = ApNeeded(u, ability);
@@ -314,7 +318,7 @@ namespace Bastion.Engine
                     break;
                 case AbilityIds.Carry:
                     if (u.Carrying != null) return Lore.WoundedText.AlreadyCarrying;
-                    if (Rules.WoundedOf(s) is not Unit w || !w.Alive) return Lore.WoundedText.NobodyToCarry;
+                    if (!Rules.Carriable(s).Any((w) => w.Alive && w.CarriedBy == null)) return Lore.WoundedText.NobodyToCarry;
                     if (CarryTarget(s, u) == null) return Lore.WoundedText.NotBeside;
                     break;
                 case AbilityIds.SetDown:
@@ -480,7 +484,8 @@ namespace Bastion.Engine
                 if (!t.Alive || t.Team != u.Team || t.Captive || Grid.Distance(u.Pos, t.Pos) > range) return false;
                 // By hand, beside the ally: never through a floor.
                 if (range <= 1.5 && !Grid.SameSpace(s, u.Pos, t.Pos)) return false;
-                if (ability == AbilityIds.FirstAid) return t.Hp < t.MaxHp;
+                // La Camilla's downed: never healed on the field (home with 1 of health; hurt again, dead).
+                if (ability == AbilityIds.FirstAid) return t.Hp < t.MaxHp && t.Downed != true;
                 if (ability == AbilityIds.Revival) return HasBadStatus(t);
                 // Apaños (docs/FASE9.md): a weapon in the hand that isn't as good as new, its own or a partner's alongside.
                 return !string.IsNullOrEmpty(t.Arms?.Primary) && Content.ConditionOf(t) < 100;

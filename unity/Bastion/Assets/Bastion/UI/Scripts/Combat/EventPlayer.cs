@@ -235,7 +235,7 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>What follows an enemy's action and belongs to it: it doesn't end the action, nor start the next (game.ts FOLLOW_UP).</summary>
-        static bool FollowUp(GameEvent e) => e is DamagedEvent || e is DiedEvent || e is StunnedEvent || e is DisorientedEvent || e is NoiseEvent || e is TileChangedEvent || e is FloorBrokenEvent || e is FellEvent || e is ItemDroppedEvent;
+        static bool FollowUp(GameEvent e) => e is DamagedEvent || e is DiedEvent || e is DownedEvent || e is StunnedEvent || e is DisorientedEvent || e is NoiseEvent || e is TileChangedEvent || e is FloorBrokenEvent || e is FellEvent || e is ItemDroppedEvent;
 
         /// <summary>The pause after the last event of one of this player's own actions before the controls are back (game.ts HOLD_AFTER).</summary>
         static float HoldAfter(GameEvent e)
@@ -244,6 +244,8 @@ namespace Bastion.UI.Combat
             {
                 case DamagedEvent _: return 1;
                 case DiedEvent _: return 0.6f;
+                // (La Camilla's downed: a moment more, to read «MALHERIDO» over them.)
+                case DownedEvent _: return 0.8f;
                 case ShotEvent _: return 0.8f;
                 case StunnedEvent _: return 0.6f;
                 case TileChangedEvent _: return 0.6f;
@@ -333,6 +335,7 @@ namespace Bastion.UI.Combat
         {
             this.control = control;
             this.stop = stop;
+            control.Downing = Downs;
         }
 
         /// <summary>Events wait to be seen, or are being seen: the turn clock waits (game.ts reportIdle).</summary>
@@ -1280,7 +1283,8 @@ namespace Bastion.UI.Combat
                     var block = all.Skip(i).Take(j - i).Select(q => q.e).ToList();
                     if (block.Any(x => x is ShotEvent s && !s.Reaction && s.Unit == who && DeadsBlow(s) && Unit(s.Target)?.Team != Teams.Alien))
                     {
-                        var fell = new HashSet<string>(block.OfType<DiedEvent>().Select(d => d.Unit));
+                        // (La Camilla's downed fall too: a later bite on them isn't one at the same time; 0.14.11.)
+                        var fell = new HashSet<string>(block.OfType<DiedEvent>().Select(d => d.Unit).Concat(block.OfType<DownedEvent>().Select(d => d.Unit)));
                         var clash = block.SelectMany(Touches).Where(touched.Contains).Distinct().ToList();
                         var fells = clash.Any(fell.Contains);
                         if (!late.Contains(who) && !fells && !clash.Any(fixedOnes.Contains) && !block.SelectMany(Mentions).Any(born.Contains))
@@ -1298,7 +1302,7 @@ namespace Bastion.UI.Combat
                 // (What comes before anybody acts stays before these bites: it isn't jumped over.)
                 if (!started) continue;
                 touched.UnionWith(Touches(e));
-                if (e is MovedEvent || e is DiedEvent || e is FellEvent || e is ReanimatedEvent || e is ShotEvent { Reaction: true }) fixedOnes.UnionWith(Touches(e).Take(1));
+                if (e is MovedEvent || e is DiedEvent || e is DownedEvent || e is FellEvent || e is ReanimatedEvent || e is ShotEvent { Reaction: true }) fixedOnes.UnionWith(Touches(e).Take(1));
             }
             return front;
         }
@@ -1636,7 +1640,7 @@ namespace Bastion.UI.Combat
         {
             var all = queue.ToList();
             var n = 0;
-            while (n < all.Count && (all[n].e is DamagedEvent || all[n].e is DiedEvent || all[n].e is StunnedEvent)) n++;
+            while (n < all.Count && (all[n].e is DamagedEvent || all[n].e is DiedEvent || all[n].e is DownedEvent || all[n].e is StunnedEvent)) n++;
             var run = new List<(GameEvent, int?, int)>();
             if (n < 2) return run;
             for (var i = 0; i < n; i++) run.Add(Take(r));
@@ -1652,7 +1656,7 @@ namespace Bastion.UI.Combat
             {
                 foreach (var falls in new[] { false, true })
                 {
-                    var these = items.Where(q => (q.e is DiedEvent) == falls).ToList();
+                    var these = items.Where(q => (q.e is DiedEvent || q.e is DownedEvent) == falls).ToList();
                     if (these.Count == 0) continue;
                     current = these[0].e;
                     var plays = these.Select(PlaySafe).ToList();
@@ -1831,7 +1835,8 @@ namespace Bastion.UI.Combat
                 if (mine) planDue = true;
             }
             else if (e is CommandPassedEvent cp && cp.To == control.MySlot) planDue = true;
-            else if (e is MovedEvent || e is DiedEvent || e is EvacuatedEvent || e is BoardedEvent) control.DropPlan(UnitOf(e));
+            // (La Camilla's downed too: they won't walk the plan; the 0.14.11's independent review, C7.)
+            else if (e is MovedEvent || e is DiedEvent || e is DownedEvent || e is EvacuatedEvent || e is BoardedEvent) control.DropPlan(UnitOf(e));
             r.Left.Add(e);
             return e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent || e is SearchedEvent || e is RoomSearchedEvent || e is BoardsRemovedEvent;
         }
@@ -2252,13 +2257,32 @@ namespace Bastion.UI.Combat
                     }
                     if (d.Shred > 0) Float(chest + Vector3.up * 0.45f, "BLINDAJE DAÑADO", "warn");
                     if (crit && Cam()) rig.Shake(0.18f * Board.Tile, 0.3f);
-                    if (units != null && Dies(target.Id))
+                    // (La Camilla's downed as one who dies: the stagger is GoDown's, the blow's reaction let go; 0.14.11.)
+                    if (units != null && (Dies(target.Id) || Downs(target.Id)))
                     {
                         Loose(units.HitReact(target.Id, crit ? 1.5f : 1, stop));
                         await Wait(LethalBeat);
                     }
                     else if (units != null) await units.HitReact(target.Id, crit ? 1.5f : d.Amount > 0 ? 1 : 0.4f, stop);
                     else await Wait(0.4f);
+                    return;
+                }
+                // La Camilla (0.14.11): the first of ours to fall lies badly hurt, alive, to be carried to La Lata. The blow
+                // played as a lethal one (DamagedEvent); here the word over them, what to do in the log, and the fall.
+                case DownedEvent downed:
+                {
+                    var u = Unit(downed.Unit);
+                    if (u == null) return;
+                    // (Lore's words, Lore.StretcherText; the sex as the busts take it, a name's when there is no look.)
+                    var sex = UnitWords.Female(u) ? Sexes.F : Sexes.M;
+                    Log(Lore.StretcherText.Downed(u.Name, sex), "#ff8a78");
+                    if (!ShownToSquad(u)) return;
+                    Float(Chest(u.Id), Lore.StretcherText.Tag(sex), "alert", over: u.Id);
+                    control.Refresh();
+                    // Arte's fall (UnitViews.GoDown, under a second): the stagger, sinking as the Sync after settling sits them
+                    // (Arturo, cuadro 169: sat with the splint). Played before the event is settled; never Die, no fading.
+                    if (units != null) await units.GoDown(u.Id, stop);
+                    else await Wait(0.8f);
                     return;
                 }
                 case DiedEvent died:
@@ -3225,6 +3249,21 @@ namespace Bastion.UI.Combat
         /// Whether this attack fells its target: its `died` comes in the same batch, behind the shot, before anyone does
         /// anything else (game.ts fells).
         /// </summary>
+        /// <summary>
+        /// Whether `id` lies downed next (La Camilla, 0.14.11), before anyone does anything else, or is being downed now (its
+        /// event playing, not yet on the view): as Dies, for the HUD (CombatController.Downing).
+        /// </summary>
+        bool Downs(string id)
+        {
+            if (current is DownedEvent now && now.Unit == id) return true;
+            foreach (var (next, _, _) in queue)
+            {
+                if (next is DownedEvent d && d.Unit == id) return true;
+                if (NewAction(next)) return false;
+            }
+            return false;
+        }
+
         /// <summary>Whether `id` dies next, before anyone does anything else (as Fells, for its `damaged`: A-04).</summary>
         bool Dies(string id)
         {
@@ -3810,6 +3849,14 @@ namespace Bastion.UI.Combat
                     text = $"{who} ha roto la ocultación";
                     break;
                 }
+                case DownedEvent downed:
+                {
+                    var u = Unit(downed.Unit);
+                    if (u == null) return;
+                    text = Lore.StretcherText.Fallen(u.Name, UnitWords.Female(u) ? Sexes.F : Sexes.M);
+                    pos = u.Pos;
+                    break;
+                }
                 case DiedEvent died:
                 {
                     var u = Unit(died.Unit);
@@ -3959,7 +4006,8 @@ namespace Bastion.UI.Combat
         static OutcomeView RunOutcome(GameState s, bool won, string line)
         {
             // The survivor who got out in La Lata counts too (Gameplay, 18/11: out alone, the expedition goes on with them).
-            var home = s.Units.Count(u => u.Team == Teams.Xcom && ((u.CampaignId != null && (won ? !Fell(u) : u.Evacuated)) || Recruit(s, u)));
+            // (Who fell, as the engine counts it: Runs.FellInFight; one carried as it ends hasn't, the 0.14.11's review, B3.)
+            var home = s.Units.Count(u => u.Team == Teams.Xcom && ((u.CampaignId != null && (won ? !Runs.FellInFight(u) : u.Evacuated)) || Recruit(s, u)));
             var boss = s.Run.NodeKind == NodeKinds.Boss;
             var bossName = s.Mission.Boss != null ? s.Units.FirstOrDefault(u => u.Id == s.Mission.Boss)?.Name : null;
             var v = new OutcomeView { Victory = won, Line = line, Campaign = true };
@@ -3992,11 +4040,8 @@ namespace Bastion.UI.Combat
             return (stays ? Lore.TalkText.Joined(joined.Name) : RunTexts.SurvivorNoRoom(joined.Name)).TrimEnd('.');
         }
 
-        /// <summary>Fallen out there, or left behind (RunFights.ApplyFight's Fell).</summary>
         /// <summary>A survivor who joined on the map (a Rescate's or one loose) and went in La Lata: a recruit coming home.</summary>
         static bool Recruit(GameState s, Unit u) => u.CampaignId == null && u.Automaton == null && !u.Captive && u.Evacuated && (u.Id == s.Mission.ObjectiveUnit || u.Id == s.Mission.Survivor);
-
-        static bool Fell(Unit u) => (!u.Alive && !u.Evacuated && u.Hp <= 0) || u.Lost == true;
 
     }
 }

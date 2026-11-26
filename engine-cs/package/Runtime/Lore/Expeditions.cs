@@ -176,7 +176,7 @@ namespace Bastion.Engine
             public const string Leave = "Salid " + Bus.In;
             public const string DeadObjective = "Sin recluta ni recompensa: salid " + Bus.In;
             /// <summary>The strip's help.</summary>
-            public static string ObjectiveTip => $"No anda: se le lleva a hombros. Cargar, dejar y pasar cuestan una acción, siempre desde una casilla de al lado; recibir no cuesta nada. Cargando, se anda como mucho {Tiles} casillas por turno y no se dispara el arma larga. Si cae quien carga, queda en el suelo, y ahí le pueden morder. {Bus.Name} no sale mientras siga fuera con vida.";
+            public static string ObjectiveTip => $"No anda: se le lleva a hombros. La primera vez que se le carga, se une a la escuadra. Cargar, dejar y pasar cuestan una acción, siempre desde una casilla de al lado; recibir no cuesta nada. Cargando, se anda como mucho {Tiles} casillas por turno y no se dispara el arma larga. Si cae quien carga, queda en el suelo, y ahí le pueden morder. {Bus.Name} no sale mientras siga fuera con vida.";
 
             /// <summary>Over the flags: whoever carries them, and them on the floor.</summary>
             public const string CarrierTag = "CARGANDO";
@@ -184,10 +184,15 @@ namespace Bastion.Engine
             /// <summary>The same on the busts, which fit no more than «A BORDO» (UI, 19/11: «CARGAN…», «PIERNA R…»).</summary>
             public const string CarrierTagShort = "CARGA";
             public const string FloorTagShort = "NO ANDA";
+            /// <summary>The flag's tag for one on the floor: La Camilla's downed say so (StretcherText.Tag); the busts keep «NO ANDA».</summary>
+            public static string FloorTagOf(Unit u) => u.Downed == true ? StretcherText.Tag(u.Appearance?.Sex) : FloorTag;
 
-            /// <summary>The actions and their help (Content); Dejar's name on a tile of La Lata's, where they go in at once.</summary>
+            /// <summary>
+            /// The actions and their help (Content); Dejar's name on a tile of La Lata's, where they go in at once. Also for La
+            /// Camilla's downed (Rules.Carriable): «quien no puede andar», not «la pierna rota», and the joining in ObjectiveTip.
+            /// </summary>
             public const string CarryAction = "Cargar";
-            public static string CarryHelp => $"Carga a hombros a quien tiene la pierna rota, desde una casilla de al lado. La primera vez, se une a la escuadra. Cargando, andas como mucho {Tiles} casillas por turno y no disparas el arma larga; la pistola, sí.";
+            public static string CarryHelp => $"Carga a hombros a quien no puede andar, desde una casilla de al lado. Cargando, andas como mucho {Tiles} casillas por turno y no disparas el arma larga; la pistola, sí.";
             public const string SetDownAction = "Dejar";
             public const string SetDownHelp = "Deja a quien llevas a hombros en una casilla libre de al lado. En una casilla de " + Bus.Name + ", sube a bordo en el acto.";
             public static string SetDownAboardAction(string who) => $"Subir a {who} {Bus.To}";
@@ -197,7 +202,7 @@ namespace Bastion.Engine
             /// <summary>The refusals (Abilities, Rules): Hablar to them; La Lata out without them (`who` null while nobody has seen them).</summary>
             public const string AlreadyCarrying = "Ya llevas a alguien a hombros.";
             public const string NobodyToCarry = "No hay nadie a quien cargar.";
-            public const string NotBeside = "Ponte al lado de quien tiene la pierna rota.";
+            public const string NotBeside = "Ponte al lado de quien no puede andar.";
             public const string NotCarrying = "No llevas a nadie.";
             public const string NoFreeTile = "No hay ninguna casilla libre a tu lado.";
             public const string NobodyToPass = "No tienes al lado a nadie de la escuadra que pueda cargar.";
@@ -216,6 +221,39 @@ namespace Bastion.Engine
             public static string SetDownAboard(string by, string who) => $"{by} sube a {who} {Bus.To}.";
             public static string Fell(string by, string who) => $"{who} cae al suelo con {by}.";
             public const string FellFloat = "AL SUELO";
+        }
+
+        /// <summary>
+        /// La Camilla (0.14.11; cuadros 164 and 165; Gameplay's ENTREGA-0.14.11): the squad's first soldier to fall in an
+        /// expedition stays on the floor alive (Unit.Downed, DownedEvent), is carried to La Lata with WoundedText's actions,
+        /// and comes out of the fight with 1 of health. `sex` is Appearance.Sex: the words agree with them.
+        /// </summary>
+        public static class StretcherText
+        {
+            private static bool F(string? sex) => sex == Sexes.F;
+            private static string Them(string? sex) => F(sex) ? "la" : "lo";
+
+            /// <summary>«malherido», «malherida».</summary>
+            public static string Word(string? sex) => F(sex) ? "malherida" : "malherido";
+            /// <summary>Over the flag (WoundedText.FloorTagOf) and over the tile as they fall (DownedEvent).</summary>
+            public static string Tag(string? sex) => F(sex) ? "MALHERIDA" : "MALHERIDO";
+
+            /// <summary>The refusals: their own pack (RunPack), and a medicine on them (RunPack, Rules).</summary>
+            public static string NoPack(string? sex) => $"Está {Word(sex)}: no puede hacer nada.";
+            public static string NoMedicine(string? sex) => $"Está {Word(sex)}: en combate no se cura. Hay que llevar{Them(sex)} {Bus.To}.";
+
+            /// <summary>The combat log as they fall (DownedEvent), and the partner's notice (UI adds «· Ver (F)»).</summary>
+            public static string Downed(string who, string? sex) => $"{who} cae {Word(sex)}: hay que llevar{Them(sex)} a hombros {Bus.To}.";
+            public static string Fallen(string who, string? sex) => $"{who} ha caído {Word(sex)}";
+            /// <summary>The help of their tag, over the figure and on the bust (UI).</summary>
+            public static string TagHelp(string? sex) => $"No anda ni actúa. Llevad{Them(sex)} a hombros {Bus.To}: si {Them(sex)} vuelven a herir, o se queda fuera, muere.";
+
+            /// <summary>
+            /// The expedition's log: home from the fight (RunFights), and La Camilla spent (RunState.StretcherUsed), however
+            /// the downed came out.
+            /// </summary>
+            public static string Home(string who, string? sex) => $"{who} vuelve {Word(sex)} en la Camilla, con 1 de salud.";
+            public const string Spent = "La Camilla ya se ha usado en esta expedición.";
         }
 
         /// <summary>
@@ -462,6 +500,8 @@ namespace Bastion.Engine
             [UpgradeIds.Trunk] = "Baúl de La Lata",
             [UpgradeIds.Workshop] = "Taller",
             [UpgradeIds.Scrap] = "Chatarrero",
+            // The last (0.14.11).
+            [UpgradeIds.Stretcher] = "Camilla",
         };
 
         /// <summary>
@@ -516,6 +556,9 @@ namespace Bastion.Engine
                 case UpgradeIds.Scrap:
                     // Content.ScrapPrice: half the Trade's, without «Buen trato».
                     return "En la base, lo del almacén se puede cambiar por §: se paga la mitad que en el Trueque, sin contar «Buen trato». Lo que no se cambia en el Trueque, aquí tampoco.";
+                case UpgradeIds.Stretcher:
+                    // Rules.StretcherTakes, DownedEvent, RunFights: carried as El herido's wounded, dead if hurt again or left out.
+                    return $"Una vez por expedición, el primer soldado que cae no muere: queda malherido en el suelo. Si lo lleváis a hombros {Bus.To}, sale del combate con 1 de salud. Si lo vuelven a herir antes, o se queda fuera cuando sale {Bus.Name}, muere.";
                 case UpgradeIds.Kit:
                     // Runs.Issue: into a free place of the belt, if there is none of it there; Gear.Issued, never offered.
                     return level >= 2

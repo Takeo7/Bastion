@@ -605,7 +605,10 @@ namespace Bastion.Net
             if (EvacWaits(s)) return false;
             var bus = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
             // (Mordido's bitten not cured never gets in: none to wait for, G23.2.)
-            foreach (var o in Squad(s).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos) && !Rules.BittenUncured(s, o)))
+            // La Camilla's downed doesn't walk, and isn't waited for: the bot doesn't carry them (C6 of the 0.14.11's review: taken
+            // for one who walks, with all the rest in La Lata it never called it). Carrying them, as Gameplay's probe did, saved 6 %
+            // of them and lost the whole squad more often (375 of 450 against 340: notas-26-11/camilla).
+            foreach (var o in Squad(s).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos) && !Rules.BittenUncured(s, o) && o.Downed != true))
             {
                 // Careful: past the dead too, who move (a mate kept off by them, hanging back, was left on the ground 29 times
                 // in 708 fights against 2: row 1's bench, 24/11); but not once it has got no nearer two turns running: the dead
@@ -1354,7 +1357,8 @@ namespace Bastion.Net
         {
             if (!SplitFight(s) || Rules.SplitShort(s) is not List<Unit> behind) return false;
             var bus = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
-            return behind.Any((o) => !o.Captive && Paths.ComputeReach(s, o, double.MaxValue, null, (x) => x.Team != o.Team) is Reach r && bus.Any((n) => r.Cost.TryGetValue(n, out _)));
+            // (La Camilla's downed doesn't walk: not waited for, as in AllAboard.)
+            return behind.Any((o) => !o.Captive && o.Downed != true && Paths.ComputeReach(s, o, double.MaxValue, null, (x) => x.Team != o.Team) is Reach r && bus.Any((n) => r.Cost.TryGetValue(n, out _)));
         }
 
         /// <summary>

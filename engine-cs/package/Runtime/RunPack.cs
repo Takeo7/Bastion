@@ -142,6 +142,8 @@ namespace Bastion.Engine
             if (u.Team != Teams.Xcom || u.Captive || u.Objective || u.Automaton != null) return "No puedes dar órdenes a esa unidad.";
             if (!Content.CommandsFor(slot, u.Owner, connected)) return "Es de la escuadra del otro jugador.";
             if (!string.IsNullOrEmpty(u.ControlledBy) || u.Panicked) return "Ese soldado no responde.";
+            // La Camilla's downed does nothing, not even what is free.
+            if (u.Downed == true) return Lore.StretcherText.NoPack(u.Appearance?.Sex);
             if (u.Pack == null || u.Kit == null) return Texts.NoPack;
             if (!ItemActions.All.Contains(cmd.Action)) return Texts.NoGear;
             if (!Free(u, cmd.Action) && u.Ap <= 0) return Texts.NoActions;
@@ -183,6 +185,8 @@ namespace Bastion.Engine
                     var to = !string.IsNullOrEmpty(cmd.To) ? Grid.GetUnit(s, cmd.To!) : u;
                     if (to == null || !to.Alive || to.Team != Teams.Xcom || to.Objective) return "Solo en ti o en un compañero.";
                     if (to != u && !Aim.InMeleeReach(s, u.Pos, to.Pos)) return "Tiene que estar a tu lado.";
+                    // La Camilla's downed: never healed on the field.
+                    if (to.Downed == true) return Lore.StretcherText.NoMedicine(to.Appearance?.Sex);
                     // On the bitten not cured (G23.2), the medicine is no antiviral: say so (Lore).
                     if (to.Hp >= to.MaxHp) return Rules.BittenUncured(s, to) ? Lore.BiteText.MedicineNo : to == u ? "No tienes heridas." : "No tiene heridas.";
                     return null;
@@ -529,6 +533,24 @@ namespace Bastion.Engine
             }
             return out_;
         }
+
+        /// <summary>
+        /// La Camilla's downed (DownedEvent; Producto's review of 26/11, C5): what of the fight's own it carried in its pack
+        /// (La llave's key, Mordido's antiviral, Las cargas' charges) on the floor where it lies, `from` it, for another to
+        /// take, as if it had fallen; the rest stays with it.
+        /// </summary>
+        public static void Downed(GameState s, Unit u, Pos at)
+        {
+            if (u.Pack == null) return;
+            foreach (var p in u.Pack.Items.Where((p) => FightsOwn.Contains(p.Gear.Kind)).ToList())
+            {
+                (s.FloorGear ??= new List<DroppedGear>()).Add(new DroppedGear { Gear = p.Gear, Pos = Events.CopyPos(at), From = u.Id });
+                u.Pack.Items.Remove(p);
+            }
+        }
+
+        /// <summary>The gear of a fight's own, never home from it (GearKinds): what a downed soldier lets go of (Downed).</summary>
+        public static readonly IReadOnlyList<string> FightsOwn = new[] { GearKinds.Key, GearKinds.Antiviral, GearKinds.Charge };
 
         /// <summary>
         /// A run's soldier fell (DiedEvent): its kit (the belt with what is left of it) and its pack, on the floor where it

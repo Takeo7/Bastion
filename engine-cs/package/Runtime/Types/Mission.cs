@@ -365,6 +365,12 @@ namespace Bastion.Engine
         /// Missing: from the first.
         /// </summary>
         public int? HordeFrom { get; set; }
+        /// <summary>
+        /// La Camilla (cuadros 164 and 165): true, the squad's first soldier to fall in this fight is left on the floor alive
+        /// (Unit.Downed, DownedEvent), once an expedition; false, it was so in this one (RunState.StretcherUsed). Missing: no
+        /// Camilla, or used in an earlier fight.
+        /// </summary>
+        public bool? Stretcher { get; set; }
         /// <summary>A run's Asedio (H5): La Lata comes on this turn; till then it takes nobody, and the waves come every two turns.</summary>
         public int? HoldUntil { get; set; }
         /// <summary>A run's Travesía (H5): the edge the horde comes in by, the squad's start's (Sim.ChooseDropZone's sides).</summary>

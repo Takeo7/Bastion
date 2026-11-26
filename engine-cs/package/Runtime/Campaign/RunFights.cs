@@ -331,6 +331,8 @@ namespace Bastion.Engine
             // Motor afinado (cuadro 165): the horde later.
             var engine = Level(c, UpgradeIds.Engine);
             if (engine > 0) state.Mission.HordeFrom = EngineHordeFrom[Math.Min(engine, EngineHordeFrom.Count) - 1];
+            // La Camilla (cuadros 164 and 165): ready while not spent in this expedition.
+            if (Level(c, UpgradeIds.Stretcher) > 0 && c.Run?.StretcherUsed != true) state.Mission.Stretcher = true;
             return (state, name);
         }
 
@@ -692,8 +694,12 @@ namespace Bastion.Engine
             return room;
         }
 
-        /// <summary>One of a run's fight who fell in it, or was left behind when La Lata went (LeftBehindEvent).</summary>
-        private static bool FellInFight(Unit u) => (!u.Alive && !u.Evacuated && u.Hp <= 0) || u.Lost == true;
+        /// <summary>
+        /// One of a run's fight who fell in it, or was left behind when La Lata went (LeftBehindEvent). Not one carried on
+        /// someone's back as it ends (La Camilla's downed, El herido's wounded: off the field, but alive; Producto's review of
+        /// 26/11, B3). Public for the end screen (UI).
+        /// </summary>
+        public static bool FellInFight(Unit u) => (!u.Alive && !u.Evacuated && u.Hp <= 0 && u.CarriedBy == null) || u.Lost == true;
 
         /// <summary>
         /// What a unit of a run's fight lost there (ApplyFight): left behind, all it had on it; fallen, what it dropped
@@ -862,6 +868,12 @@ namespace Bastion.Engine
             if (run == null || node == null || fight == null || run.Phase != RunPhases.Fight) return report;
             // The gear counter goes on from where the fight left it.
             c.NextId = Math.Max(c.NextId, fight.NextGear);
+            // La Camilla spent in this fight: not again in this expedition, however it went for its downed.
+            if (mission.Mission.Stretcher == false && run.StretcherUsed != true)
+            {
+                run.StretcherUsed = true;
+                Campaign.RunsLog(c, Lore.StretcherText.Spent, LogTones.Info);
+            }
             var fought = 0;
             var standing = 0;
             foreach (var u in mission.Units)
@@ -889,6 +901,8 @@ namespace Bastion.Engine
                 }
                 standing++;
                 s.Kit = KitBack(u, s);
+                // La Camilla's downed, home in La Lata: with 1 of health (none left in the fight).
+                if (u.Downed == true) Campaign.RunsLog(c, Lore.StretcherText.Home(s.Name, s.Appearance?.Sex), LogTones.Good);
                 var hp = Math.Max(1, Math.Min(MaxHp(s), u.Hp));
                 run.Hp[s.Id] = hp;
                 if (hp < MaxHp(s)) entry.Status = ReportStatuses.Wounded;

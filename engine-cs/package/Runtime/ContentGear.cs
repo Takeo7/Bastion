@@ -238,6 +238,8 @@ namespace Bastion.Engine
             [UpgradeIds.Trunk] = new[] { 120, 200 },
             [UpgradeIds.Workshop] = new[] { 100, 200 },
             [UpgradeIds.Scrap] = new[] { 120 },
+            // The last (0.14.11).
+            [UpgradeIds.Stretcher] = new[] { 250 },
         };
 
         /// <summary>Baúl de La Lata: its rows by level, 4 wide (cuadro 165: 4×2, 4×4).</summary>

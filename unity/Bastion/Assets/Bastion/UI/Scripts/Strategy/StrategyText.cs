@@ -209,12 +209,12 @@ namespace Bastion.UI.Strategy
                     case Bastion.Engine.UpgradeIds.Squad:
                     case Bastion.Engine.UpgradeIds.Mend:
                     case Bastion.Engine.UpgradeIds.Training:
-                    case "stretcher":
+                    case Bastion.Engine.UpgradeIds.Stretcher:
                     case Bastion.Engine.UpgradeIds.Kit:
                         return "squad";
                     case Bastion.Engine.UpgradeIds.Pack:
                     case Bastion.Engine.UpgradeIds.Sight:
-                    case "trunk":
+                    case Bastion.Engine.UpgradeIds.Trunk:
                     case Bastion.Engine.UpgradeIds.Route:
                     case Bastion.Engine.UpgradeIds.Engine:
                     case Bastion.Engine.UpgradeIds.Radio:
@@ -243,9 +243,9 @@ namespace Bastion.UI.Strategy
                     // The ten of cuadros 164 and 165 (Lore's TEXTOS.md; the engine's figures). `level`, the next one.
                     // (The same at every level, and never «barra»: Arturo, cuadro 166.)
                     case Bastion.Engine.UpgradeIds.Training: return "+1 punto de habilidad al unirse";
-                    case "stretcher": return "El primero que cae no muere, una vez por expedición";
+                    case Bastion.Engine.UpgradeIds.Stretcher: return "El primero que cae no muere, una vez por expedición";
                     case Bastion.Engine.UpgradeIds.Kit: return level <= 1 ? "Todos salen con un botiquín" : "Todos salen también con un cóctel molotov";
-                    case "trunk": return level <= 1 ? "Un baúl de 4×2 en La Lata" : "Baúl de 4×2 → 4×4";
+                    case Bastion.Engine.UpgradeIds.Trunk: return level <= 1 ? "Un baúl de 4×2 en La Lata" : "Baúl de 4×2 → 4×4";
                     case Bastion.Engine.UpgradeIds.Route: return "Volver a la base desde un Trueque";
                     case Bastion.Engine.UpgradeIds.Engine:
                     {
@@ -253,13 +253,13 @@ namespace Bastion.UI.Strategy
                         return level <= 1 ? $"La horda, desde el turno {from[0]}" : $"La horda, desde el turno {from[level - 2]} → {from[System.Math.Min(level, from.Count) - 1]}";
                     }
                     case Bastion.Engine.UpgradeIds.Radio: return "Avisos de todas las etapas · +1 etapa a la vista";
-                    case "workshop": return level <= 1 ? "Hacer cargadores, flechas y cócteles" : "Hacer accesorios, a 45 §";
+                    case Bastion.Engine.UpgradeIds.Workshop: return level <= 1 ? "Hacer cargadores, flechas y cócteles" : "Hacer accesorios, a 45 §";
                     case Bastion.Engine.UpgradeIds.Garden:
                     {
                         var gives = Bastion.Engine.Runs.GardenSupplies;
                         return level <= 1 ? $"+{gives[0]} § al volver" : $"{gives[level - 2]} → {gives[System.Math.Min(level, gives.Count) - 1]} § al volver";
                     }
-                    case "scrap": return "Cambiar en la base, a la mitad del Trueque";
+                    case Bastion.Engine.UpgradeIds.Scrap: return "Cambiar en la base, a la mitad del Trueque";
                     case Bastion.Engine.UpgradeIds.Squad: return $"{seats} → {next} plazas";
                     case Bastion.Engine.UpgradeIds.Stash: return "+2 filas en el almacén";
                     case Bastion.Engine.UpgradeIds.Pack: return "+1 fila en cada mochila";

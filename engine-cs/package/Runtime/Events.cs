@@ -528,6 +528,35 @@ namespace Bastion.Engine
                 case SmokeDeployedEvent ev:
                     s.Smoke.Add(new SmokeCloud { Pos = CopyPos(ev.Pos), Radius = ev.Radius, Turns = ev.Turns });
                     break;
+                case DownedEvent ev:
+                {
+                    // La Camilla: on the floor alive, out of the fight as the wounded (Lame), no health left; the Camilla spent.
+                    var u = UnitOf(s, ev.Unit);
+                    u.Downed = true;
+                    u.Lame = true;
+                    u.Hp = 0;
+                    u.Ap = 0;
+                    u.Moves = 0;
+                    u.Overwatch = false;
+                    u.KillZone = false;
+                    u.WatchMelee = null;
+                    u.Hunkered = false;
+                    u.Hidden = null;
+                    u.Aided = 0;
+                    u.Down = null;
+                    EndSuppression(s, u);
+                    if (!string.IsNullOrEmpty(u.SuppressedBy))
+                    {
+                        var by = Grid.GetUnit(s, u.SuppressedBy!);
+                        if (by != null) by.Suppressing = null;
+                        u.SuppressedBy = null;
+                    }
+                    s.Mission.Stretcher = false;
+                    // What of the fight's own it carried, on the floor (RunPack.Downed); the item of a mission, dropped before
+                    // (Sim.Damage: ItemDroppedEvent).
+                    RunPack.Downed(s, u, Flights.RestingPlace(s, u.Pos));
+                    break;
+                }
                 case DisorientedEvent ev:
                     UnitOf(s, ev.Unit).Disoriented = 1;
                     ThrowLanded(s, UnitOf(s, ev.Unit));
@@ -1353,6 +1382,7 @@ namespace Bastion.Engine
                 Lost = u.Lost,
                 Aboard = u.Aboard,
                 Lame = u.Lame,
+                Downed = u.Downed,
                 Guard = u.Guard,
                 Carrying = u.Carrying,
                 Hauled = u.Hauled,
@@ -1510,6 +1540,7 @@ namespace Bastion.Engine
                     Siege = m.Siege != null ? new Siege { Hold = m.Siege.Hold } : null,
                     Awake = m.Awake,
                     HordeFrom = m.HordeFrom,
+                    Stretcher = m.Stretcher,
                     HoldUntil = m.HoldUntil,
                     HordeSide = m.HordeSide,
                     Stealth = m.Stealth,

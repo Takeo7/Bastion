@@ -25,10 +25,16 @@ namespace Bastion.Client.Units
             {
                 v.woundedClip = clip;
                 var c = clip != null ? FigureCatalog.Load()?.Clip(clip) : null;
-                // (At once, no blend: set down it stood on its broken leg for three frames before sitting.)
+                // (At once, no blend: set down it stood on its broken leg for three frames before sitting. But one going down
+                // badly hurt, La Camilla's: eased, from its stagger down to the floor. GoDown.)
+                bool now = !v.sinking;
+                v.sinking = false;
                 var part = Anims.CampPartOf(clip);
-                if (c != null && part?.loop != null && part.loop.Length >= 2) v.anim.CampLoop(c, true, part.loop[0], part.loop[1]);
-                else v.anim.CampLoop(c, true);
+                if (c != null && part?.loop != null && part.loop.Length >= 2) v.anim.CampLoop(c, now, part.loop[0], part.loop[1]);
+                else v.anim.CampLoop(c, now);
+                // (A soldier's weapons, La Camilla's of the 0.14.11: put away, the long gun on its back and the pistol in its
+                // holster, not in its hands as it sits. Producto, 26/11: they stay with it.)
+                if (clip != null && v.carried.Count > 0 && v.drawn != EmptyHands) Draw(v, EmptyHands);
                 // (Posed now: the Sync that sets it down comes after the frame's step, and it was drawn a frame as it rode.)
                 if (clip != null)
                 {
@@ -39,6 +45,20 @@ namespace Bastion.Client.Units
             if (u.Lame == true && v.splint == null) v.splint = Splint(v);
             return clip != null;
         }
+
+        /// <summary>
+        /// A soldier going down badly hurt (La Camilla; DownedEvent, in a death's place): the blow's stagger, and it sinks to
+        /// the floor as the Sync that follows sits it (WoundedPose, eased this once). No body, no fading. UI's EventPlayer
+        /// calls it as it plays «downed», before it settles the event.
+        /// </summary>
+        public async Awaitable GoDown(string id, System.Threading.CancellationToken ct = default)
+        {
+            if (!views.TryGetValue(id, out var v) || v.dead) return;
+            v.sinking = true;
+            await HitReactNow(v, 1.5f, ct);
+            await Awaitable.WaitForSecondsAsync(GoDownHold, ct);
+        }
+        const float GoDownHold = 0.15f;
 
         /// <summary>Its broken leg out straight along the ground, a little to its side: over the loop, each frame.</summary>
         static void WoundedLeg(View v)
@@ -72,15 +92,34 @@ namespace Bastion.Client.Units
             carriers.Clear();
             foreach (var v in views.Values)
                 if (v.carriedBy != null) carriers.Add(v.carriedBy);
+            // (The carried one's own long gun, on its back: not drawn while it rides, there it went through its carrier.)
+            foreach (var v in views.Values)
+            {
+                bool hideSlung = v.carriedBy != null;
+                if (!v.carried.TryGetValue(MainCarry, out var slung) || slung == null) continue;
+                // (Asked of the gun itself each frame, not remembered alone: a Draw or a fade's end shows it again.)
+                if (hideSlung && slung.gameObject.activeSelf)
+                {
+                    slung.gameObject.SetActive(false);
+                    v.slungHidden = true;
+                }
+                else if (!hideSlung && v.slungHidden)
+                {
+                    v.slungHidden = false;
+                    slung.gameObject.SetActive(true);
+                }
+            }
             foreach (var v in views.Values)
             {
                 bool carries = carriers.Contains(v.id);
                 bool hide = carries && v.inHand == Held.Rifle && v.weapon != null;
-                if (hide != v.gunHidden)
+                // (While hidden, every frame: a fade's end or the cutaway turns its renderers on again.)
+                if (hide != v.gunHidden || hide)
                 {
                     v.gunHidden = hide;
                     if (v.weapon != null)
-                        foreach (var r in v.weapon.GetComponentsInChildren<Renderer>(true)) r.enabled = !hide;
+                        foreach (var r in v.weapon.GetComponentsInChildren<Renderer>(true))
+                            if (r.enabled == hide) r.enabled = !hide;
                 }
                 // (Its rucksack, Sidekick's part on the back: of one mesh with the rest, so its bone shrunk to nothing.)
                 if (carries && !v.backSought && v.body != null)

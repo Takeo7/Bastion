@@ -272,6 +272,10 @@ namespace Bastion.Client.Units
             public float labTime;
             /// <summary>The camp loop the wounded sits in (UnitViews.Wounded), or null; and its splint, once built.</summary>
             public string woundedClip;
+            /// <summary>Going down badly hurt (GoDown): its sitting eased into, once, not there at a stroke (WoundedPose).</summary>
+            public bool sinking;
+            /// <summary>Its long gun on its back not drawn while it is carried (StepCarried: through its carrier's head and arms).</summary>
+            public bool slungHidden;
             public GameObject splint;
             /// <summary>Who carries it on its shoulders (Unit.CarriedBy; UnitViews.Wounded's StepCarried), or null.</summary>
             public string carriedBy;

@@ -238,11 +238,12 @@ namespace Bastion.Engine
 
         /// <summary>
         /// Separados: a group all fallen (nobody of it alive nor in La Lata): the reward is lost whatever happens (Lore's
-        /// line; no warning on leaving any more).
+        /// line; no warning on leaving any more). One carried on someone's back is alive (La Camilla's downed; Producto's
+        /// review of 26/11, C8).
         /// </summary>
         public static bool SplitLost(GameState s)
         {
-            return s.Mission.Split != null && Enumerable.Range(0, s.Mission.Split.Count).Any((g) => !SplitUnits(s, g).Any((u) => u.Alive || u.Evacuated));
+            return s.Mission.Split != null && Enumerable.Range(0, s.Mission.Split.Count).Any((g) => !SplitUnits(s, g).Any((u) => u.Alive || u.Evacuated || u.CarriedBy != null));
         }
 
         /// <summary>
@@ -254,9 +255,11 @@ namespace Bastion.Engine
         {
             if (s.Mission.Split == null || SplitLost(s)) return null;
             var noSeat = NoSeat(s);
-            bool Goes(Unit u) => u.Evacuated || (u.Alive && Abilities.InEvacZone(s, u.Pos) && !noSeat.Contains(u));
+            // On someone's back, it goes if they do (La Camilla's downed).
+            bool Goes(Unit u) => u.Evacuated || (u.Alive && Abilities.InEvacZone(s, u.Pos) && !noSeat.Contains(u))
+                || (u.CarriedBy != null && Grid.GetUnit(s, u.CarriedBy) is Unit by && Goes(by));
             for (var g = 0; g < s.Mission.Split.Count; g++)
-                if (!SplitUnits(s, g).Any(Goes)) return SplitUnits(s, g).Where((u) => u.Alive).ToList();
+                if (!SplitUnits(s, g).Any(Goes)) return SplitUnits(s, g).Where((u) => u.Alive || u.CarriedBy != null).ToList();
             return null;
         }
 
@@ -332,6 +335,34 @@ namespace Bastion.Engine
         public static bool WoundedSafe(GameState s)
         {
             return WoundedOf(s) is Unit w && w.Evacuated;
+        }
+
+        /// <summary>
+        /// La Camilla (cuadros 164 and 165): whether `u`, falling now, is left on the floor alive (DownedEvent) instead of
+        /// dead: one of the squad's soldiers (not one who joined on the map, a turret nor the wounded), the Camilla ready.
+        /// </summary>
+        public static bool StretcherTakes(GameState s, Unit u)
+        {
+            return s.Mission.Stretcher == true && u.Team == Teams.Xcom && u.CampaignId != null && u.Lame != true && !u.Captive && !u.Objective
+                && u.Automaton == null && u.Template != TemplateIds.Vip && u.Aboard != true;
+        }
+
+        /// <summary>La Camilla: the fight's downed soldier (Unit.Downed) still to save: on the floor or carried, not dead nor in La Lata.</summary>
+        public static Unit? DownedOf(GameState s)
+        {
+            return s.Units.FirstOrDefault((u) => u.Downed == true && !u.Evacuated && (u.Alive || u.CarriedBy != null));
+        }
+
+        /// <summary>
+        /// Who can be carried in this fight (AbilityIds.Carry): El herido's wounded and La Camilla's downed, whoever of them
+        /// there is, alive or carried.
+        /// </summary>
+        public static List<Unit> Carriable(GameState s)
+        {
+            var all = new List<Unit>();
+            if (WoundedOf(s) is Unit w) all.Add(w);
+            if (DownedOf(s) is Unit d) all.Add(d);
+            return all;
         }
 
         /// <summary>

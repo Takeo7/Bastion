@@ -150,18 +150,18 @@ namespace Bastion.Engine
                     break;
                 case AbilityIds.RapidFire:
                     Attack(u, target!, ability);
-                    if (u.Alive && target!.Alive && !Over && Loaded()) Attack(u, target, ability);
+                    if (!Felled(u) && target!.Alive && !Over && Loaded()) Attack(u, target, ability);
                     break;
                 case AbilityIds.ChainShot:
                 {
                     var first = Attack(u, target!, ability);
-                    if (first != null && first != ShotResults.Miss && u.Alive && target!.Alive && !Over && Loaded()) Attack(u, target, ability);
+                    if (first != null && first != ShotResults.Miss && !Felled(u) && target!.Alive && !Over && Loaded()) Attack(u, target, ability);
                     break;
                 }
                 case AbilityIds.Faceoff:
                     foreach (var t in Abilities.RangedTargets(S, u, AbilityIds.Faceoff))
                     {
-                        if (!u.Alive || Over) break;
+                        if (Felled(u) || Over) break;
                         if (t.Alive) Attack(u, t, AbilityIds.Faceoff);
                     }
                     break;
@@ -185,7 +185,7 @@ namespace Bastion.Engine
                     // Hacerse sitio (docs/FASE9.md): a Slash at every enemy alongside, without a step.
                     foreach (var t in Abilities.BesideEnemies(S, u))
                     {
-                        if (!u.Alive || Over) break;
+                        if (Felled(u) || Over) break;
                         if (t.Alive) MeleeAttack(u, new MeleeOption { Target = t, Tile = u.Pos, Path = new List<Pos>() }, AbilityIds.Slash, false);
                     }
                     break;
@@ -262,21 +262,28 @@ namespace Bastion.Engine
                 {
                     // G23.3 El herido: on its back; the first time, found and joined too, no Talk (Producto, cuadro 92).
                     var w = Abilities.CarryTarget(S, u)!;
-                    if (S.Mission.SurvivorFound != true) Emit(new SurvivorFoundEvent { Unit = w.Id, By = u.Id });
-                    // Joined the first time (found, they are no captive any more: Events.SurvivorFound; nobody's till now).
-                    if (w.Captive || w.Owner == null) Emit(new VipRescuedEvent { Unit = w.Id, By = u.Id, Owner = u.Owner });
+                    // (La Camilla's downed is of the squad already: neither.)
+                    if (w.Downed != true)
+                    {
+                        if (S.Mission.SurvivorFound != true) Emit(new SurvivorFoundEvent { Unit = w.Id, By = u.Id });
+                        // Joined the first time (found, they are no captive any more: Events.SurvivorFound; nobody's till now).
+                        if (w.Captive || w.Owner == null) Emit(new VipRescuedEvent { Unit = w.Id, By = u.Id, Owner = u.Owner });
+                    }
                     Emit(new CarriedEvent { Unit = u.Id, Target = w.Id });
                     break;
                 }
                 case AbilityIds.SetDown:
-                    Emit(new SetDownEvent { Unit = u.Id, Target = u.Carrying!, Tile = Engine.Events.CopyPos(tile!) });
-                    // On a tile of La Lata's (T24): in at once, with no seat taken (Arturo, cuadro 92).
-                    if (Rules.WoundedOf(S) is Unit down && down.Alive && Rules.LaLataHere(S) && Abilities.InEvacZone(S, down.Pos))
+                {
+                    var set = u.Carrying!;
+                    Emit(new SetDownEvent { Unit = u.Id, Target = set, Tile = Engine.Events.CopyPos(tile!) });
+                    // On a tile of La Lata's (T24): in at once, with no seat taken (Arturo, cuadro 92); La Camilla's downed too.
+                    if (Grid.GetUnit(S, set) is Unit down && down.Alive && Rules.LaLataHere(S) && Abilities.InEvacZone(S, down.Pos))
                     {
                         Emit(new BoardedEvent { Unit = down.Id });
                         CheckOutcome();
                     }
                     break;
+                }
                 case AbilityIds.Pass:
                     Emit(new CarriedEvent { Unit = target!.Id, Target = u.Carrying!, From = u.Id });
                     break;
@@ -341,7 +348,7 @@ namespace Bastion.Engine
         public string? Attack(Unit attacker, Unit target, string ability, bool reaction = false)
         {
             if (!reaction) CoveringFire(attacker);
-            if (!attacker.Alive || !target.Alive || Over) return null;
+            if (Felled(attacker) || !target.Alive || Over) return null;
             var preview = Aim.PreviewShot(S, attacker, target, new ShotOptions { Ability = ability, Reaction = reaction });
             if (preview == null) return null;
             var shot = Aim.ResolveShot(preview, Rng);
@@ -370,7 +377,7 @@ namespace Bastion.Engine
                 if (ability == AbilityIds.Rupture && target.Alive) Emit(new RupturedEvent { Unit = target.Id, Amount = Content.RuptureDamage });
                 if (!target.Alive && !reaction) AfterKill(attacker, target, ability, preview.Origin);
                 // Segundo aliento: a blade kill heals 1.
-                if (!target.Alive && weapon.Melee && Content.HasPerk(attacker, PerkIds.SecondWind) && attacker.Alive && attacker.Hp < attacker.MaxHp)
+                if (!target.Alive && weapon.Melee && Content.HasPerk(attacker, PerkIds.SecondWind) && !Felled(attacker) && attacker.Hp < attacker.MaxHp)
                 {
                     Emit(new HealedEvent { Unit = attacker.Id, Target = attacker.Id, Amount = 1 });
                 }
@@ -409,14 +416,14 @@ namespace Bastion.Engine
             Damage(target, target.Hp, 0, u, target.Armor);
             if (!target.Alive) AfterKill(u, target, AbilityIds.Takedown, u.Pos);
             // Segundo aliento, as after any kill with the blade.
-            if (!target.Alive && Content.HasPerk(u, PerkIds.SecondWind) && u.Alive && u.Hp < u.MaxHp) Emit(new HealedEvent { Unit = u.Id, Target = u.Id, Amount = 1 });
+            if (!target.Alive && Content.HasPerk(u, PerkIds.SecondWind) && !Felled(u) && u.Hp < u.MaxHp) Emit(new HealedEvent { Unit = u.Id, Target = u.Id, Amount = 1 });
             CheckOutcome();
         }
 
         /// <summary>Implacable and Death From Above give an action back after a kill, once per turn.</summary>
         private void AfterKill(Unit killer, Unit victim, string ability, Pos from)
         {
-            if (killer.Refunded || !killer.Alive) return;
+            if (killer.Refunded || Felled(killer)) return;
             var melee = Content.AttackWeapon(killer, ability).Melee;
             if (melee && Content.HasPerk(killer, PerkIds.Implacable)) Emit(new RefundEvent { Unit = killer.Id, Reason = RefundReasons.Implacable });
             else if (!melee && Content.HasPerk(killer, PerkIds.DeathFromAbove) && Grid.HeightAt(S, from) > Grid.HeightAt(S, victim.Pos))
@@ -438,10 +445,16 @@ namespace Bastion.Engine
                 Los.CanSee(S, o, attacker)).ToList();
             foreach (var o in watchers)
             {
-                if (!attacker.Alive || Over) break;
+                if (Felled(attacker) || Over) break;
                 Attack(o, attacker, AbilityIds.Shoot, true);
             }
         }
+
+        /// <summary>
+        /// Whether `u` can't go on with what it was doing (a walk, a strike, a sweep, what a kill gives back): dead, or La
+        /// Camilla's downed, alive but out of the fight (Producto's review of 26/11, B1 and C2).
+        /// </summary>
+        private static bool Felled(Unit u) => !u.Alive || u.Downed == true;
 
         /// <summary>
         /// Armour absorbs up to its value per hit (unless the attack pierces it), then
@@ -457,6 +470,12 @@ namespace Bastion.Engine
             if (S.Mission.Item?.Carrier == u.Id) Emit(new ItemDroppedEvent { Pos = Flights.RestingPlace(S, u.Pos) });
             // G23.3 El herido: on the floor where their carrier falls, unhurt.
             if (u.Carrying != null) Emit(new SetDownEvent { Unit = u.Id, Target = u.Carrying, Tile = Flights.RestingPlace(S, u.Pos), Fell = true });
+            // La Camilla (cuadros 164 and 165): the expedition's first soldier to fall lives, on the floor where it is.
+            if (Rules.StretcherTakes(S, u))
+            {
+                Emit(new DownedEvent { Unit = u.Id, By = source?.Id });
+                return;
+            }
             Emit(new DiedEvent { Unit = u.Id, By = source?.Id });
             // A patrol car's or an ambulance's siren silenced: the car stays, over its tile as over its nose's (19/10), solid. Without
             // an alarm said (a skirmish, older saves), a car but in a facility, as the client draws it (unitViews.ts ALARM_BY_MAP).
@@ -524,7 +543,7 @@ namespace Bastion.Engine
         {
             if (option.Path.Count > 0) MoveAlong(u, option.Path, 0);
             var target = Grid.GetUnit(S, option.Target.Id);
-            if (!u.Alive || target == null || !target.Alive || Over || !Aim.InReachOf(S, u, u.Pos, target.Pos)) return;
+            if (Felled(u) || target == null || !target.Alive || Over || !Aim.InReachOf(S, u, u.Pos, target.Pos)) return;
             var result = Attack(u, target, ability);
             if (ability == AbilityIds.StunLance && result != null && result != ShotResults.Miss && target.Alive) Emit(new StunnedEvent { Unit = target.Id });
             // Golpe al oído (board.ts): a blade that strikes leaves the enemy reeling.
@@ -533,7 +552,7 @@ namespace Bastion.Engine
             if (!sweep || ability != AbilityIds.Slash || !Content.Sweeps(u)) return;
             foreach (var t in Abilities.BesideEnemies(S, u).Where((t) => t.Id != target.Id))
             {
-                if (!u.Alive || Over) break;
+                if (Felled(u) || Over) break;
                 if (t.Alive) MeleeAttack(u, new MeleeOption { Target = t, Tile = u.Pos, Path = new List<Pos>() }, AbilityIds.Slash, false);
             }
         }
@@ -543,7 +562,7 @@ namespace Bastion.Engine
             // The Hinchado's burst is its death: nobody gets to fire first, and it goes off without it.
             var bursting = ability == AbilityIds.Burst;
             if (!bursting) CoveringFire(source);
-            if ((!source.Alive && !bursting) || Over) return;
+            if ((Felled(source) && !bursting) || Over) return;
             var weapon = Content.Weapons[Content.Abilities[ability].Explosive!];
             Emit(new ExplosiveEvent { Unit = source.Id, Ability = ability, Target = center });
             var tiles = Abilities.BlastTiles(S, ability, center, source);
@@ -641,7 +660,7 @@ namespace Bastion.Engine
         private void Molotov(Unit u, Pos center)
         {
             CoveringFire(u);
-            if (!u.Alive || Over) return;
+            if (Felled(u) || Over) return;
             Emit(new ExplosiveEvent { Unit = u.Id, Ability = AbilityIds.Molotov, Target = center });
             // N4 (Arturo, 22/11, cuadro 120): on whatever floor it lands, and only there (a floor stops it: BlastTiles).
             var tiles = Abilities.BlastTiles(S, AbilityIds.Molotov, center, u)
@@ -676,7 +695,8 @@ namespace Bastion.Engine
             {
                 var a = S.Units[i];
                 if (!a.Alive || a.Team != u.Team || a.Captive || Grid.Distance(a.Pos, u.Pos) > range || !Grid.SameSpace(S, a.Pos, u.Pos)) continue;
-                var heal = Math.Min(Content.RestorationHeal, a.MaxHp - a.Hp);
+                // La Camilla's downed: never healed on the field.
+                var heal = a.Downed == true ? 0 : Math.Min(Content.RestorationHeal, a.MaxHp - a.Hp);
                 if (heal > 0) Emit(new HealedEvent { Unit = u.Id, Target = a.Id, Amount = heal });
                 if (Abilities.HasBadStatus(a)) Emit(new CleansedEvent { Unit = u.Id, Target = a.Id });
             }
@@ -959,7 +979,7 @@ namespace Bastion.Engine
                 {
                     Flush();
                     Damage(u, Content.FallDamage * fell, 0, null, u.Armor);
-                    if (!u.Alive || Over) return;
+                    if (Felled(u) || Over) return;
                 }
 
                 // A trap of the base under one of the dead (docs/FASE12.md §11.4): it stops there.
@@ -969,7 +989,7 @@ namespace Bastion.Engine
                 {
                     Flush();
                     Burn(u, step);
-                    if (!u.Alive || Over) return;
+                    if (Felled(u) || Over) return;
                 }
 
                 var item = S.Mission.Item;
@@ -1035,28 +1055,28 @@ namespace Bastion.Engine
                 Flush();
                 foreach (var r in reactors)
                 {
-                    if (!u.Alive || Over) break;
+                    if (Felled(u) || Over) break;
                     // Noticed, the squad is seen.
                     if (r.Alive && r.Overwatch && u.Team == Teams.Xcom) BreakConcealment(ConcealReasons.Spotted, u.Id, r.Id);
                     if (r.Alive && r.Overwatch) Attack(r, u, r.WatchMelee == true ? AbilityIds.Slash : AbilityIds.Shoot, true);
                 }
                 foreach (var r in suppressors)
                 {
-                    if (!u.Alive || Over) break;
+                    if (Felled(u) || Over) break;
                     if (!r.Alive || r.Suppressing != u.Id) continue;
                     Attack(r, u, AbilityIds.Shoot, true);
                     Emit(new SuppressionEndedEvent { Unit = r.Id });
                 }
                 foreach (var b in biters)
                 {
-                    if (!u.Alive || Over) break;
+                    if (Felled(u) || Over) break;
                     if (b.Alive) Attack(b, u, AbilityIds.Claw, true);
                 }
                 if (noticing.Count > 0 && !Over) ActivatePods(noticing, Sighting(noticing, u, step));
-                if (!u.Alive || Over) return;
+                if (Felled(u) || Over) return;
             }
             Flush();
-            if (u.Team == Teams.Xcom && u.Alive && !Over)
+            if (u.Team == Teams.Xcom && !Felled(u) && !Over)
             {
                 // Its walk ended on a tile of La Lata's with a seat free: in, safe (T24); La Lata goes if all the living are.
                 if (Rules.Boards(S, u))
@@ -1666,7 +1686,12 @@ namespace Bastion.Engine
             // G23.3: the wounded alone on the field is nobody to fight on (they never act); G23.6, nor are the civilians.
             var squad = Grid.Combatants(s, Teams.Xcom).Where((u) => u.Lame != true && !Rules.IsCivilian(u)).ToList();
             var hostiles = Grid.Combatants(s, Teams.Alien);
-            void End(string outcome, string reason) => Emit(new MissionEndedEvent { Outcome = outcome, Reason = reason });
+            void End(string outcome, string reason)
+            {
+                // La Camilla: the squad fallen, nobody left to carry its downed: dead with them.
+                if (reason == EndReasons.Wiped && Rules.DownedOf(s) is Unit down && down.Alive) Emit(new DiedEvent { Unit = down.Id });
+                Emit(new MissionEndedEvent { Outcome = outcome, Reason = reason });
+            }
 
             // A siege (docs/FASE12.md §4): the base falls with nobody left to defend it (turrets don't count); it holds once every wave is in and down.
             if (m.Siege != null)
@@ -1675,12 +1700,19 @@ namespace Bastion.Engine
                 else if (hostiles.Count == 0 && m.Reinforcements.All((r) => r.Landed)) End(Outcomes.Victory, EndReasons.Objective);
                 return;
             }
+            // G23.3: everyone in La Lata waiting for the wounded (WoundedOut) isn't wiped: they may get down for them.
+            // G23.6: nor waiting for a civilian found walking to it (AllAboard): one aboard calls it to leave, or waits (Producto's
+            // review of 21/11).
+            // La Camilla: nor waiting for its downed out of it (AllAboard: alive, of the squad), who may still be fetched; in a
+            // Limpieza too (Producto's review of 26/11, B2).
+            var waiting = (Rules.WoundedOut(s) || Rules.DownedOf(s) != null || s.Units.Any((u) => u.Alive && Rules.IsCivilian(u) && !u.Captive))
+                && s.Units.Any((u) => u.Aboard == true && u.Lame != true && !Rules.IsCivilian(u));
             // The Limpieza is won clearing the map; leaving it by the bus is a retreat.
             if (m.Kind == MissionKinds.Elimination)
             {
                 if (hostiles.Count == 0) End(Outcomes.Victory, EndReasons.Objective);
                 else if (m.EvacDone == true) End(Outcomes.Defeat, EndReasons.Abandoned);
-                else if (squad.Count == 0) End(Outcomes.Defeat, EndReasons.Wiped);
+                else if (squad.Count == 0 && !waiting) End(Outcomes.Defeat, EndReasons.Wiped);
                 return;
             }
             var target = !string.IsNullOrEmpty(m.ObjectiveUnit) ? Grid.GetUnit(s, m.ObjectiveUnit!) : null;
@@ -1699,10 +1731,6 @@ namespace Bastion.Engine
                 End(won ? Outcomes.Victory : Outcomes.Defeat, won ? EndReasons.Objective : EndReasons.Abandoned);
                 return;
             }
-            // G23.3: everyone in La Lata waiting for the wounded (WoundedOut) isn't wiped: they may get down for them.
-            // G23.6: nor waiting for a civilian found walking to it (AllAboard): one aboard calls it to leave, or waits (Producto's
-            // review of 21/11).
-            var waiting = (Rules.WoundedOut(s) || s.Units.Any((u) => u.Alive && Rules.IsCivilian(u) && !u.Captive)) && s.Units.Any((u) => u.Aboard == true && u.Lame != true && !Rules.IsCivilian(u));
             if (squad.Count == 0 && !waiting) End(Outcomes.Defeat, EndReasons.Wiped);
         }
 
@@ -1743,8 +1771,12 @@ namespace Bastion.Engine
             }
             foreach (var u in squad.Where((o) => !Boards(o)).ToList())
             {
-                if (u.Carrying != null) Emit(new SetDownEvent { Unit = u.Id, Target = u.Carrying, Tile = Engine.Events.CopyPos(u.Pos), Fell = true });
+                var carried = u.Carrying;
+                if (carried != null) Emit(new SetDownEvent { Unit = u.Id, Target = carried, Tile = Engine.Events.CopyPos(u.Pos), Fell = true });
                 Emit(new LeftBehindEvent { Unit = u.Id, NoSeat = noSeat.Contains(u) ? true : (bool?)null });
+                // Whoever was on its back stays out with it (Producto's review of 26/11, C1): off the field as it was, it wasn't
+                // counted with the rest.
+                if (carried != null && Grid.GetUnit(S, carried) is Unit w && w.Alive) Emit(new LeftBehindEvent { Unit = w.Id });
             }
             var m = S.Mission;
             var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S) || Rules.BittenSafe(S) || Rules.WoundedSafe(S) || Rules.SplitSafe(S) || Rules.CiviliansSafe(S) || Rules.ChargesSet(S));
@@ -1918,8 +1950,9 @@ namespace Bastion.Engine
         {
             var first = turn % 2 == 1 ? 0 : 1;
             var order = new[] { first, first == 0 ? 1 : 0 };
-            // One aboard La Lata with actions too: it has a turn, to come down (T24; Red and Producto, 18/11).
-            bool Fielded(int slot) => Grid.Combatants(S, Teams.Xcom).Any((u) => u.Owner == slot) || S.Units.Any((u) => u.Aboard == true && u.Owner == slot && u.Ap > 0);
+            // One aboard La Lata with actions too: it has a turn, to come down (T24; Red and Producto, 18/11). Never one who
+            // can't act (La Camilla's downed, El herido's wounded: Lame; Producto's review of 26/11, C4).
+            bool Fielded(int slot) => Grid.Combatants(S, Teams.Xcom).Any((u) => u.Owner == slot && u.Lame != true) || S.Units.Any((u) => u.Aboard == true && u.Owner == slot && u.Ap > 0);
             foreach (var slot in order) if (Connected.Contains(slot) && Fielded(slot)) return slot;
             foreach (var slot in order) if (Connected.Contains(slot)) return slot;
             return first;
@@ -2259,6 +2292,7 @@ namespace Bastion.Engine
                     var to = !string.IsNullOrEmpty(cmd.To) ? Grid.GetUnit(s, cmd.To!) : u;
                     if (to == null || !to.Alive || to.Team != Teams.Xcom || to.Objective) return "Solo en ti o en un compañero.";
                     if (to != u && !Aim.InMeleeReach(s, u.Pos, to.Pos)) return "Tiene que estar a tu lado.";
+                    if (to.Downed == true) return Lore.StretcherText.NoMedicine(to.Appearance?.Sex);
                     if (to.Hp >= to.MaxHp) return to == u ? "No tienes heridas." : "No tiene heridas.";
                     return null;
                 }

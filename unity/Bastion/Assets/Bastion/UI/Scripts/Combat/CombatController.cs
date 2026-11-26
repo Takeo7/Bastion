@@ -85,6 +85,12 @@ namespace Bastion.UI.Combat
 
         /// <summary>The enemy's turn on screen (the event player's): the space bar hurries it then (Hurry), and gives no orders.</summary>
         public Func<bool> EnemyTurnPlaying = () => false;
+
+        /// <summary>
+        /// La Camilla (0.14.11): whether a unit at 0 is about to lie downed, not dead (the event player's, EventPlayer.Downs):
+        /// its bust isn't «CAÍDO» between the blow and its `downed`.
+        /// </summary>
+        public Func<string, bool> Downing = _ => false;
         public Action<bool> Hurry;
 
         string picked;

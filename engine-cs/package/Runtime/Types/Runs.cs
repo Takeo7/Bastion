@@ -160,6 +160,8 @@ namespace Bastion.Engine
         /// fight); home, into the stash, the squad fallen too. Null: no Baúl when the run started.
         /// </summary>
         public GearGrid? Trunk { get; set; }
+        /// <summary>La Camilla (cuadros 164 and 165): spent in this expedition (MissionState.Stretcher false in one of its fights). Null: not yet.</summary>
+        public bool? StretcherUsed { get; set; }
     }
 
     /// <summary>The stop the squad is at (RunState.stop).</summary>
@@ -262,8 +264,13 @@ namespace Bastion.Engine
         public const string Workshop = "workshop";
         /// <summary>Chatarrero: at the base, what is in the stash offered for § at half what a Trade pays (ScrapGearCommand).</summary>
         public const string Scrap = "scrap";
+        /// <summary>
+        /// La Camilla (cuadros 164 and 165): once an expedition, the first soldier to fall is left on the floor alive, to be
+        /// carried to La Lata (MissionState.Stretcher, Unit.Downed).
+        /// </summary>
+        public const string Stretcher = "stretcher";
 
-        public static readonly IReadOnlyList<string> All = new[] { Squad, Stash, Pack, Mend, Sight, Haggle, Training, Route, Engine, Garden, Radio, Kit, Trunk, Workshop, Scrap };
+        public static readonly IReadOnlyList<string> All = new[] { Squad, Stash, Pack, Mend, Sight, Haggle, Training, Route, Engine, Garden, Radio, Kit, Trunk, Workshop, Scrap, Stretcher };
     }
 
     // ------------------------------------------------------- the runs' votes

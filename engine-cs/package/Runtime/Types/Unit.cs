@@ -273,6 +273,12 @@ namespace Bastion.Engine
         /// <summary>G23.3 El herido: never walks nor acts (no actions, no movement); carried by the squad. Null for everyone else.</summary>
         public bool? Lame { get; set; }
         /// <summary>
+        /// La Camilla (cuadros 164 and 165): the squad's first soldier to fall in an expedition, on the floor alive (Lame too:
+        /// no actions, no movement, carried as the wounded), with no health left; hurt again, dead; in La Lata, home with 1 of
+        /// health (MissionState.Stretcher, DownedEvent). Null for everyone else.
+        /// </summary>
+        public bool? Downed { get; set; }
+        /// <summary>
         /// G23.5 Saqueadores: one of the living keeping the camp (GuardPosts): by its fire, sitting while its group is unaware
         /// and it has heard nothing (Arte, 20/11); standing by the stash; or on its round. Each a group of its own, its post
         /// its round's one stop (Pod.Patrol). Set at the start, never changed. Null for everyone else.
