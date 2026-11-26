@@ -47,6 +47,27 @@ namespace Bastion.Client.Net
 
         private static string AddressProblem => $"Escribe la dirección que sale en la pantalla de quien aloja la partida, o en su «Menú»; por ejemplo, 192.168.1.20:{RoomHost.FirstPort}.";
 
+        /// <summary>
+        /// Joining, the host never reached (Arturo, cuadro 172: the cause and what to do, not only «No responde nadie»):
+        /// `where`, the address and port tried. Lore's texts (Lore.JoinText).
+        /// </summary>
+        private string NotReached(Unreach? why, string where)
+        {
+            switch (why)
+            {
+                case Unreach.NoRoute:
+                    if (Application.platform == RuntimePlatform.IPhonePlayer)
+                        return Lore.JoinText.NoLocalNetworkIos(SystemInfo.deviceModel.StartsWith("iPad", StringComparison.Ordinal) ? "iPad" : "iPhone");
+                    if (Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.OSXEditor)
+                        return Lore.JoinText.NoLocalNetworkMac(Version);
+                    return Lore.JoinText.NoRoute(where);
+                case Unreach.Refused:
+                    return Lore.JoinText.Refused(where);
+                default:
+                    return Lore.JoinText.NoAnswer(where);
+            }
+        }
+
         private const string KeyProblem = "Escribe la clave que sale junto a la dirección, en la pantalla de quien aloja la partida o en su «Menú»; por ejemplo, KXRT5.";
 
         private static NetLink? instance;
@@ -94,6 +115,10 @@ namespace Bastion.Client.Net
         private bool joining;
         /// <summary>The hello was refused (a name taken, a full game, another version): a close then is no «nobody there».</summary>
         private bool refused;
+
+        /// <summary>Why the last try to reach the host failed (ClientSession.Unreached): the kind, for the notice, and the error, for red.log.</summary>
+        private Unreach? unreachedKind;
+        private string? unreached;
         private DateTime lastFrame;
         /// <summary>BASTION_EMPEZAR: hosting, the skirmish starts once both are in.</summary>
         private bool startWhenBoth;
@@ -532,11 +557,19 @@ namespace Bastion.Client.Net
             target = key;
             joining = true;
             refused = false;
+            unreachedKind = null;
+            unreached = null;
             feed.Reset();
             var s = new ClientSession((cancel) => Dial(address, port, cancel), settings.TokensFor(key), Version) { Key = roomKey };
             session = s;
             s.Message += (msg) => { if (s == session) Heard(msg); };
             s.Unreadable += (why) => { if (s == session) Report($"[red] mensaje del anfitrión que no se entiende: {why}"); };
+            s.Unreached += (kind, why) =>
+            {
+                if (s != session) return;
+                unreachedKind = kind;
+                unreached = why;
+            };
             s.Status += (status) => { if (s == session) OnStatus(status); };
             s.Rejoining += (on) => { if (s == session) Rejoining?.Invoke(on); };
             s.HostClosed += () =>
@@ -577,8 +610,8 @@ namespace Bastion.Client.Net
             var where = target;
             Drop();
             if (!nobody) return;
-            log.Write($"[red] {where}: no responde nadie");
-            Failed?.Invoke($"No responde nadie en {where}. ¿Tiene ya abierta la partida quien la aloja? Desde otra red, usa la dirección «Por internet» o la de «Con Tailscale».");
+            log.Write($"[red] {where}: no responde nadie ({unreached ?? "?"})");
+            Failed?.Invoke(NotReached(unreachedKind, where));
         }
 
         /// <summary>A message from the host, already read on the network thread (ClientSession): a whole mission never costs a frame.</summary>

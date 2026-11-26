@@ -62,6 +62,8 @@ namespace Bastion.UI.Start
         /// <summary>«Partida multijugador»'s column (cuadro 151: as the main menu's): Alojar, Unirse, Volver.</summary>
         VisualElement twoMenu;
         Button joinEntry;
+        /// <summary>«Unirse a Ana», over «Unirse por dirección», while a game of this version is heard on the network.</summary>
+        Button heardEntry;
         Label title;
         Label status, joinLabel;
         GameMenu settings;
@@ -248,7 +250,12 @@ namespace Bastion.UI.Start
             twoMenu.pickingMode = PickingMode.Ignore;
             Button NewEntry() { var b = new Button(); twoMenu.Add(b); return b; }
             buttons.Add(twoEntries.Make(NewEntry(), StartText.Host, Host));
-            joinEntry = twoEntries.Make(NewEntry(), StartText.ByAddress, JoinCard);
+            // A game heard on the network: «Unirse a Ana»; and «Unirse por dirección» always, under it (Arturo, 26/11: with a
+            // game heard whose joining fails, there was nowhere to write an address).
+            heardEntry = twoEntries.Make(NewEntry(), StartText.ByAddress, JoinCard);
+            buttons.Add(heardEntry);
+            Ui.Show(heardEntry, false);
+            joinEntry = twoEntries.Make(NewEntry(), StartText.ByAddress, () => Go(Page.Address));
             buttons.Add(joinEntry);
             buttons.Add(twoEntries.Make(NewEntry(), StartText.Back, () => Go(Page.Menu)));
 
@@ -595,7 +602,11 @@ namespace Bastion.UI.Start
             heardList = list ?? new LanGame[0];
             heard = previewing ? previewHeard : heardList.FirstOrDefault(g => g.Version == link.Version);
             joinLabel.text = (heard != null ? StartText.JoinOf(heard.Name) : StartText.ByAddress).ToUpperInvariant();
-            if (joinEntry != null) StartLook.Entries.SetText(joinEntry, heard != null ? StartText.JoinOf(heard.Name) : StartText.ByAddress);
+            if (heardEntry != null)
+            {
+                Ui.Show(heardEntry, heard != null);
+                if (heard != null) StartLook.Entries.SetText(heardEntry, StartText.JoinOf(heard.Name));
+            }
         }
 
         /// <summary>
