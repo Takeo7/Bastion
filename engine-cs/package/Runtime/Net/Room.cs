@@ -914,7 +914,7 @@ namespace Bastion.Net
                         // Not over a campaign mission left half played: it would be lost, and played again.
                         if (PausedMission() != null)
                         {
-                            Send(seat.Socket!, new ErrorMessage { Message = "Antes, acabad la etapa a medias: «Continuar partida»." });
+                            Send(seat.Socket!, new ErrorMessage { Message = "Antes, acabad la etapa a medias: «Continuar»." });
                             return;
                         }
                         if (m.Veterans != null) skirmishVeterans = m.Veterans.Value;

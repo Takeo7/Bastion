@@ -432,7 +432,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(2, (int)room["savedCampaign"]!["level"]!);
             // A skirmish would lose it: not before it is finished.
             rig.Say(ana, new { t = "start" });
-            Assert.Equal("Antes, acabad la etapa a medias: «Continuar partida».", (string?)ana.Take("error").Single()["message"]);
+            Assert.Equal("Antes, acabad la etapa a medias: «Continuar».", (string?)ana.Take("error").Single()["message"]);
             ana.Take("snapshot");
             rig.Say(ana, new { t = "continueCampaign" });
             Assert.Equal("mission", (string?)Last(pepe, "room")["phase"]);

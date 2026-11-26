@@ -7,6 +7,9 @@ Shader "Bastion/ClimaGota"
     {
         _MainTex ("Texture", 2D) = "white" {}
         _Gain ("Gain", Float) = 1
+        // (0 for the menu's flakes and its lamp's halo: a build without the fog's variants drew them bright and the editor
+        // in the haze, 26/11; so the same in both.)
+        _Haze ("In the haze", Float) = 1
     }
     SubShader
     {
@@ -37,6 +40,7 @@ Shader "Bastion/ClimaGota"
             SAMPLER(sampler_MainTex);
             // How much brighter than its colour (a flake as bright as the lit snow under it).
             float _Gain;
+            float _Haze;
             TEXTURE2D(_ClimaRoofs);
             float4 _ClimaSize;
 
@@ -80,7 +84,7 @@ Shader "Bastion/ClimaGota"
                 c.rgb *= _Gain;
                 float2 near = _ClimaNear.y > 0 ? _ClimaNear.xy : float2(NearFrom, NearTo);
                 c.a *= smoothstep(near.x, near.y, distance(v.world, GetCameraPositionWS()));
-                c.rgb = MixFog(c.rgb, v.fog);
+                c.rgb = lerp(c.rgb, MixFog(c.rgb, v.fog), _Haze);
                 return c;
             }
             ENDHLSL

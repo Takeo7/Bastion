@@ -6,13 +6,14 @@ namespace Bastion.Engine
 
         /// <summary>
         /// Leaving the game from the desktop app (the Esc menu in a mission, the
-        /// base's menu, the lobby), named like the app's own menu. The room saves
-        /// after every action, so nothing is lost; what changes is the partner's side.
+        /// base's menu, the lobby): «Salir», as the start menu's (Arturo, cuadro 171:
+        /// fewer words). The room saves after every action, so nothing is lost; what
+        /// changes is the partner's side.
         /// </summary>
         public static class QuitText
         {
-            public const string Button = "Salir de Bastión";
-            public const string Title = "¿Salir de Bastión?";
+            public const string Button = "Salir";
+            public const string Title = "¿Salir?";
             public const string Saved = "La partida queda guardada tal como está.";
             public const string SavedMission = "La partida queda guardada tal como está, con la misión a medias.";
             public const string Accept = "Salir";

@@ -495,8 +495,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Ana se queda fuera.", Lore.LeftBehindLine("Ana"));
 
             // quit, settings, rubble
-            Assert.Equal("Salir de Bastión", Lore.QuitText.Button);
-            Assert.Equal("¿Salir de Bastión?", Lore.QuitText.Title);
+            Assert.Equal("Salir", Lore.QuitText.Button);
+            Assert.Equal("¿Salir?", Lore.QuitText.Title);
             Assert.Equal("La partida queda guardada tal como está.", Lore.QuitText.Saved);
             Assert.Equal("La partida queda guardada tal como está, con la misión a medias.", Lore.QuitText.SavedMission);
             Assert.Equal("Salir", Lore.QuitText.Accept);

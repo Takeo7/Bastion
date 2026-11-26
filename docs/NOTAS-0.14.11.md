@@ -68,7 +68,8 @@ Versión 0.14.11 (commit [commit]). La última de las diez mejoras nuevas de la 
 - **Los guardias sentados de la hoguera,** con la cámara normal, parecen de pie.
 - **Quedan saltos de animación:**
   - un soldado se levanta de golpe;
-  - algunos muertos suben el brazo o bajan el cuerpo de golpe.
+  - algunos muertos suben el brazo o bajan el cuerpo de golpe;
+  - el malherido de la Camilla, si muere, se pone de pie de golpe antes de caer.
 
   Si veis alguno, apuntad dónde y cuándo.
 - **La dificultad** se ajusta jugando: apuntad lo que notéis en cada nivel.

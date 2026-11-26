@@ -386,7 +386,8 @@ namespace Bastion.UI.Hud
             /// <summary>«Abandonar la misión» off while one's own call waits: the partner answers on their bar.</summary>
             public const string AbandonWaitingTip = "Contesta en su barra";
             public const string LeaveTitle = "¿Volver al menú principal?";
-            public const string LeaveCampaign = "La misión queda guardada tal como está; «Continuar partida» vuelve a ella.";
+            // (The start screen's key is «Continuar» since the 0.14.12, cuadro 171; Lore.)
+            public const string LeaveCampaign = "La misión queda guardada tal como está; «Continuar» vuelve a ella.";
             public const string LeaveSkirmish = "La escaramuza se acaba.";
             public const string LeaveYes = "Volver al menú";
             public const string LeaveNo = "Seguir aquí";

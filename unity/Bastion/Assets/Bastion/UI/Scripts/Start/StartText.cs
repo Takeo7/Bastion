@@ -11,23 +11,24 @@ namespace Bastion.UI.Start
     {
         public const string Title = "BASTIÓN";
 
-        // The main menu (p1), in this order; «Continuar partida» only with a game saved.
-        public const string Continue = "Continuar partida";
+        // The main menu (p1), in this order; «Continuar» only with a game saved. (Arturo, 26/11: fewer words, «Salir», not
+        // «Salir de Bastión»; Producto's table, Lore to review.)
+        public const string Continue = "Continuar";
         /// <summary>Under it, the saved game's chapter and level (cuadro 125).</summary>
         public static string SavedLine(int chapter, string level) => $"Capítulo {System.Math.Max(1, chapter)} · {level}";
         /// <summary>Where «Continuar partida» would be, with only a campaign from before the expeditions (NetLink.OldCampaign; Lore, 16/11).</summary>
         public static string OldCampaign(string file) => $"La campaña anterior no se puede continuar con esta versión. Queda guardada aparte, en {file}. Con «Nueva partida» empiezas la de las expediciones.";
         public const string New = "Nueva partida";
-        public const string Two = "Partida multijugador";
+        public const string Two = "Multijugador";
         public const string Settings = "Ajustes";
-        public const string Quit = "Salir de Bastión";
+        public const string Quit = "Salir";
         public const string Back = "Volver";
 
-        // «Partida multijugador» (p2): to host; to join the game heard on the network, or by address when there is none
+        // «Multijugador» (p2): to host; to join the game heard on the network, or by address when there is none
         // (Arturo's choice, 14/11).
-        public const string Host = "Alojar partida";
-        /// <summary>In the infinitive as «Unirse por dirección» and «Alojar partida» (Lore, 23/11; Producto's review: two forms of the verb side by side).</summary>
-        public static string JoinOf(string name) => $"Unirse a la partida de {name}";
+        public const string Host = "Alojar";
+        /// <summary>In the infinitive as «Unirse por dirección» and «Alojar» (Lore, 23/11; Producto's review: two forms of the verb side by side).</summary>
+        public static string JoinOf(string name) => $"Unirse a {name}";
         public const string ByAddress = "Unirse por dirección";
 
         // What is asked: the name (before a new game; before anything else while there is none), an address and its key.

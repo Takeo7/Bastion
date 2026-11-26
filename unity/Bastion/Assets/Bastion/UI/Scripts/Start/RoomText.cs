@@ -17,22 +17,22 @@ namespace Bastion.UI.Start
         public const string Offline = "Sin conexión";
         public const string Away = "Ausente";
         /// <summary>
-        /// How the partner finds this game (Lore, 15/11: as their card in «Partida multijugador» says it, with the host's
+        /// How the partner finds this game (Lore, 15/11: as their card in «Multijugador» says it, with the host's
         /// name); without the name, in general.
         /// </summary>
         public static string Invite(string name) => string.IsNullOrEmpty(name)
-            ? "Quien juegue contigo verá tu partida en «Partida multijugador» de su app. Si no la ve, que pulse «Unirse por dirección» y escriba:"
-            : $"Quien juegue contigo verá «{StartText.JoinOf(name)}» en «Partida multijugador». Si no le sale, que pulse «Unirse por dirección» y escriba:";
+            ? $"Quien juegue contigo verá tu partida en «{StartText.Two}» de su app. Si no la ve, que pulse «Unirse por dirección» y escriba:"
+            : $"Quien juegue contigo verá «{StartText.JoinOf(name)}» en «{StartText.Two}». Si no le sale, que pulse «Unirse por dirección» y escriba:";
         /// <summary>
-        /// The room as a screen of the game (cuadro 124, Arturo 23/11): its title, the start screen's «Partida multijugador»;
+        /// The room as a screen of the game (cuadro 124, Arturo 23/11): its title, the start screen's «Multijugador»;
         /// this app's seat; Invite in two, its first half on the screen and the addresses behind «¿No le sale tu partida?»
         /// (Arturo's words). Lore's, 23/11; the card quoted by StartText.JoinOf itself, so the two never part.
         /// </summary>
         public static string Title => StartText.Two;
         public const string You = "Tú";
         public static string InviteSeen(string name) => string.IsNullOrEmpty(name)
-            ? "Quien juegue contigo verá tu partida en «Partida multijugador» de su app."
-            : $"Quien juegue contigo verá «{StartText.JoinOf(name)}» en «Partida multijugador».";
+            ? $"Quien juegue contigo verá tu partida en «{StartText.Two}» de su app."
+            : $"Quien juegue contigo verá «{StartText.JoinOf(name)}» en «{StartText.Two}».";
         public const string NotSeen = "¿No le sale tu partida?";
         public const string InviteAddress = "Que pulse «Unirse por dirección» en su app y escriba:";
         /// <summary>On iOS the game isn't announced on the network (NetLink.LanBlind): the address is the only way in (Lore, 7/11).</summary>
@@ -99,7 +99,7 @@ namespace Bastion.UI.Start
         };
 
         // The main page and a new campaign's question (lobby.ts renderMain, renderConfirm).
-        public const string Continue = "Continuar partida";
+        public const string Continue = StartText.Continue;
         public const string NewCampaign = "Nueva partida";
         public const string NewCampaignAbout = "Expediciones desde una base compartida";
         public const string Skirmish = "Escaramuza";
@@ -149,7 +149,8 @@ namespace Bastion.UI.Start
         /// jugadas» beside «Etapa 3 de 7» read as two games), «(capítulo 1 · etapa 3 de 7 · 4 soldados · 245 §)».
         /// </summary>
         public static string Replaces(SavedCampaign s) => s.Chapter > 0
-            ? $"La partida guardada (capítulo {s.Chapter} · {Lower(SavedWhere(s))}) se sustituye por una nueva."
+            // (Not «partida» three times on the room's «Nueva partida»: cuadro 171, Lore's yes.)
+            ? $"La guardada (capítulo {s.Chapter} · {Lower(SavedWhere(s))}) se sustituye por una nueva."
             : $"La campaña guardada ({Lore.OutingsMark(s.Missions).ToLowerInvariant()}) se sustituye por una nueva.";
 
         static string Lower(string s) => string.IsNullOrEmpty(s) ? s : char.ToLowerInvariant(s[0]) + s.Substring(1);

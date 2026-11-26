@@ -221,14 +221,6 @@ namespace Bastion.UI.Start
             menuEntries = new StartLook.Entries(root);
             twoEntries = new StartLook.Entries(root);
             formEntries = new StartLook.Entries(root);
-            // «Capítulo 1 · Medio» past «Continuar partida»'s stroke, on its line (the entries keep the picture's steps).
-            menuEntries.Sized += (entry, left, width) =>
-            {
-                if (entry != continueKey || savedNote == null) return;
-                var words = entry.Q<Label>(className: "start__entry-text").layout;
-                savedNote.style.left = left + width + 6;
-                savedNote.style.top = Mathf.Round(words.y + words.height / 2 - 9);
-            };
             if (Resources.Load<Texture2D>("Start/bordes") is Texture2D edges)
             {
                 var e = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -241,11 +233,8 @@ namespace Bastion.UI.Start
             oldNote = new Label();
             Ui.AddClasses(oldNote, "start__old");
             continueKey.parent.Insert(continueKey.parent.IndexOf(continueKey) + 1, oldNote);
-            // Under «Continuar partida», the saved game's chapter and level (cuadro 125: seen there only).
-            // (On its line, past the brush stroke (menuEntries.Sized): the entries keep the picture's steps, CORRECCIONES-2.)
-            savedNote = new Label { pickingMode = PickingMode.Ignore };
-            Ui.AddClasses(savedNote, "start__saved");
-            continueKey.Add(savedNote);
+            // (No chapter nor level by «Continuar» any more: Arturo, cuadro 171, «Fuera»; the room keeps them, and the loading
+            // window says them.)
             Entry("new", StartText.New, NewGame);
             Entry("two", StartText.Two, () => Go(Page.Two));
             Entry("settings", StartText.Settings, OpenSettings);
@@ -457,11 +446,6 @@ namespace Bastion.UI.Start
         void ShowSaved()
         {
             if (continueKey != null) Ui.Show(continueKey, Saved != null);
-            if (savedNote != null)
-            {
-                Ui.Show(savedNote, Saved != null);
-                if (Saved != null) savedNote.text = StartText.SavedLine(Saved.Chapter, Bastion.Engine.Lore.GameLevelText.NameOf(Saved.GameLevel));
-            }
             if (oldNote == null) return;
             var old = previewing ? null : link.OldCampaign;
             Ui.Show(oldNote, Saved == null && old != null);
@@ -470,8 +454,6 @@ namespace Bastion.UI.Start
 
         /// <summary>The campaign from before the expeditions, where «Continuar partida» would be; hidden without one.</summary>
         Label oldNote;
-        /// <summary>Under «Continuar partida»: «Capítulo 1 · Medio».</summary>
-        Label savedNote;
 
         // ------------------------------------------------------------ the keys
 

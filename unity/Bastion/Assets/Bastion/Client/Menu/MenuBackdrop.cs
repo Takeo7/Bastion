@@ -263,7 +263,9 @@ namespace Bastion.Client.Menu
                 Lamp(new Vector3(head.center.x, head.max.y - 0.35f, head.center.z), 0xffb468, 0, 0, true, 0.7f,
                     Spot(new Vector3(head.center.x, head.max.y - 0.2f, head.center.z), Quaternion.Euler(28, 235, 0), 0xffd9a0, 30, 26, 70));
                 // (His picture's: a warm point with a halo by the tower.)
-                Halo(new Vector3(head.center.x, head.max.y - 0.35f, head.center.z), new Color(1, 0.62f, 0.28f, 0.85f), 5.5f);
+                // (Cuadro 171, 26/11: as his picture's, a small bright point, yellower; out of the haze, as the app drew it.)
+                Halo(new Vector3(head.center.x, head.max.y - 0.35f, head.center.z), new Color(1, 0.5f, 0.16f, 0.9f), 2.6f, 2f);
+                Halo(new Vector3(head.center.x, head.max.y - 0.35f, head.center.z), new Color(1, 0.66f, 0.3f, 1), 1f, 2.4f);
             }
             // (A palisade of Apocalypse's stakes, not Construction's concrete: each pack's atlas loads whole with MenuArt,
             // Construction's 4096² for one wall; MenuLab.Make lists them.)
@@ -309,8 +311,8 @@ namespace Bastion.Client.Menu
             // Two big pines close on the right, framing it.
             PutPine(0, new Vector3(60.5f, 0, -124), 35, 1);
             PutPine(1, new Vector3(58.6f, 0, -118), 110, 1);
-            // (Fewer flakes in his picture.)
-            Snowfall(eye + Eye.transform.forward * 18 + Vector3.up * 5, new Vector3(44, 12, 36), 0.07f, new Color(1, 1, 1, 0.85f), 1.3f);
+            // (Fewer flakes in his picture; and, cuadro 171, big and cream: few, thick, warm.)
+            Snowfall(eye + Eye.transform.forward * 18 + Vector3.up * 5, new Vector3(44, 12, 36), 0.035f, new Color(1, 0.9f, 0.7f, 0.9f), 1.3f, null, 10, 0.16f, 0.3f, 0.013f);
         }
 
         // ---- Crossroads ----
@@ -598,13 +600,14 @@ namespace Bastion.Client.Menu
         /// filled from the start.
         /// </summary>
         /// <summary>A lamp's halo: the flakes' soft dot, once, `across` metres, in `colour`, standing where the lamp is.</summary>
-        void Halo(Vector3 at, Color colour, float across)
+        void Halo(Vector3 at, Color colour, float across, float gain = 1.6f)
         {
             var material = KitMaterials.New(KitMaterials.ClimaGota, "Halo del farol");
             if (material == null) return;
             made.Add(material);
             material.mainTexture = Dot();
-            material.SetFloat("_Gain", 1.6f);
+            material.SetFloat("_Gain", gain);
+            material.SetFloat("_Haze", 0);
             var ps = new GameObject("Halo").AddComponent<ParticleSystem>();
             ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ps.transform.SetParent(transform, false);
@@ -626,13 +629,14 @@ namespace Bastion.Client.Menu
             ps.Emit(1);
         }
 
-        void Snowfall(Vector3 middle, Vector3 size, float rate, Color colour, float gain, Quaternion? turn = null, float life = 10)
+        void Snowfall(Vector3 middle, Vector3 size, float rate, Color colour, float gain, Quaternion? turn = null, float life = 10, float least = 0.06f, float most = 0.12f, float onScreen = 0.012f)
         {
             var material = KitMaterials.New(KitMaterials.ClimaGota, "Copos del menú");
             if (material == null) return;
             made.Add(material);
             material.mainTexture = Dot();
             material.SetFloat("_Gain", gain);
+            material.SetFloat("_Haze", 0);
             var ps = new GameObject("Copos").AddComponent<ParticleSystem>();
             ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ps.transform.SetParent(transform, false);
@@ -644,7 +648,7 @@ namespace Bastion.Client.Menu
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.startLifetime = new ParticleSystem.MinMaxCurve(life * 0.85f, life);
             main.startSpeed = 0;
-            main.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.12f);
+            main.startSize = new ParticleSystem.MinMaxCurve(least, most);
             main.startColor = colour;
             main.gravityModifier = 0;
             main.scalingMode = ParticleSystemScalingMode.Shape;
@@ -680,7 +684,7 @@ namespace Bastion.Client.Menu
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
             renderer.shadowCastingMode = ShadowCastingMode.Off;
             renderer.receiveShadows = false;
-            renderer.maxParticleSize = 0.012f;
+            renderer.maxParticleSize = onScreen;
             ps.Simulate(life + 0.5f, true, true, false);
             if (Application.isPlaying) ps.Play();
         }

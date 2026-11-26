@@ -68,7 +68,19 @@ namespace Bastion.UI.Start
                         at += 4;
                     }
             }
-            Color32 Dark(float x, float y) { var c = VeilColour; c.a *= Weight(x, y); return c; }
+            // The canvas (Arturo, 26/11: «no está por encima»): the dark blue grey mottled with a lighter one in big and small
+            // blotches, as the picture's, so that it reads over a scene as dark as the menu's.
+            Color32 Dark(float x, float y)
+            {
+                var h = r.height;
+                var m = MottleBig * Mathf.PerlinNoise(x / (MottleBigSize * h) + 3.1f, y / (MottleBigSize * h) + 7.7f)
+                    + (1 - MottleBig) * Mathf.PerlinNoise(x / (MottleSmallSize * h) + 11.3f, y / (MottleSmallSize * h) + 5.9f);
+                var c = Color.Lerp(VeilColour, VeilLight, Mathf.SmoothStep(0, 1, Mathf.InverseLerp(MottleFrom, 1, m)) * MottleStrength);
+                // Darkest behind the words, on the left, as the picture's: VeilLeftAlpha there, VeilColour's from VeilReach of the
+                // width on (measured against the app's picture of the 0.14.11, Pruebas, 26/11).
+                c.a = Mathf.Lerp(VeilLeftAlpha, VeilColour.a, Mathf.SmoothStep(0, 1, x / r.width / VeilReach)) * Weight(x, y);
+                return c;
+            }
             Cells(ctx.Allocate(nx * ny * 4, nx * ny * 6), Dark, false);
             if (grain == null) return;
             Color32 Grain(float x, float y) => new Color(1, 1, 1, GrainStrength * Weight(x, y));
@@ -79,11 +91,18 @@ namespace Bastion.UI.Start
         /// The veil's edge where it meets the right side and the left (as parts of the height), how soft (a part of the height
         /// each side), its colour and the grain's strength over it. (CORRECCIONES-2: the edge from (100 %, 9 %) to (0 %, 80 %),
         /// through the tower's foot; a dark, dull blue grey, thin enough for the left's pines to show through it. Producto's
-        /// final word, 24/11: ronda2's veil over Arte's fixed scene; nobody changes the start screen again.)
+        /// final word, 24/11: ronda2's veil over Arte's fixed scene.)
+        /// (Arturo, 26/11, «no está por encima»: in the app, over the menu's night scene with its pines sharp and snowy, the
+        /// 0.6 of a dark blue hardly showed. Stronger behind the words (0.85, to 0.62 from the middle on), greyer, and mottled
+        /// as a canvas: VeilLight's blotches, big and small, by Perlin noise, a part of the height across; the grain's dots a
+        /// little bigger. Set by its effect on the app's picture of the 0.14.11: the lab's shot draws the scene hazier and
+        /// lays the panels over it apart, so it isn't the measure.)
         /// </summary>
         static readonly Vector2 VeilRight = new Vector2(1f, 0.09f), VeilLeft = new Vector2(0f, 0.80f);
-        const float VeilSoft = 0.012f, VeilCell = 16, GrainTile = 512, GrainStrength = 1f;
-        static readonly Color VeilColour = new Color(35 / 255f, 46 / 255f, 75 / 255f, 0.6f);
+        const float VeilSoft = 0.012f, VeilCell = 16, GrainTile = 320, GrainStrength = 1f;
+        static readonly Color VeilColour = new Color(20 / 255f, 27 / 255f, 45 / 255f, 0.62f), VeilLight = new Color(70 / 255f, 82 / 255f, 108 / 255f, 1f);
+        const float VeilLeftAlpha = 0.85f, VeilReach = 0.5f;
+        const float MottleBig = 0.65f, MottleBigSize = 0.30f, MottleSmallSize = 0.08f, MottleFrom = 0.35f, MottleStrength = 0.5f;
 
         // ---------------------------------------------------------------- the entries
 
