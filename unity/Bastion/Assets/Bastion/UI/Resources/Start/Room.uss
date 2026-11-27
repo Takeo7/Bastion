@@ -5,6 +5,58 @@
     align-items: flex-start;
 }
 
+/*
+   What the room took from Start.uss until the 0.12.24, when the start screen was made anew (373b355) and its sheet lost
+   them: the sheet in the middle over a dark ground, the invite's small grey lines, a choice with its name big and what
+   it does small under it, and the status as a line under the keys. Kept here, under #room, as they were (0.12.27).
+*/
+#room {
+    align-items: center;
+    justify-content: center;
+    background-color: rgb(12, 14, 15);
+}
+
+#room .start__hint {
+    font-size: 12px;
+    white-space: normal;
+    color: var(--t-muted);
+    margin-bottom: 4px;
+}
+
+#room .start__choice {
+    padding: 10px 14px;
+    align-items: flex-start;
+}
+
+#room .start__choice-title {
+    font-size: 20px;
+    letter-spacing: 2px;
+}
+
+#room .btn-primary .start__choice-title,
+#room .btn-primary .start__choice-about {
+    color: var(--t-primary-ink);
+}
+
+#room .start__choice-about {
+    font-size: 12px;
+    white-space: normal;
+    -unity-text-align: upper-left;
+    margin-top: 2px;
+}
+
+/* The start screen's status is a plate at the foot of the screen now: here, a line in its panel, as it was. */
+#room .start__status {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    font-size: 13px;
+    white-space: normal;
+    min-height: 18px;
+    -unity-text-align: upper-left;
+}
+
 /* 24 px apart: the two steel frames (8 px out of each plate) keep a gap between them. */
 .room__side {
     width: 300px;

@@ -199,8 +199,9 @@ principal() {
   for folder in unity/Bastion/Builds/release packages/desktop/dist/release; do
     mkdir -p "$main/$folder" && cp "$out/Bastion-$version-mac.zip" "$out/Bastion-$version-win-x64.zip" "$main/$folder/" || exit 1
   done
-  # With the version in its name (cuadro 162), as in the zip: «Bastión 0.14.8.app»; the ones of before and Bastion.app out.
-  copy="$main/unity/Bastion/Builds/Mac/Bastión $version.app"
+  # As in the zip: Bastion.app, without the version in its name (the 0.12 line, 27/11; the 0.14's «Bastión 0.14.8.app», cuadro
+  # 162, is in aparcado/0.14). Any of those left here goes too: copies of one executable confuse macOS's «Red local» (TN3179).
+  copy="$main/unity/Bastion/Builds/Mac/Bastion.app"
   rm -rf "$main/unity/Bastion/Builds/Mac/Bastion.app" "$main/unity/Bastion/Builds/Mac/Bastión "*.app
   ditto unity/Bastion/Builds/Mac/Bastion.app "$copy" || exit 1
   codesign -v --deep --strict "$copy" || echo "La firma de la app copiada no pasa."

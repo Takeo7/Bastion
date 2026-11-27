@@ -445,11 +445,14 @@ namespace Bastion.UI.App
             Tail = true,
         };
 
-        /// <summary>The router's row's words (Lore, .dev-snapshots/lore/0.12.17/TEXTOS.md §5).</summary>
+        /// <summary>
+        /// The router's row's words (Lore, .dev-snapshots/lore/0.12.17/TEXTOS.md §5; About's third sentence, Lore 27/11: since
+        /// the 0.12.27 the card of the game heard brings the key, and only who comes by address is asked for it).
+        /// </summary>
         public static class RouterText
         {
             public const string Label = "Abrir el puerto del router";
-            public const string About = "Al alojar una partida, el juego abre su puerto en el router. Así, quien juegue contigo puede entrar por internet con la dirección y la clave. Con el puerto abierto, quien entra por primera vez desde tu red también necesita la clave. Con «No», el juego no toca el router: se entra desde tu red o con Tailscale.";
+            public const string About = "Al alojar una partida, el juego abre su puerto en el router. Así, quien juegue contigo puede entrar por internet con la dirección y la clave. Con el puerto abierto, desde tu red la tarjeta «Unirte a la partida de…» entra sin clave; quien entra por primera vez por dirección sí la necesita. Con «No», el juego no toca el router: se entra desde tu red o con Tailscale.";
             public const string YesTip = "Se puede entrar por internet";
             public const string NoTip = "Desde tu red o con Tailscale";
         }

@@ -35,6 +35,7 @@ namespace Bastion.UI.Start
         string page = "main";
         /// <summary>Made-up room and addresses for a capture (Preview); null, NetLink's.</summary>
         RoomMessage previewRoom;
+        string previewKey;
         IReadOnlyList<HostAddress> previewAddresses;
         bool previewHosting;
         RouterState? previewRouter;
@@ -76,11 +77,12 @@ namespace Bastion.UI.Start
 
         /// <summary>
         /// A room to show without a connection (HudShots.Room): its players, the host's addresses, hosting or not, the page;
-        /// the router's state and, open, its address on the internet.
+        /// the router's state and, open, its address on the internet; `roomKey`, the room's key for its line.
         /// </summary>
-        public void Preview(RoomMessage room, IReadOnlyList<HostAddress> addresses, bool hosting, string page = "main", RouterState? router = null, string internet = null)
+        public void Preview(RoomMessage room, IReadOnlyList<HostAddress> addresses, bool hosting, string page = "main", RouterState? router = null, string internet = null, string roomKey = null)
         {
             previewRoom = room;
+            previewKey = roomKey;
             previewAddresses = addresses;
             previewHosting = hosting;
             previewRouter = router;
@@ -249,7 +251,7 @@ namespace Bastion.UI.Start
             // The room's key on its own line, with the internet's address or without it: asked of whoever comes from the
             // internet (an IPv6 address too, the port closed or not), and from the house while the router's port is open, where
             // what is typed is the house's address and the key (Red, 0.12.17 and 0.12.18; Gameplay's review, 10/11, #9; Lore).
-            if (previewRoom == null && link.Key is string key) Ui.Text(RoomText.KeyLine(key), "room__router", invite);
+            if ((previewRoom != null ? previewKey : link.Key) is string key) Ui.Text(RoomText.KeyLine(key), "room__router", invite);
             if (addresses.Count > 1)
             {
                 var more = new Foldout { text = RoomText.OtherAddresses(addresses.Count - 1), value = false };

@@ -63,7 +63,7 @@ namespace Bastion.Engine
             /// number, each one installed over the last; the 0.14's («Bastión 0.14.13»…) carry the same identifier and
             /// confuse macOS (Red, 27/11).
             /// </summary>
-            public const string NoLocalNetworkMac = "Este Mac no deja a Bastión usar la red local: en Ajustes del Sistema › Privacidad y seguridad › Red local, activa «Bastión». Si en la lista salen otras, como «Bastión 0.14.13», bórralas de Aplicaciones.";
+            public const string NoLocalNetworkMac = "Este Mac no deja a Bastión usar la red local: en Ajustes del Sistema › Privacidad y seguridad › Red local, activa «Bastión». Si en la lista salen otras, como «Bastión 0.14.13», bórralas.";
             /// <summary>The same on iOS: `device` is «iPhone» or «iPad».</summary>
             public static string NoLocalNetworkIos(string device) => $"Este {device} no deja a Bastión usar la red local: en Ajustes › Privacidad y seguridad › Red local, activa Bastión.";
             /// <summary>No route anywhere else (Windows): no network that leads there.</summary>

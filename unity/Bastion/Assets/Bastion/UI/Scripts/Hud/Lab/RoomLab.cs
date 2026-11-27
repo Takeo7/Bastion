@@ -39,7 +39,8 @@ namespace Bastion.UI.Hud
                 "refused" => RouterState.Refused,
                 _ => (RouterState?)null,
             };
-            GetComponent<RoomMenu>().Preview(room, addresses, true, which == "pregunta" ? "ask" : which == "escaramuza" ? "skirmish" : "main", router, router == RouterState.Open ? "83.45.12.7:41391 · KXRT5" : null);
+            GetComponent<RoomMenu>().Preview(room, addresses, true, which == "pregunta" ? "ask" : which == "escaramuza" ? "skirmish" : "main", router, router == RouterState.Open ? "83.45.12.7:41391 · KXRT5" : null,
+                System.Environment.GetEnvironmentVariable("BASTION_SALA_CLAVE") == "1" ? "KXRT5" : null);
         }
 
         void Update()

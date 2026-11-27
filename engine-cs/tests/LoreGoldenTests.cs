@@ -455,7 +455,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("La partida está en tu ordenador: si sales, Ana se desconecta hasta que vuelvas a abrirla.", Lore.QuitHostWarning("Ana"));
             Assert.Equal("Arturo sigue la misión sin ti: tus soldados se quedan quietos donde están hasta que vuelvas.", Lore.QuitGuestWarning("Arturo"));
             // Joining, the host not reached (cuadro 172, in the 0.12.27 by cuadro 183): why, and what to touch.
-            Assert.Equal("Este Mac no deja a Bastión usar la red local: en Ajustes del Sistema › Privacidad y seguridad › Red local, activa «Bastión». Si en la lista salen otras, como «Bastión 0.14.13», bórralas de Aplicaciones.", Lore.JoinText.NoLocalNetworkMac);
+            Assert.Equal("Este Mac no deja a Bastión usar la red local: en Ajustes del Sistema › Privacidad y seguridad › Red local, activa «Bastión». Si en la lista salen otras, como «Bastión 0.14.13», bórralas.", Lore.JoinText.NoLocalNetworkMac);
             Assert.Equal("Este iPad no deja a Bastión usar la red local: en Ajustes › Privacidad y seguridad › Red local, activa Bastión.", Lore.JoinText.NoLocalNetworkIos("iPad"));
             Assert.Equal("No hay camino hasta 192.168.1.20:41391 desde aquí. Mirad que los dos estéis en la misma wifi; desde otra red, usad la dirección «Por internet, con la clave» o la de «Con Tailscale».", Lore.JoinText.NoRoute("192.168.1.20:41391"));
             Assert.Equal("En 192.168.1.20:41391 no hay ninguna partida abierta. Que quien aloja pulse «Alojar partida», y copiad la dirección entera de su sala.", Lore.JoinText.Refused("192.168.1.20:41391"));

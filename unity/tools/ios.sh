@@ -32,6 +32,11 @@ sim=${SIMULADOR:-229BDFD9-4440-459D-9ED7-62BAE78C28C6}
 team=${EQUIPO:-}
 lock=/tmp/bastion-ios-unity.lock
 id=com.takeo7.bastion
+# The 0.12 line (main from 27/11) has no iOS build: AppBuild.IosSimulator/IosDevice and the rest of the iOS layer came
+# with the 0.13.0 and are in aparcado/0.14. Said here, before Unity starts and fails on the copy.
+if ! grep -q "public static void $method()" "$project/Assets/Bastion/Client/Net/Editor/AppBuild.cs"; then
+  echo "esta rama no compila para iOS: falta AppBuild.$method (la capa de iOS está en aparcado/0.14)"; exit 2
+fi
 if [ ! -d "$copy/Library" ]; then echo "no está la copia para iOS en $copy (docs/IOS.md §4)"; exit 1; fi
 if [ "$mode" = aparato ] && [ -z "$team" ]; then echo "para el aparato hace falta EQUIPO=<id del equipo personal de Arturo>"; exit 2; fi
 until mkdir "$lock" 2>/dev/null; do sleep 2; done
