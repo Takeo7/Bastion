@@ -45,9 +45,10 @@ namespace Bastion.UI.Start
         public const string Internet = "Por internet, con la clave";
         /// <summary>
         /// The room's key without the internet's address (Red, 0.12.17): asked of whoever comes from the internet, and from
-        /// the house while the router's port is open (Gameplay; Lore, .dev-snapshots/lore/0.12.17/TEXTOS.md §2).
+        /// the house, by address, while the router's port is open: «Unirse a…» brings it from the beacon (Red, 0.14.14;
+        /// Lore, 27/11).
         /// </summary>
-        public static string KeyLine(string key) => $"Clave de la partida: {key}. Se pide al entrar por internet, y también desde tu red si el puerto del router está abierto.";
+        public static string KeyLine(string key) => $"Clave de la partida: {key}. Se pide al entrar por internet, y también desde tu red, por dirección, si el puerto del router está abierto.";
         public const string Copy = "Copiar";
         public const string Copied = "Copiada";
         public const string Mission = "Misión";

@@ -62,15 +62,15 @@ namespace Bastion.Engine
             /// No route at once on a Mac: the app without «Red local» (macOS confuses it with several copies, and every
             /// version is a new app: Red, 26/11). `version` names the app as macOS lists it, «Bastión 0.14.12».
             /// </summary>
-            public static string NoLocalNetworkMac(string version) => $"Este Mac no deja a Bastión usar la red local: en Ajustes del Sistema › Privacidad y seguridad › Red local, activa «Bastión {version}». Si salen otras versiones de Bastión, bórralas de Aplicaciones.";
+            public static string NoLocalNetworkMac(string version) => $"Este Mac no deja a Bastión usar la red local: en Ajustes del Sistema › Privacidad y seguridad › Red local, activa «Bastión {version}». Si salen otras versiones de Bastión, bórralas.";
             /// <summary>The same on iOS: `device` is «iPhone» or «iPad».</summary>
             public static string NoLocalNetworkIos(string device) => $"Este {device} no deja a Bastión usar la red local: en Ajustes › Privacidad y seguridad › Red local, activa Bastión.";
             /// <summary>No route anywhere else (Windows): no network that leads there.</summary>
-            public static string NoRoute(string where) => $"No hay camino hasta {where} desde aquí. Mirad que los dos estéis en la misma wifi; desde otra red, usad la dirección «Por internet» o la de «Con Tailscale».";
+            public static string NoRoute(string where) => $"No hay camino hasta {where} desde aquí. Mirad que los dos estéis en la misma wifi; desde otra red, usad la dirección «Por internet, con la clave» o la de «Con Tailscale».";
             /// <summary>Refused: nobody listens on that port, the game not open or another port.</summary>
             public static string Refused(string where) => $"En {where} no hay ninguna partida abierta. Que quien aloja pulse «Alojar», y copiad la dirección entera de su sala.";
             /// <summary>No answer in the time (NetLink.ConnectTimeoutMs): a firewall or a VPN between, or not that address.</summary>
-            public static string NoAnswer(string where) => $"No responde nadie en {where}. Mirad que la dirección sea la de su sala, que quien aloja haya permitido a Bastión en su cortafuegos y que ninguno de los dos tenga una VPN puesta. Desde otra red, usad la dirección «Por internet» o la de «Con Tailscale».";
+            public static string NoAnswer(string where) => $"No responde nadie en {where}. Mirad que la dirección sea la de su sala, que quien aloja haya permitido a Bastión en su cortafuegos y que ninguno de los dos tenga una VPN puesta. Desde otra red, usad la dirección «Por internet, con la clave» o la de «Con Tailscale».";
         }
     }
 }

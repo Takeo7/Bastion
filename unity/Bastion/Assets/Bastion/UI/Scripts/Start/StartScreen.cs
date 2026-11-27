@@ -509,7 +509,7 @@ namespace Bastion.UI.Start
                 return;
             }
             var game = heard;
-            WithName(Page.Two, name => link.Join(game.Address, name), StartText.Entering(game.Name), StartText.Join);
+            WithName(Page.Two, name => link.Join(game, name), StartText.Entering(game.Name), StartText.Join);
         }
 
         /// <summary>`run` as the name last played with; with none, the name asked first, under it `go` (what was pressed).</summary>

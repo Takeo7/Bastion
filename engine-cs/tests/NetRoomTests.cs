@@ -281,6 +281,27 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void TheCardGoesInWithTheKeyItHeard()
+        {
+            // Cuadro 186 (Arturo, 27/11): a game heard in the house brings the room's key, and the card joins with it while
+            // the router's port is open. Typed without it, refused as before (#9); an earlier hosting's key, refused too.
+            using var rig = new Rig();
+            rig.Room.Exposed(true);
+            rig.Room.Pump();
+            var from = IPAddress.Parse("192.168.1.20");
+            var heard = LanBeacon.Read(LanBeacon.Beacon(41391, "mac-de-arturo", "1.0.0", Array.Empty<string>(), "lobby", rig.Room.Key), from)!;
+            Assert.Equal(0, (int)rig.Join("Ana", key: heard.Key).Take("welcome").Single()["slot"]!);
+            var typed = rig.Join("Pepe", key: "");
+            Assert.Equal("Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su pantalla o en su «Menú», junto a la dirección. Escribe las dos en «Unirse por dirección».", (string?)typed.Take("error").Single()["message"]);
+            Assert.True(typed.IsClosed);
+            var old = LanBeacon.Read(LanBeacon.Beacon(41391, "mac-de-arturo", "1.0.0", Array.Empty<string>(), "lobby", "ZZZZ9"), from)!;
+            var stale = rig.Join("Pepe", key: old.Key);
+            Assert.Equal("Esa clave no es la de esta partida: cambia cada vez que se aloja. Pide la de ahora a quien la aloja.", (string?)stale.Take("error").Single()["message"]);
+            Assert.True(stale.IsClosed);
+            Assert.Equal(new[] { "Ana" }, rig.Room.Summary().players);
+        }
+
+        [Fact]
         public void WithThePortClosedTheHouseJoinsAsBefore()
         {
             using var rig = new Rig();

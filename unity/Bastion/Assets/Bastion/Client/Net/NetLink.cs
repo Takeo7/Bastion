@@ -506,8 +506,9 @@ namespace Bastion.Client.Net
                 log.Write($"anfitrión arrancado: tcp {host.Port} · {(LocalOnly ? "solo 127.0.0.1 (prueba)" : string.Join(", ", HostAddresses.List().Select((a) => a.Address)))} · versión {Version}");
                 if (!LocalOnly)
                 {
-                    // iOS: no beacon, and the router by NAT-PMP alone (LanBlind).
-                    if (!LanBlind) announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
+                    // iOS: no beacon, and the router by NAT-PMP alone (LanBlind). With the room's key: a game heard in the
+                    // house goes in by its entry with the router's port open (cuadro 186).
+                    if (!LanBlind) announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary, key: room.Key);
                     if (settings.Router) OpenRouter();
                     else log.Write("[router] sin abrir: el jugador lo tiene apagado en Ajustes");
                 }
@@ -538,12 +539,28 @@ namespace Bastion.Client.Net
             return Open(h, p, name, true, Room.NormalKey(key));
         }
 
-        /// <summary>`roomKey`: the room's, to join from the internet (with the address, as Invite gives them).</summary>
-        private string? Open(string address, int port, string name, bool remember, string? roomKey = null)
+        /// <summary>
+        /// A game heard on the network (LanBeacon), with the key its announcement brought, so the house goes in with the
+        /// router's port open and nothing typed (cuadro 186, Arturo 27/11). The address is remembered without it: the key
+        /// changes each time the game is hosted, and a typed one is asked as before.
+        /// </summary>
+        public string? Join(LanGame game, string name)
+        {
+            name = name.Trim();
+            if (name.Length < 1 || name.Length > 20) return NameProblem;
+            if (!GameAddress.TryParse(game.Address, out var h, out var p)) return AddressProblem;
+            return Open(h, p, name, true, game.Key, rememberKey: false);
+        }
+
+        /// <summary>
+        /// `roomKey`: the room's, to join from the internet (with the address, as Invite gives them); `rememberKey`, kept
+        /// with the address for the next time (not an announcement's).
+        /// </summary>
+        private string? Open(string address, int port, string name, bool remember, string? roomKey = null, bool rememberKey = true)
         {
             var key = $"{address}:{port}";
             settings.Name = name;
-            if (remember) settings.Last = roomKey != null ? $"{key} · {roomKey}" : key;
+            if (remember) settings.Last = roomKey != null && rememberKey ? $"{key} · {roomKey}" : key;
             settings.Save();
             // The same host and not in yet (a name taken): the same connection, another name.
             if (session != null && joining && target == key)

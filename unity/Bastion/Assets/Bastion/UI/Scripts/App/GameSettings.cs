@@ -566,11 +566,11 @@ namespace Bastion.UI.App
             public const string CapSynced = "Con la sincronía, el límite se redondea hacia arriba según la pantalla: con 60 en una de 144 Hz, va a 72.";
         }
 
-        /// <summary>The router's row's words (Lore, .dev-snapshots/lore/0.12.17/TEXTOS.md §5).</summary>
+        /// <summary>The router's row's words (Lore, .dev-snapshots/lore/0.12.17/TEXTOS.md §5; the key's sentence, 27/11).</summary>
         public static class RouterText
         {
             public const string Label = "Abrir el puerto del router";
-            public const string About = "Al alojar una partida, el juego abre su puerto en el router. Así, quien juegue contigo puede entrar por internet con la dirección y la clave. Con el puerto abierto, quien entra por primera vez desde tu red también necesita la clave. Con «No», el juego no toca el router: se entra desde tu red o con Tailscale.";
+            public const string About = "Al alojar una partida, el juego abre su puerto en el router. Así, quien juegue contigo puede entrar por internet con la dirección y la clave. Con el puerto abierto, desde tu red se entra sin clave con «Unirse a…»; quien entra por primera vez por dirección sí la necesita. Con «No», el juego no toca el router: se entra desde tu red o con Tailscale.";
             /// <summary>Under its name (B7; provisional, Lore reviews the five).</summary>
             public const string Hint = "Para jugar por internet sin Tailscale.";
             public const string YesTip = "Se puede entrar por internet";
