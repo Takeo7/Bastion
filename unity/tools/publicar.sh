@@ -54,6 +54,11 @@ probar() {
     echo "La identidad «$sign» no está una sola vez en el llavero (security find-identity -v -p codesigning)."
     exit 2
   fi
+  # The measuring room's port (below), looked at first: taken, nothing is built (Producto's review of the 0.14.4, cuadro 148).
+  if lsof -nP -iTCP:${PUBLICAR_PUERTO:-3400} -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "El puerto ${PUBLICAR_PUERTO:-3400}, el de la sala de medida, está ocupado: «PUBLICAR_PUERTO=<otro> $0 …»."
+    exit 2
+  fi
   rm -f "$mark"
   # The version, in the project: it goes in the commit.
   sed -i '' "s/^  bundleVersion: .*$/  bundleVersion: $version/" "$settings"
@@ -106,24 +111,54 @@ probar() {
   ls -la unity/Bastion/Builds/Bastion-Mac.zip unity/Bastion/Builds/Bastion-Windows.zip || exit 1
 
   # The Mac app by itself, hosting on this machine with its own data: 90 s of combat in a city, 120 s in the base.
+  # Run as a copy with an identifier of its own: Unity keeps an app's PlayerPrefs by its CFBundleIdentifier, and the real
+  # one, run here, wrote its sessions into the preferences of Arturo's game (Red, R22b of 23/11: session_count and the
+  # session ids). The same executable, signed ad hoc; what is zipped and published is the real one, untouched. A tester
+  # (BASTION_ANFITRION, BASTION_MEDIR) keeps its room on 127.0.0.1, so macOS asks nothing of the copy.
+  trial=$out/prueba/Bastion.app
+  rm -rf "${out:?}/prueba"; mkdir -p "$out/prueba"
+  ditto "$app" "$trial"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.takeo7.bastion.unity.prueba" "$trial/Contents/Info.plist"
+  codesign --force --deep --sign - "$trial" > /dev/null 2>&1 && codesign -v --deep --strict "$trial" \
+    || { echo "No he podido firmar la copia de prueba de la app."; exit 1; }
+  # Arturo's preferences (the real identifier's), the same after the runs as before: date, size and content.
+  prefs=~/Library/Preferences/com.takeo7.bastion.unity.plist
+  prefsMark() { [ -f "$prefs" ] && echo "$(stat -f '%Sm %z' "$prefs") $(shasum -a 256 "$prefs" | cut -d' ' -f1)" || echo "sin archivo"; }
+  prefsBefore=$(prefsMark)
   appFaults=0
+  # The measuring room on a port of its own, on 127.0.0.1 alone (Red, 24/11): on the game's default one (41391) another
+  # session's app, joining «127.0.0.1» with no port, came into it (Pruebas, 05:28). PUBLICAR_PUERTO changes it; taken, stop
+  # (looked at when «probar» starts too; here again, in case something took it while the apps were built).
+  trialPort=${PUBLICAR_PUERTO:-3400}
+  if lsof -nP -iTCP:$trialPort -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "El puerto $trialPort, el de la sala de medida, está ocupado: «PUBLICAR_PUERTO=<otro> $0 …»."
+    exit 1
+  fi
   for mode in ciudad base; do
     data=$out/app-$mode
     rm -rf "$data"; mkdir -p "$data"
-    BASTION_DATOS=$data BASTION_ANFITRION=Medida BASTION_SEMILLA=7 BASTION_MEDIR=$mode \
-      "$app/Contents/MacOS/Bastion" -logFile "$data/Player.log"
+    BASTION_DATOS=$data BASTION_ANFITRION=Medida BASTION_SEMILLA=7 BASTION_MEDIR=$mode BASTION_PUERTO=$trialPort BASTION_SOLO_LOCAL=1 \
+      "$trial/Contents/MacOS/Bastion" -logFile "$data/Player.log"
     code=$?
     faults=$(grep -c "Exception" "$data/Player.log")
     layout=$(grep -c "Layout update is struggling" "$data/Player.log")
     done_=$(grep -c "\[prueba\] medir: $mode terminado" "$data/red.log" 2>/dev/null)
-    echo "== app, $mode: salida $code · excepciones $faults · avisos de layout $layout"
+    # A message of the app's that the room refused (Room logs it: «[sala] Ana: mensaje no válido (baseView «stash»)»); the
+    # 0.13.0's Almacén was refused at each tab, and only the screen said so (G12, G13, 17/11).
+    refused=$(grep -c "\[sala\]" "$data/red.log" 2>/dev/null)
+    echo "== app, $mode: salida $code · excepciones $faults · avisos de layout $layout · rechazos de la sala ${refused:-0}"
     grep -h "\[prueba\] medir" "$data/red.log"
+    grep -h "\[sala\]" "$data/red.log" 2>/dev/null | head -8
     grep -h "\[rend Medida\] combate" "$data/red.log" | grep -oE "[0-9]+ tir(ón|ones)" | awk '{s+=$1} END {print "tirones en combate: " s+0}'
-    if [ $code != 0 ] || [ "$faults" != 0 ] || [ "$layout" != 0 ] || [ "${done_:-0}" = 0 ]; then appFaults=1; fi
+    if [ $code != 0 ] || [ "$faults" != 0 ] || [ "$layout" != 0 ] || [ "${done_:-0}" = 0 ] || [ "${refused:-0}" != 0 ]; then appFaults=1; fi
   done
 
+  prefsAfter=$(prefsMark)
+  if [ "$prefsAfter" = "$prefsBefore" ]; then echo "preferencias de Arturo iguales: $prefsAfter"
+  else echo "PREFERENCIAS DE ARTURO CAMBIADAS: $prefsBefore → $prefsAfter"; appFaults=1; fi
+
   if [ "$closeFaults" != 0 ] || [ $appFaults != 0 ]; then
-    echo "NO está para publicar: mirar las excepciones de arriba."
+    echo "NO está para publicar: mirar arriba las excepciones, los avisos y los rechazos de la sala."
     exit 1
   fi
   tree_state > "$mark"
@@ -164,9 +199,11 @@ principal() {
   for folder in unity/Bastion/Builds/release packages/desktop/dist/release; do
     mkdir -p "$main/$folder" && cp "$out/Bastion-$version-mac.zip" "$out/Bastion-$version-win-x64.zip" "$main/$folder/" || exit 1
   done
-  rm -rf "$main/unity/Bastion/Builds/Mac/Bastion.app"
-  ditto unity/Bastion/Builds/Mac/Bastion.app "$main/unity/Bastion/Builds/Mac/Bastion.app" || exit 1
-  codesign -v --deep --strict "$main/unity/Bastion/Builds/Mac/Bastion.app" || echo "La firma de la app copiada no pasa."
+  # With the version in its name (cuadro 162), as in the zip: «Bastión 0.14.8.app»; the ones of before and Bastion.app out.
+  copy="$main/unity/Bastion/Builds/Mac/Bastión $version.app"
+  rm -rf "$main/unity/Bastion/Builds/Mac/Bastion.app" "$main/unity/Bastion/Builds/Mac/Bastión "*.app
+  ditto unity/Bastion/Builds/Mac/Bastion.app "$copy" || exit 1
+  codesign -v --deep --strict "$copy" || echo "La firma de la app copiada no pasa."
   # The main tree onto the published commit, keeping every working file as it is.
   git -C "$main" fetch -q origin && git -C "$main" reset -q origin/main || exit 1
   sed -i '' "s/^  bundleVersion: .*$/  bundleVersion: $version/" "$main/unity/Bastion/ProjectSettings/ProjectSettings.asset"

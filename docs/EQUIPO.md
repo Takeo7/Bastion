@@ -1,21 +1,27 @@
 # Equipo y reparto
 
-Quién hace qué en Bastión, qué archivos toca cada uno y en qué está ahora. Lo mantiene **Gameplay**, que coordina. Antes de tocar un archivo de otro rol, se le pregunta por mensaje.
+> **27/11:** `main` vuelve a la 0.12.26 y lo hecho desde la 0.13.0 queda en la rama `aparcado/0.14` (ver `CLAUDE.md`). Los roles y las normas de abajo son los de hoy; lo que cada tabla dice de «en qué está» cada rol es de antes del cambio y está por poner al día.
 
-## Roles hoy (Unity, desde el 23/10; puesto al día el 16/11)
+Quién hace qué en Bastión, qué archivos toca cada uno y en qué está ahora. Lo mantiene **Producto**, que coordina desde el 17/11 (Arturo: «deberías ser tú el que orqueste y no Gameplay ahora»). Antes de tocar un archivo de otro rol, se le pregunta por mensaje.
+
+## Roles hoy (Unity, desde el 23/10; puesto al día el 24/11)
 
 | Rol | Sesión | Hace | Sus archivos |
 |---|---|---|---|
-| **Gameplay** (coordina) | Gameplay | Las reglas y la campaña, el reparto del trabajo, la revisión, las versiones y estos documentos | `engine-cs/package/Runtime/` (menos `Lore/` y `Net/`), `engine-cs/tests/` (menos las de red y las de textos), `engine-cs/golden/`, `unity/tools/publicar.sh`, `copia.sh`, `.github/`, `CLAUDE.md`, `docs/UNITY.md`, `TRASPASO.md`, `EQUIPO.md` |
+| **Producto** (coordina) | Producto | Piensa con Arturo qué lleva el juego y le lleva las decisiones al cuadro; planifica las tareas y las encarga a cada rol; revisa lo entregado; hace los commits y publica. No programa | `.dev-snapshots/producto/` (el encargo `RUNS.md` y el tablero `TABLERO.md`), `CLAUDE.md`, `docs/EQUIPO.md` |
+| **Gameplay** | Gameplay | Las reglas y la campaña; los documentos técnicos | `engine-cs/package/Runtime/` (menos `Lore/` y `Net/`), `engine-cs/tests/` (menos las de red, las de textos y los bancos de Bots), `engine-cs/golden/`, `unity/tools/publicar.sh`, `copia.sh`, `.github/`, `docs/UNITY.md`, `TRASPASO.md` |
 | **Lore** | Lore | El mundo y todos los textos que se ven, las notas de cada versión | `engine-cs/package/Runtime/Lore/`, los textos (no la lógica) del resto del motor y de la interfaz, `docs/LORE.md`, `docs/NOTAS-*.md`, `README.md` |
 | **Arte** | Arte | Lo que se ve en 3D: figuras, animaciones, armas, mapas, la base, luz, efectos y el rendimiento | `unity/Bastion/Assets/Bastion/Client/` (menos `Net/`, `Audio/` e `Input/`), `Assets/Bastion/Editor/` (los laboratorios), `unity/tools/unity.sh`, `captura.sh`, `importar-synty.sh`, `docs/UNITY-ARTE.md` |
 | **UI** | UI | El HUD, el control y la cámara del combate, las pantallas de estrategia, el inicio y los Ajustes, lo táctil | `unity/Bastion/Assets/Bastion/UI/`, `Client/Input/`, `docs/UNITY-UI.md`, `docs/UNITY-ESTRATEGIA.md` |
-| **Red** | Networking | La sala, la conexión, el guardado, las apps (Mac, Windows, iOS), la firma y el sonido | `engine-cs/package/Runtime/Net/`, sus pruebas (`Net*Tests.cs`), `Assets/Bastion/Client/Net/` (con `Editor/AppBuild.cs`), `Client/Audio/`, `unity/tools/ios.sh`, `sonido.sh`, `docs/FIRMA.md`, `docs/IOS.md`, `docs/UNITY-SONIDO.md` |
+| **Red** | Networking | La sala, la conexión, el guardado, las apps (Mac, Windows, iOS), la firma y el sonido | `engine-cs/package/Runtime/Net/` (menos lo de Bots), sus pruebas (`Net*Tests.cs`, menos las del bot), `Assets/Bastion/Client/Net/` (con `Editor/AppBuild.cs`), `Client/Audio/`, `unity/tools/ios.sh`, `sonido.sh`, `docs/FIRMA.md`, `docs/IOS.md`, `docs/UNITY-SONIDO.md` |
+| **Pruebas** | Pruebas | Desde el 24/11. Prueba cada versión en la app compilada, **a un jugador (desde el menú de inicio, como juega Arturo) y a dos**: las transiciones medidas por fotograma, tiras leyendo lo que dice la pantalla, fotos lado a lado con la versión anterior, cortes y guardados de la versión anterior; reproduce lo que cuentan Arturo y Ana. No arregla código del juego | `.dev-snapshots/pruebas/` (la lista fija está en `LISTA-FIJA.md`; los guiones, heredados de Red, en `guiones/`). Puertos 3410/3411 |
+| **Bots** | Bots | Desde el 24/11. Un bot que juegue como un jugador prudente, y los bancos que con él midan la dificultad y la economía. No cambia reglas: trae tablas y Producto las lleva al cuadro. El bot nuevo va detrás de una opción apagada por defecto; antes de encenderlo en las apps o en `Measure`, avisa a Pruebas y a Red | `engine-cs/package/Runtime/Net/MissionBot.cs`, `Net/HeardGameBot.cs` (la parte del bot de `HeardGame`, `partial`), `tests/NetMissionBot*Tests.cs`, `tests/NetRun*Bot*Tests.cs`, `tests/RunBench*.cs`, `tests/RescueBench.cs`, `.dev-snapshots/bots/`. Los bancos corren en una copia |
 | **Biblioteca** | Biblioteca de assets | La web local de recursos de Arturo ([BIBLIOTECA.md](BIBLIOTECA.md)) | `unity/tools/biblioteca/` |
-| **Producto** | Producto | Piensa con Arturo qué lleva el juego y pasa lo decidido a Gameplay, que lo reparte | Ningún archivo de código; sus notas, en `.dev-snapshots/producto/` |
 
 - **Escenas:** un solo dueño por archivo `.unity`. Partida es de Arte; Inicio, de UI.
 - **Unity, de uno en uno:** `unity.sh` y `captura.sh` llevan un cerrojo; quien llega espera.
+- **La máquina, para medir:** quien mide rendimiento crea `.dev-snapshots/MIDIENDO` (con su nombre y la hora) y lo borra al acabar; mientras exista, nadie lanza bancos, `dotnet test` ni compilaciones.
+- **Las preferencias de la app de Arturo no se tocan:** las apps de prueba llevan identificador propio (`com.takeo7.bastion.unity.prueba`), y cada parte comprueba que `~/Library/Preferences/com.takeo7.bastion.unity.plist` no ha cambiado.
 - **Cada versión** se compila en la copia limpia (`../Bastion-0122`), con los parches de cada rol (`.dev-snapshots/<rol>/…`), no en el árbol donde todos trabajan ([UNITY.md](UNITY.md), «Cómo se publica»).
 - **`packages/`** (TypeScript, 0.10.1) está congelado: lo de abajo vale solo para arreglos graves y como referencia.
 
@@ -39,7 +45,8 @@ Sesiones abiertas (2026-10-14), todas con Remote Control para seguirlas desde cl
 
 - Nada de Prettier ni formateadores: el código está formateado a mano.
 - Ediciones exactas y pequeñas en archivos compartidos, nunca reescribir un archivo entero de otro.
-- Nadie hace commit sin avisar a Gameplay, que agrupa y sube.
+- Nadie hace commit: los hace Producto al cerrar cada hito, tras preguntar a los roles si lo suyo está para guardar (desde el 17/11; antes, Gameplay).
+- Cada rol da el parte a Producto: al acabar una tarea del tablero, una línea con lo hecho, lo que se desvía y dónde está su LEEME con capturas o medidas. Las decisiones de gusto (aspecto, nombres, reglas que se notan al jugar) van a Producto antes de hacerlas; Producto las lleva al cuadro de Arturo.
 - Conversión de Synty: `tools/synty/convert.ts` siempre con ids explícitos, nunca una pasada completa (borra lo que no está en el manifiesto y podría llevarse lo nuevo de otro agente).
 - Cada uno prueba con su propio servidor:
 
