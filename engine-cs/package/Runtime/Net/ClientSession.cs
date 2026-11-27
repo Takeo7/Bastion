@@ -260,13 +260,20 @@ namespace Bastion.Net
         public static Unreach Why(Exception? failed)
         {
             if (!(failed is System.Net.Sockets.SocketException e)) return Unreach.NoAnswer;
-            switch (e.SocketErrorCode)
+            // On iOS (IL2CPP) the code is the system's own errno, not .NET's: «61: mono-io-layer-error (61)» for a refusal in
+            // the simulator (0.14.12), where the Mac's Mono says ConnectionRefused. Both are read: Darwin's numbers are
+            // ECONNREFUSED 61, EHOSTUNREACH 65, ENETUNREACH 51 and ENETDOWN 50, none of them one of .NET's.
+            switch ((int)e.SocketErrorCode)
             {
-                case System.Net.Sockets.SocketError.ConnectionRefused:
+                case (int)System.Net.Sockets.SocketError.ConnectionRefused:
+                case 61:
                     return Unreach.Refused;
-                case System.Net.Sockets.SocketError.HostUnreachable:
-                case System.Net.Sockets.SocketError.NetworkUnreachable:
-                case System.Net.Sockets.SocketError.NetworkDown:
+                case (int)System.Net.Sockets.SocketError.HostUnreachable:
+                case (int)System.Net.Sockets.SocketError.NetworkUnreachable:
+                case (int)System.Net.Sockets.SocketError.NetworkDown:
+                case 65:
+                case 51:
+                case 50:
                     return Unreach.NoRoute;
                 default:
                     return Unreach.NoAnswer;

@@ -188,6 +188,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal(Unreach.NoAnswer, ClientSession.Why(Error(System.Net.Sockets.SocketError.TimedOut)));
             Assert.Equal(Unreach.NoAnswer, ClientSession.Why(new TimeoutException("No responde nadie en 192.168.1.20:41391.")));
             Assert.Equal(Unreach.NoAnswer, ClientSession.Why(null));
+            // iOS (IL2CPP): Darwin's own numbers, as the simulator gave them (0.14.12: «61: mono-io-layer-error (61)»).
+            Assert.Equal(Unreach.Refused, ClientSession.Why(new System.Net.Sockets.SocketException(61)));
+            Assert.Equal(Unreach.NoRoute, ClientSession.Why(new System.Net.Sockets.SocketException(65)));
+            Assert.Equal(Unreach.NoRoute, ClientSession.Why(new System.Net.Sockets.SocketException(51)));
+            Assert.Equal(Unreach.NoRoute, ClientSession.Why(new System.Net.Sockets.SocketException(50)));
+            Assert.Equal(Unreach.NoAnswer, ClientSession.Why(new System.Net.Sockets.SocketException(60)));
         }
 
         [Fact]
