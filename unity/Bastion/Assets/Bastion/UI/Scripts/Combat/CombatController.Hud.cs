@@ -939,6 +939,8 @@ namespace Bastion.UI.Combat
                 WeaponIcon = WeaponIconOf(u),
                 WeaponTip = string.Join(" · ", new[] { weapon }.Concat(extras)) + (Content.BareHanded(u) ? "\n" + HudText.Bare.Tip : ""),
                 WeaponBare = weapon == HudText.Bare.Name,
+                Hp = u.Hp, MaxHp = u.MaxHp, Ap = u.Ap, ApMax = Math.Max(Content.ApPerTurnOf(u), u.Ap),
+                WeaponPicture = gun ? "weapon:" + ShotPicture(u) : null,
             };
             // Its cover, a shield in its colour (Arturo, 7/11).
             var shown = UnitById(Shown, u.Id) ?? u;

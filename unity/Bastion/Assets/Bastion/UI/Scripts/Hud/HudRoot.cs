@@ -93,6 +93,11 @@ namespace Bastion.UI.Hud
             squad = new SquadList(root.Q("squad-cards"), squadPlate, relay, tips) { Icons = Icon };
             gear = new Bastion.UI.Gear.GearBoard(root, tips, Icon, gearRelay) { Cell = 40, PictureOf = Bastion.Client.GearPictures.Of, CanThrow = false };
             unit = new UnitPanel(root.Q("unit-panel"), root.Q("pack"), relay, tips, Icon) { Gear = gear };
+            // With the mouse the sheet is inside the picked soldier's card (cuadro 179): the list puts it there.
+            squad.Sheet = root.Q("unit-panel");
+            squad.Pack = root.Q("pack");
+            squad.SheetHelp = () => unit.Help;
+            squad.SheetOpens = () => unit.Opens;
             // A bust's help over the picked one's sheet, not on it (Producto, 18/11).
             var sheet = root.Q("unit-panel");
             tips.KeepClear.Add(() => sheet);

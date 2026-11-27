@@ -236,3 +236,23 @@
     border-top-width: 2px;
     border-top-color: var(--t-accent);
 }
+
+/* ================================================================ the picked one's card with its sheet (cuadro 179) */
+
+/* With the mouse: the bust and the name in a column (.squad-card__main), the sheet to its right (UnitPanel.uss
+   .unit-panel--in-card). The health and the actions are the sheet's bars, and the movement the bar's: not under the
+   bust too. */
+.squad-card--sheet {
+    flex-direction: row;
+    flex-shrink: 0;
+}
+
+.squad-card__main {
+    flex-shrink: 0;
+}
+
+.squad-card--sheet .squad-card__hp,
+.squad-card--sheet .squad-card__ap,
+.squad-card--sheet .squad-card__moves {
+    display: none;
+}

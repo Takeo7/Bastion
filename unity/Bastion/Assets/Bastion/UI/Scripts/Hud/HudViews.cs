@@ -192,6 +192,12 @@ namespace Bastion.UI.Hud
         public string WhoseColor;
         public List<StatView> Stats = new List<StatView>();
         public string Weapon;
+        /// <summary>
+        /// For the sheet inside its card (cuadro 179, with the mouse): its health and its actions, as bars, and its gun's
+        /// picture side on, as on its key («weapon:rifle»; null without a gun: WeaponIcon, the blade's).
+        /// </summary>
+        public int Hp, MaxHp, Ap, ApMax;
+        public string WeaponPicture;
         /// <summary>The weapon in the hand's picture, an id of the HUD's table (U29); null, the rifle's as before.</summary>
         public string WeaponIcon;
         public string WeaponTip;

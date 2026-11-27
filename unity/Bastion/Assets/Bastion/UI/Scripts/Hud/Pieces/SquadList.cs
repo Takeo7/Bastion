@@ -57,6 +57,22 @@ namespace Bastion.UI.Hud
         /// <summary>A soldier's bust by id (Arte's Portraits.Soldier); null, none yet.</summary>
         public Func<string, Texture> PortraitOf;
 
+        /// <summary>
+        /// The picked soldier's sheet (UnitPanel's holder) and the backpack's slots' (HudRoot): with the mouse the sheet goes
+        /// inside the picked one's card, to the right of its bust (Arturo, cuadro 179), and the slots over it. With no card
+        /// picked it goes back where it was, a line over the plate.
+        /// </summary>
+        public VisualElement Sheet;
+        public VisualElement Pack;
+        /// <summary>What the picked one's card says more in its help (its whole name, its rank, its aims) and whether a click on it opens its sheet (UnitPanel's).</summary>
+        public Func<string> SheetHelp;
+        public Func<bool> SheetOpens;
+        /// <summary>The sheet's width in the card, with its margin (UnitPanel.uss .unit-panel--in-card).</summary>
+        const float SheetW = 196;
+        VisualElement sheetHome;
+        int sheetAt;
+        bool sheetQuiet;
+
         /// <param name="host">The cards' row.</param>
         /// <param name="plate">The squad's plate, as wide as the row needs.</param>
         /// <summary>
@@ -83,6 +99,7 @@ namespace Bastion.UI.Hud
             var k = Ui.Key(view);
             if (k == key) return;
             key = k;
+            Undock();
             host.Clear();
             var cards = view?.Cards ?? new List<SquadCardView>();
             // No soldier yet (the HUD before the first view): no plate either.
@@ -107,7 +124,9 @@ namespace Bastion.UI.Hud
             var extra = groups * (GroupGap - Gap);
             var width = n <= 4 ? CardW : Mathf.Max(MinW, Mathf.Floor((MaxRow - PickedMore - (n - 1) * Gap - extra) / n));
             var row = n * width + PickedMore + Mathf.Max(0, n - 1) * Gap + extra;
-            plate.style.width = Mathf.Max(Least, row + 2 * Padding);
+            // The picked one's card holds its sheet (with the mouse): the plate, that much wider.
+            var docks = UnitPanel.InCard && Sheet != null && cards.Exists(c => c.Selected);
+            plate.style.width = Mathf.Max(Least, row + 2 * Padding) + (docks ? SheetW : 0);
             for (var i = 0; i < n; i++)
             {
                 // Separados' groups apart (U27): the wider gap, a line down its middle.
@@ -115,7 +134,51 @@ namespace Bastion.UI.Hud
                 var card = Card(cards[i], cards[i].Selected ? width + PickedMore : width);
                 if (i > 0 && !cards[i].GroupStart) card.style.marginLeft = Gap;
                 host.Add(card);
+                if (docks && cards[i].Selected) Dock(card, width + PickedMore);
             }
+        }
+
+        /// <summary>The sheet out of the card it was in, back over the plate (before the cards are made again).</summary>
+        void Undock()
+        {
+            if (Sheet == null) return;
+            if (sheetHome == null)
+            {
+                sheetHome = Sheet.parent;
+                sheetAt = sheetHome != null ? sheetHome.IndexOf(Sheet) : 0;
+            }
+            if (Sheet.parent == sheetHome || sheetHome == null) return;
+            Sheet.RemoveFromHierarchy();
+            Sheet.RemoveFromClassList("unit-panel--in-card");
+            sheetHome.Insert(Mathf.Min(sheetAt, sheetHome.childCount), Sheet);
+            if (Pack != null) Pack.style.left = StyleKeyword.Null;
+        }
+
+        /// <summary>
+        /// The picked one's card with its sheet: what the card has (the bust, the name) in a column `width` wide, the sheet
+        /// to its right. Its health and actions are the sheet's bars and its movement the bar's («8/8»): not under the bust
+        /// as well (SquadList.uss .squad-card--sheet).
+        /// </summary>
+        void Dock(VisualElement card, float width)
+        {
+            var main = Ui.El("squad-card__main");
+            main.pickingMode = PickingMode.Ignore;
+            foreach (var child in new List<VisualElement>(card.Children())) main.Add(child);
+            // (The card's width took in its padding and its border, 3 a side.)
+            main.style.width = width - 6;
+            card.Add(main);
+            card.style.width = StyleKeyword.Auto;
+            card.AddToClassList("squad-card--sheet");
+            Sheet.AddToClassList("unit-panel--in-card");
+            card.Add(Sheet);
+            // A click on the sheet is the sheet's (the backpack's key), not the card's.
+            if (!sheetQuiet)
+            {
+                sheetQuiet = true;
+                Sheet.RegisterCallback<ClickEvent>(e => e.StopPropagation());
+            }
+            // The backpack's slots over the sheet, where its key is.
+            if (Pack != null) card.RegisterCallback<GeometryChangedEvent>(_ => Pack.style.left = Padding + card.layout.x + width);
         }
 
         /// <summary>A bust came: the cards drawn again with it.</summary>
@@ -201,9 +264,21 @@ namespace Bastion.UI.Hud
             }
             if (c.InPlay) Tag(HudText.Squad.InPlay, "in-play", HudText.Squad.InPlayTip);
             foreach (var t in c.Tags) Tag(t.Text, t.Kind, t.Tip, t.Icon);
-            tips.Attach(card, string.Join("\n", help));
+            var words = string.Join("\n", help);
+            // The picked one's, with its sheet in it (the mouse): what the line said and the card doesn't show (the rank,
+            // the aims), and that a click opens the soldier's sheet; asked as the pointer comes, the sheet is drawn after.
+            var withSheet = c.Selected && UnitPanel.InCard && Sheet != null;
+            if (withSheet)
+                tips.Attach(card, () =>
+                {
+                    var more = SheetHelp?.Invoke();
+                    var tip = new Label(string.IsNullOrEmpty(more) ? words : words + "\n" + more);
+                    tip.AddToClassList("tooltip__text");
+                    return tip;
+                });
+            else tips.Attach(card, words);
             var id = c.Id;
-            if (c.Mine && !c.Dead) card.RegisterCallback<ClickEvent>(_ => Click(id));
+            if (c.Mine && !c.Dead) card.RegisterCallback<ClickEvent>(_ => Click(id, withSheet));
             // The partner's: the camera to it (Ana, 7/11 #12).
             else if (!c.Dead && !c.Evacuated) card.RegisterCallback<ClickEvent>(_ => handlers.OnLookUnit(id));
             if (!c.Dead && !c.Evacuated)
@@ -312,13 +387,15 @@ namespace Bastion.UI.Hud
         }
 
         /// <summary>A click picks the soldier; the second on the same card soon after takes the camera to it (UI-08).</summary>
-        void Click(string id)
+        /// <param name="picked">The card is the picked one's, with its sheet: a click opens the soldier's sheet (cuadro 179).</param>
+        void Click(string id, bool picked = false)
         {
             var now = Time.realtimeSinceStartup;
             var twice = clicked == id && now - clickedAt < DoubleClick;
             clicked = twice ? null : id;
             clickedAt = now;
             if (twice) handlers.OnLookUnit(id);
+            else if (picked && SheetOpens?.Invoke() == true) handlers.OnSheet(id);
             else handlers.OnSelectUnit(id);
         }
     }

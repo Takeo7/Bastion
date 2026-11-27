@@ -652,3 +652,142 @@
 .desk .unit-pack-mark {
     margin-left: 4px;
 }
+
+/* ================================================================ the sheet inside its card (cuadro 179) */
+
+/*
+   With the mouse (UnitPanel.InCard; SquadList docks it): no plate of its own, a column to the right of the bust. The
+   gun's picture and its name; the health and the actions, a bar each with its icon; the rounds, the cover's shield and
+   the states; «MOCHILA». The name, the rank and the aims are the card's help.
+*/
+.unit-panel--in-card {
+    width: 186px;
+    min-height: 0;
+    margin: 0 0 0 10px;
+    padding: 4px 8px 3px 0;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    background-image: none;
+}
+
+.unit-panel--in-card .unit-head__name-row,
+.unit-panel--in-card .stat--aim,
+.unit-panel--in-card .stat--melee {
+    display: none;
+}
+
+.unit-panel--in-card .unit-weapon,
+.unit-panel--in-card .unit-stats {
+    margin-left: 0;
+    padding-left: 0;
+    border-left-width: 0;
+}
+
+.unit-panel--in-card .unit-gun {
+    width: 70px;
+    height: 26px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.unit-panel--in-card .unit-weapon__name {
+    font-size: 13px;
+    white-space: normal;
+    flex-shrink: 1;
+}
+
+.unit-bars .stat {
+    margin: 0 0 4px 0;
+}
+
+.unit-panel--in-card .unit-bars .stat-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 7px;
+}
+
+.unit-bars .pips {
+    flex-grow: 1;
+}
+
+.unit-bars .stat--hp .pips {
+    padding: 3px 4px;
+}
+
+.unit-bars .stat--hp .pip {
+    flex-grow: 1;
+    width: 0;
+    height: 9px;
+    margin-right: 2px;
+}
+
+.unit-bars .stat--ap .pip {
+    flex-grow: 1;
+    width: 0;
+    height: 7px;
+    margin-right: 3px;
+}
+
+.unit-has {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.unit-panel--in-card .unit-stats {
+    flex-wrap: wrap;
+}
+
+.unit-panel--in-card .unit-has .stat {
+    margin-right: 12px;
+}
+
+.unit-panel--in-card .unit-has .stat-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 5px;
+}
+
+.unit-panel--in-card .pips--ammo .pip {
+    width: 5px;
+    height: 15px;
+    margin-right: 3px;
+}
+
+.unit-panel--in-card .unit-has .stat__value {
+    font-size: 15px;
+    margin-left: 3px;
+}
+
+.unit-panel--in-card .cover-shield {
+    width: 22px;
+    height: 22px;
+    margin: 0 8px 0 0;
+}
+
+.unit-panel--in-card .unit-head {
+    flex-wrap: wrap;
+    flex-shrink: 1;
+}
+
+.unit-panel--in-card .unit-state {
+    margin-right: 5px;
+    margin-bottom: 1px;
+}
+
+.unit-panel--in-card .unit-pack-mark {
+    margin-left: 0;
+    padding: 5px 13px 5px 9px;
+    align-self: flex-start;
+}
+
+.unit-panel--in-card .unit-pack-mark__label {
+    font-size: 13px;
+}
+
+/* The backpack's slots over the sheet (SquadList sets where), from its left. */
+.desk .unit-pack {
+    right: auto;
+    align-items: flex-start;
+}

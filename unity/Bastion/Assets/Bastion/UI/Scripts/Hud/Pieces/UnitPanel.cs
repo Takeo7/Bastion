@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -24,6 +25,18 @@ namespace Bastion.UI.Hud
         readonly Backpack backpack;
         string key;
         string shownId;
+
+        /// <summary>
+        /// With the mouse the sheet is inside the picked soldier's card (Arturo, cuadro 179: no loose line over the busts;
+        /// SquadList puts it there): its gun's picture and name, its health and actions as bars, its rounds, its cover and
+        /// «MOCHILA». Its whole name, its rank and its aims are the card's help, and a click on the bust opens the soldier's
+        /// sheet. With the finger, the line as it was.
+        /// </summary>
+        public static bool InCard => !Bastion.Client.GameInput.Touch;
+
+        /// <summary>For the picked soldier's card (SquadList): what its help says more, and whether a click opens its sheet.</summary>
+        public string Help { get; private set; }
+        public bool Opens { get; private set; }
 
         /// <param name="packHost">Where the backpack's slots go: over the sheet's end.</param>
         public UnitPanel(VisualElement host, VisualElement packHost, IHudHandlers handlers, TooltipLayer tips, System.Func<string, Sprite> icon = null)
@@ -54,6 +67,8 @@ namespace Bastion.UI.Hud
             key = k;
             host.Clear();
             Ui.Show(host, view != null);
+            Help = null;
+            Opens = false;
             if (view == null)
             {
                 backpack.Set(packHost, null, null);
@@ -71,7 +86,15 @@ namespace Bastion.UI.Hud
             if (opens) head.RegisterCallback<ClickEvent>(_ => handlers.OnSheet(shownId));
             var rank = tree.Q("rank");
             for (var i = 0; i < view.Rank; i++) Ui.El("rank__chevron", rank);
-            Ui.Show(rank, view.Rank > 0);
+            Ui.Show(rank, view.Rank > 0 && !InCard);
+            Opens = opens;
+            Help = string.Join("\n", new[]
+            {
+                string.IsNullOrEmpty(view.RankName) ? view.Name : $"{view.Name} · {view.RankName}",
+                view.Stats.Find(s => s.Kind == "aim")?.Tip,
+                view.Stats.Find(s => s.Kind == "melee")?.Tip,
+                opens ? HudText.Squad.SheetTip.TrimStart(' ', '·') : null,
+            }.Where(x => !string.IsNullOrEmpty(x)));
             if (view.Skills.Length > 0)
             {
                 var hex = new SkillHex();
@@ -162,6 +185,35 @@ namespace Bastion.UI.Hud
                     packMark.EnableInClassList("unit-pack-mark--open", backpack.Pockets);
                 });
             }
+            if (InCard) Arrange(tree, view);
+        }
+
+        /// <summary>
+        /// The pieces as the card has them (InCard), top to bottom: the gun, its picture big; the health and the actions, a
+        /// bar each with its icon; the rounds with the cover's shield and the states; «MOCHILA».
+        /// </summary>
+        void Arrange(VisualElement tree, UnitPanelView view)
+        {
+            var weapon = tree.Q("weapon");
+            var stats = tree.Q("stats");
+            var picture = view.WeaponPicture != null ? icon?.Invoke(view.WeaponPicture) : null;
+            if (picture != null && tree.Q(className: "stat-icon--weapon") is VisualElement small)
+            {
+                small.AddToClassList("unit-gun");
+                small.style.backgroundImage = new StyleBackground(picture);
+            }
+            // (One with no card of its own has them among its figures already: the partner's, a turret.)
+            var bars = Ui.El("unit-bars");
+            if (!view.Stats.Exists(s => s.Kind == "hp"))
+            {
+                if (view.MaxHp > 0) bars.Add(Stat(new StatView { Kind = "hp", Tip = $"Salud {view.Hp}/{view.MaxHp}", Filled = view.Hp, Total = view.MaxHp }));
+                if (view.ApMax > 0) bars.Add(Stat(new StatView { Kind = "ap", Tip = $"Acciones {view.Ap}/{view.ApMax}", Filled = view.Ap, Total = view.ApMax }));
+            }
+            tree.Insert(tree.IndexOf(weapon) + 1, bars);
+            var has = Ui.El("unit-has");
+            tree.Insert(tree.IndexOf(stats), has);
+            has.Add(stats);
+            has.Add(tree.Q("head"));
         }
 
         VisualElement Stat(StatView s)
