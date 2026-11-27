@@ -90,6 +90,7 @@ namespace Bastion.UI.Combat
             var pack = u.Pack != null ? u.Pack.Items.Select(p => Lore.GearName(p.Gear.Kind, p.Gear.Type, p.Gear.Count)).ToList()
                 : (u.Backpack ?? new List<Loot>()).Select(Lore.LootName).ToList();
             Carry("Mochila", pack.Count > 0 ? string.Join(" · ", pack) : "Vacía");
+            SheetFigures(v, u);
             v.Skills.AddRange(u.Perks.Select(p => Bastion.Engine.Board.Cells.FirstOrDefault(c => c.Perk == p)?.Name).Where(n => !string.IsNullOrEmpty(n)));
             // In a campaign, its board as in the Cuartel, not to be touched.
             var cs = !string.IsNullOrEmpty(u.CampaignId) ? Campaign?.Invoke()?.Soldiers.FirstOrDefault(x => x.Id == u.CampaignId) : null;
@@ -100,6 +101,80 @@ namespace Bastion.UI.Combat
                 Bastion.Client.Portraits.Know(cs.Id, cs.Appearance, cs.Name);
             }
             Hud.ShowSheet(v);
+        }
+
+        /// <summary>
+        /// The sheet's figures to read with the eyes (cuadros 179 and 180): the bars, the soldier's own figures, and each
+        /// weapon it carries as it has it (O7: Aim.CardFor, the stash's own card), its odds apart from its damage. Every name
+        /// is the engine's (Lore.WeaponLabels, the board's totals'): none is new.
+        /// </summary>
+        void SheetFigures(SoldierSheetView v, Unit u)
+        {
+            var t = Content.Templates[u.Template];
+            var s = Shown;
+            v.Bars.Add(new SheetBarView { Icon = "stat:hp", Kind = "hp", Now = u.Hp, Max = u.MaxHp, Name = "Salud" });
+            v.Bars.Add(new SheetBarView { Icon = "stat:ap", Kind = "ap", Now = u.Ap, Max = Math.Max(Content.ApPerTurnOf(u), u.Ap), Name = "Acciones" });
+            if (Paths.FullMoves(s, u) > 0)
+                v.Bars.Add(new SheetBarView
+                {
+                    Icon = "footprint", Kind = "moves", Now = Paths.MoveBudget(s, u) / Paths.CostOrtho, Max = Paths.FullMoves(s, u) / Paths.CostOrtho, Name = HudText.Moves.Stat,
+                    Tip = HudText.Moves.Tip(Paths.MoveBudget(s, u), Paths.FullMoves(s, u), Paths.ConcealedBonus(s, u)),
+                });
+            var dodge = t.Dodge + u.Mods.Dodge;
+            var defense = t.Defense + u.Mods.Defense;
+            v.Guards.Add(new SheetFigureView { Icon = "base:will", Value = u.Will.ToString(), Name = "Voluntad" });
+            v.Guards.Add(new SheetFigureView { Icon = "stat:dodge", Value = dodge.ToString(), Name = "Esquiva", Tip = Lore.GuardText.Dodge(dodge) + "\n" + Lore.GuardText.Against });
+            v.Guards.Add(new SheetFigureView { Icon = "aim:defense", Value = defense.ToString(), Name = "Defensa", Tip = Lore.GuardText.Defense(defense) + "\n" + Lore.GuardText.Against });
+            if (u.Armor > 0) v.Guards.Add(new SheetFigureView { Icon = "stat:armor", Value = u.Armor.ToString(), Name = "Blindaje" });
+
+            // Its weapons, as it has each (its skills on the weapon's own figures): the one in its hands, the pistol, the blade.
+            var hands = HandsOf(u);
+            string Span(int min, int max) => min == max ? min.ToString() : $"{min}–{max}";
+            void Weapon(Bastion.Engine.Gear g)
+            {
+                var d = g != null ? Content.GearWeapon(g) : null;
+                if (d == null) return;
+                var held = hands(g);
+                var f = Bastion.UI.Strategy.StrategyPresenter.FiguresOf(d, g.Mods, held);
+                var arrows = Content.Weapons[d.Weapon].Arrows;
+                var w = new SheetWeaponView
+                {
+                    Kind = g.Kind, Type = g.Type, Name = Bastion.UI.Strategy.StrategyPresenter.GearName(g),
+                    Tip = string.Join("\n", new[] { Bastion.UI.Strategy.StrategyPresenter.GearName(g) }.Concat(Bastion.UI.Strategy.StrategyPresenter.WeaponLines(d, g.Mods, hand: held))),
+                };
+                // The odds, with their «%»: a gun's before how far and what covers (the shot's panel counts those).
+                w.Odds.Add(new SheetFigureView { Icon = "stat:aim", Value = $"{f.Aim} %", Name = Lore.WeaponLabels.Aim, Tip = f.Melee ? null : Bastion.UI.Strategy.StrategyText.Stash.NoReachNorCover });
+                if (f.Crit != 0) w.Odds.Add(new SheetFigureView { Icon = "mindspin", Value = $"{f.Crit} %", Name = Lore.WeaponLabels.Crit });
+                // What it does: the damage, and the critical's.
+                w.Damage.Add(new SheetFigureView { Icon = "level:wounds", Value = Span(f.Min, f.Max), Name = Lore.WeaponLabels.Damage });
+                if (f.Crit != 0 && f.CritMax > 0) w.Damage.Add(new SheetFigureView { Icon = "mindspin", Value = Span(f.CritMin, f.CritMax), Name = Lore.WeaponLabels.CritDamage });
+                // The rest: how far, its rounds, its noise; the actions a shot takes when two; the armour it takes off.
+                w.Rest.Add(new SheetFigureView { Icon = "aim:range", Value = f.Reach.Max.ToString(), Name = Lore.WeaponLabels.Reach, Tip = Bastion.UI.Strategy.StrategyText.Stash.Reach(f.Reach.From, f.Reach.To, f.Reach.Max, f.Melee) });
+                // (The pistol's magazine is the rules' own, Content.PistolClip, as the line over the busts counted it: its card
+                // has none. The bow's, an arrow a shot.)
+                var clip = f.Clip > 0 ? f.Clip : d.Slot == FoundWeaponSlots.Sidearm ? Content.PistolClip : 0;
+                if (!f.Melee && (clip > 0 || arrows)) w.Rest.Add(new SheetFigureView { Icon = arrows ? "arrows" : "stat:ammo", Value = clip > 0 ? clip.ToString() : "1", Name = Lore.WeaponLabels.Clip, Tip = Lore.WeaponFigure("clip", clip, f.Melee, arrows) });
+                w.Rest.Add(new SheetFigureView { Icon = "noise", Value = f.Noise.ToString(), Name = Lore.WeaponLabels.Noise, Tip = Lore.WeaponFigure("noise", f.Noise) });
+                if (f.Actions >= 2) w.Rest.Add(new SheetFigureView { Icon = "stat:ap", Value = f.Actions.ToString(), Name = f.Melee ? Lore.WeaponLabels.ActionsMelee : Lore.WeaponLabels.Actions });
+                if (f.Shred > 0) w.Rest.Add(new SheetFigureView { Icon = "rupture", Value = f.Shred.ToString(), Name = Lore.WeaponLabels.Shred });
+                v.Weapons.Add(w);
+            }
+            // (A unit with no kit of the runs': the weapon in its hands by its arms, if it is one found.)
+            var main = u.Kit?.Primary ?? (!string.IsNullOrEmpty(u.Arms?.Primary) && Content.FoundWeapons.ContainsKey(u.Arms.Primary) ? new Bastion.Engine.Gear { Id = "", Kind = GearKinds.Weapon, Type = u.Arms.Primary } : null);
+            Weapon(main);
+            Weapon(u.Kit?.Pistol);
+            Weapon(u.Kit?.Melee);
+
+            // The rest it carries, as the stash draws it: what it wears and its belt's, then its pack's.
+            void Thing(Bastion.Engine.Gear g, bool packed)
+            {
+                if (g == null) return;
+                var item = Bastion.UI.Strategy.StrategyPresenter.Item(g);
+                v.Things.Add(new SheetThingView { Kind = g.Kind, Type = g.Type, Icon = item.Icon, Count = g.Count, Tip = item.Tip, Packed = packed });
+            }
+            Thing(u.Kit?.Vest, false);
+            foreach (var b in RunPack.BeltLeft(u) ?? new Bastion.Engine.Gear[0]) Thing(b, false);
+            foreach (var p in u.Pack?.Items ?? new List<Placed>()) Thing(p.Gear, true);
         }
 
         /// <summary>An enemy's file by id (tests: PackSteps «file=a49»); one not in sight, none.</summary>

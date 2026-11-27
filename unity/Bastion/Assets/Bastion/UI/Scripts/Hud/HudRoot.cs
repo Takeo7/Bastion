@@ -97,7 +97,6 @@ namespace Bastion.UI.Hud
             squad.Sheet = root.Q("unit-panel");
             squad.Pack = root.Q("pack");
             squad.SheetHelp = () => unit.Help;
-            squad.SheetOpens = () => unit.Opens;
             // A bust's help over the picked one's sheet, not on it (Producto, 18/11).
             var sheet = root.Q("unit-panel");
             tips.KeepClear.Add(() => sheet);
@@ -152,7 +151,7 @@ namespace Bastion.UI.Hud
             // «Aceptar evacuación» on «Turno de Ana: puedes planear los movimientos»).
             tips.KeepClear.Add(() => notesHost);
             tips.KeepClear.Add(() => abilitiesHost.Q(className: "abilities__lock"));
-            window = new BattleWindow(root, tips, s => Sound?.Invoke(s));
+            window = new BattleWindow(root, tips, s => Sound?.Invoke(s)) { Icon = Icon };
             menu = new GameMenu(root, tips, s => Sound?.Invoke(s));
             menu.Chose += what => MenuChose?.Invoke(what);
             menu.Changed += (id, value) =>

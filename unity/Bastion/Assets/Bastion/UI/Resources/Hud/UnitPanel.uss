@@ -791,3 +791,8 @@
     right: auto;
     align-items: flex-start;
 }
+
+/* A click on the sheet in the card opens the soldier's whole sheet (cuadro 180): it answers the pointer. */
+.unit-panel--in-card.unit-panel--opens:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}

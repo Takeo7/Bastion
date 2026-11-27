@@ -673,6 +673,25 @@ namespace Bastion.UI.Combat
                                 }
                                 break;
                             }
+                            // «clic=.unit-gun»: a click on the first element of that class, as the pointer's (what is no Button: the
+                            // sheet in the picked soldier's card, a bust's face).
+                            if (what.StartsWith("clic=."))
+                            {
+                                var cls = what.Substring(6);
+                                foreach (var doc in FindObjectsByType<UnityEngine.UIElements.UIDocument>(FindObjectsSortMode.None))
+                                {
+                                    var hit = doc.rootVisualElement != null ? UnityEngine.UIElements.UQueryExtensions.Q(doc.rootVisualElement, null, cls) : null;
+                                    if (hit == null) continue;
+                                    using (var e = UnityEngine.UIElements.ClickEvent.GetPooled())
+                                    {
+                                        e.target = hit;
+                                        hit.SendEvent(e);
+                                    }
+                                    Debug.Log($"[lab] clic en «.{cls}»");
+                                    break;
+                                }
+                                break;
+                            }
                             if (what.StartsWith("ayuda="))
                             {
                                 Hud?.PinTip(what.Substring("ayuda=".Length));

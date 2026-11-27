@@ -190,3 +190,243 @@
     color: var(--t-accent);
     white-space: normal;
 }
+
+/* ================================================================ the sheet to read with the eyes (cuadro 180) */
+
+/*
+   With the mouse (Arturo: «quita el texto de qué es qué, pon un tooltip… quiero que aparezca el daño y demás stats…
+   distingue entre el % de acierto y el daño»): bars with their icon, figures under theirs, each weapon with its odds
+   (white, «%») apart from its damage (the shot's panel's red) and the rest (grey); every name in its help.
+*/
+
+/* The window over the squad's plate, not on it: the sheet in the card stays in sight under it. */
+.battle-window--up {
+    padding-top: 112px;
+    padding-bottom: 166px;
+}
+
+.battle-window--up .battle-window__card--board {
+    height: 606px;
+}
+
+/* Its plate solid: the enemies' flags showed through. */
+.battle-window__card--figures {
+    -unity-background-image-tint-color: rgba(8, 9, 10, 1);
+}
+
+.battle-window__card--figures .battle-sheet__side {
+    width: 330px;
+}
+
+/* The board's totals are the sheet's figures: once. */
+.battle-window__card--figures .board-card__totals {
+    display: none;
+}
+
+.sheet-bars {
+    margin-top: 8px;
+}
+
+.sheet-bar {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 7px;
+}
+
+.sheet-bar__icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--t-text);
+}
+
+.sheet-bar__pips {
+    flex-grow: 1;
+}
+
+.sheet-bar__pips.pips--hp {
+    padding: 4px 5px;
+}
+
+.sheet-bar__pips .pip {
+    flex-grow: 1;
+    width: 0;
+    height: 12px;
+    margin-right: 3px;
+}
+
+.sheet-bar__pips.pips--ap .pip {
+    height: 10px;
+    margin-right: 4px;
+}
+
+.sheet-bar__pips.pips--moves .pip {
+    height: 8px;
+}
+
+.sheet-bar__n {
+    width: 44px;
+    margin-left: 10px;
+    font-size: 17px;
+    -unity-text-align: middle-right;
+}
+
+/* A figure: its icon, then it. */
+.sheet-figure {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 14px;
+}
+
+.sheet-figure__icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 5px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--t-muted);
+}
+
+.sheet-figure__n {
+    font-size: 17px;
+    color: #ffffff;
+}
+
+/* The soldier's own (the will, the dodge, the defence, the armour), a row between two lines. */
+.sheet-guards {
+    flex-direction: row;
+    margin-top: 3px;
+    padding: 9px 0;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.sheet-figure--own {
+    margin-right: 22px;
+}
+
+.sheet-figure--own .sheet-figure__icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 7px;
+}
+
+.sheet-figure--own .sheet-figure__n {
+    font-size: 21px;
+}
+
+/* A weapon: its picture, then its odds and its damage side by side, each in its colour, and the rest under them. */
+.sheet-weapon {
+    margin-top: 10px;
+}
+
+.sheet-weapon__figures {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 5px;
+}
+
+.sheet-weapon__group {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* The odds: white, with their «%». */
+.sheet-figure--odds .sheet-figure__icon {
+    -unity-background-image-tint-color: #ffffff;
+}
+
+.sheet-figure--odds .sheet-figure__n {
+    font-size: 19px;
+}
+
+/* The damage: the red the shot's panel says it in, after a line of its own. */
+.sheet-weapon__group--damage {
+    margin-left: 2px;
+    padding-left: 14px;
+    border-left-width: 1px;
+    border-left-color: rgba(255, 255, 255, 0.18);
+}
+
+.sheet-figure--damage .sheet-figure__icon {
+    -unity-background-image-tint-color: var(--t-danger);
+}
+
+.sheet-figure--damage .sheet-figure__n {
+    font-size: 19px;
+    color: var(--t-danger);
+}
+
+/* The rest: smaller and grey. */
+.sheet-weapon__group--rest {
+    margin-top: 3px;
+}
+
+.sheet-figure--rest .sheet-figure__icon {
+    width: 15px;
+    height: 15px;
+}
+
+.sheet-figure--rest .sheet-figure__n {
+    font-size: 14px;
+    color: var(--t-muted);
+}
+
+/* What it carries, as the stash draws it. */
+.sheet-thing {
+    background-color: rgb(46, 50, 47);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.16);
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.sheet-thing__icon {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--t-text);
+}
+
+.sheet-thing__name {
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    font-size: 10.5px;
+    color: #d7dbd2;
+}
+
+.sheet-thing__n {
+    position: absolute;
+    right: 4px;
+    bottom: 0;
+    font-size: 14px;
+    color: #ffffff;
+}
+
+.sheet-things {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+.sheet-things .sheet-thing {
+    margin: 0 6px 6px 0;
+}
+
+.sheet-things__pack {
+    width: 22px;
+    height: 24px;
+    margin: 0 10px 6px 0;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--t-muted);
+}

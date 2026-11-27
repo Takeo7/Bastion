@@ -340,14 +340,14 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>A weapon's figures as it is (the engine's card with what is mounted, no wear); the knife's, its own.</summary>
-        struct WeaponFigures
+        public struct WeaponFigures
         {
             public int Min, Max, CritMin, CritMax, Aim, Crit, Clip, Noise, Actions, Shred;
             public WeaponReach Reach;
             public bool Melee;
         }
 
-        static WeaponFigures FiguresOf(FoundWeaponDef d, IReadOnlyList<string> mods, HeldFigures? hand)
+        public static WeaponFigures FiguresOf(FoundWeaponDef d, IReadOnlyList<string> mods, HeldFigures? hand)
         {
             var w = Content.Weapons[d.Weapon];
             // (The knife isn't one found: the engine's card of its weapon, nothing to mount on it; as Aim.CardFor's. Till O7

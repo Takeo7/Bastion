@@ -29,14 +29,16 @@ namespace Bastion.UI.Hud
         /// <summary>
         /// With the mouse the sheet is inside the picked soldier's card (Arturo, cuadro 179: no loose line over the busts;
         /// SquadList puts it there): its gun's picture and name, its health and actions as bars, its rounds, its cover and
-        /// «MOCHILA». Its whole name, its rank and its aims are the card's help, and a click on the bust opens the soldier's
-        /// sheet. With the finger, the line as it was.
+        /// «MOCHILA». Its whole name, its rank and its aims are the card's help, and a click on the sheet in the card (not
+        /// on the bust: Arturo, cuadro 180) opens the soldier's whole sheet. With the finger, the line as it was.
         /// </summary>
         public static bool InCard => !Bastion.Client.GameInput.Touch;
 
-        /// <summary>For the picked soldier's card (SquadList): what its help says more, and whether a click opens its sheet.</summary>
+        /// <summary>For the picked soldier's card (SquadList): what its help says more.</summary>
         public string Help { get; private set; }
+        /// <summary>Whether a click on the sheet in the card opens the soldier's whole sheet.</summary>
         public bool Opens { get; private set; }
+        bool listens;
 
         /// <param name="packHost">Where the backpack's slots go: over the sheet's end.</param>
         public UnitPanel(VisualElement host, VisualElement packHost, IHudHandlers handlers, TooltipLayer tips, System.Func<string, Sprite> icon = null)
@@ -83,7 +85,11 @@ namespace Bastion.UI.Hud
             var opens = view.Soldier && SheetExists;
             head.EnableInClassList("unit-head--opens", opens);
             tips.Attach(head, opens ? view.RankName + HudText.Squad.SheetTip : view.RankName);
-            if (opens) head.RegisterCallback<ClickEvent>(_ => handlers.OnSheet(shownId));
+            // (In the card the whole sheet opens it, below: not twice.)
+            if (opens) head.RegisterCallback<ClickEvent>(_ =>
+            {
+                if (!host.ClassListContains("unit-panel--in-card")) handlers.OnSheet(shownId);
+            });
             var rank = tree.Q("rank");
             for (var i = 0; i < view.Rank; i++) Ui.El("rank__chevron", rank);
             Ui.Show(rank, view.Rank > 0 && !InCard);
@@ -93,8 +99,21 @@ namespace Bastion.UI.Hud
                 string.IsNullOrEmpty(view.RankName) ? view.Name : $"{view.Name} · {view.RankName}",
                 view.Stats.Find(s => s.Kind == "aim")?.Tip,
                 view.Stats.Find(s => s.Kind == "melee")?.Tip,
-                opens ? HudText.Squad.SheetTip.TrimStart(' ', '·') : null,
             }.Where(x => !string.IsNullOrEmpty(x)));
+            // In the card, a click anywhere on the sheet (the gun, the bars) opens the whole one; «MOCHILA» is its own key.
+            host.EnableInClassList("unit-panel--opens", InCard && opens);
+            if (InCard && !listens)
+            {
+                listens = true;
+                host.RegisterCallback<ClickEvent>(e =>
+                {
+                    if (!Opens || !host.ClassListContains("unit-panel--in-card")) return;
+                    for (var x = e.target as VisualElement; x != null && x != host; x = x.parent)
+                        if (x.name == "pack-mark") return;
+                    handlers.OnSheet(shownId);
+                });
+            }
+            if (InCard && opens) tips.Attach(host, HudText.Squad.SheetTip.TrimStart(' ', '·'));
             if (view.Skills.Length > 0)
             {
                 var hex = new SkillHex();

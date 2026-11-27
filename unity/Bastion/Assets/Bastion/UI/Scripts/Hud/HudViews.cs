@@ -233,8 +233,62 @@ namespace Bastion.UI.Hud
     /// and its skills; in a campaign its board beside, as in the Cuartel, not to be touched. Only to look at.
     /// </summary>
     [Serializable]
+    /// <summary>A bar of the soldier's sheet: its icon, how full («hp», «ap», «moves»: the pips' kinds), its name and what it is for its help.</summary>
+    public sealed class SheetBarView
+    {
+        public string Icon;
+        public string Kind;
+        public int Now, Max;
+        public string Name;
+        public string Tip;
+    }
+
+    /// <summary>A figure of the soldier's sheet under its icon («67 %», «3–5»); its name, and what it does if Lore says, for its help.</summary>
+    public sealed class SheetFigureView
+    {
+        public string Icon;
+        public string Value;
+        public string Name;
+        public string Tip;
+    }
+
+    /// <summary>
+    /// A weapon the soldier carries, on its sheet: its picture (the stash's, by kind and type) and its name; the odds with
+    /// it («%»: its aim, its critical) apart from what it does (its damage, the critical's) and from the rest (how far, its
+    /// rounds, its noise…); its whole help, as in the stash.
+    /// </summary>
+    public sealed class SheetWeaponView
+    {
+        public string Kind, Type;
+        public string Name;
+        public string Tip;
+        public List<SheetFigureView> Odds = new List<SheetFigureView>();
+        public List<SheetFigureView> Damage = new List<SheetFigureView>();
+        public List<SheetFigureView> Rest = new List<SheetFigureView>();
+    }
+
+    /// <summary>A thing carried that is no weapon (the vest, the belt's, the pack's): its picture, how many, its name and help. `Packed`: in the pack.</summary>
+    public sealed class SheetThingView
+    {
+        public string Kind, Type;
+        public string Icon;
+        public int Count = 1;
+        public string Tip;
+        public bool Packed;
+    }
+
     public sealed class SoldierSheetView
     {
+        /// <summary>
+        /// The sheet to read with the eyes (Arturo, cuadros 179 and 180; with the mouse): what rises and falls as bars;
+        /// the will, the dodge, the defence and the armour, a figure each under its icon; each weapon carried with its
+        /// odds («%») apart from its damage and its other figures; and the rest it carries, as the stash draws it. No
+        /// word says what is what: each one's name is its help. Empty, the lines of before (Stats, Carries).
+        /// </summary>
+        public List<SheetBarView> Bars = new List<SheetBarView>();
+        public List<SheetFigureView> Guards = new List<SheetFigureView>();
+        public List<SheetWeaponView> Weapons = new List<SheetWeaponView>();
+        public List<SheetThingView> Things = new List<SheetThingView>();
         public string Name;
         /// <summary>Its veterancy, or what it is if not a soldier.</summary>
         public string Rank;

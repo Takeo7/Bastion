@@ -64,9 +64,8 @@ namespace Bastion.UI.Hud
         /// </summary>
         public VisualElement Sheet;
         public VisualElement Pack;
-        /// <summary>What the picked one's card says more in its help (its whole name, its rank, its aims) and whether a click on it opens its sheet (UnitPanel's).</summary>
+        /// <summary>What the picked one's card says more in its help (its whole name, its rank, its aims: UnitPanel's). Its sheet opens with a click on the sheet in the card, not on the bust (Arturo, cuadro 180).</summary>
         public Func<string> SheetHelp;
-        public Func<bool> SheetOpens;
         /// <summary>The sheet's width in the card, with its margin (UnitPanel.uss .unit-panel--in-card).</summary>
         const float SheetW = 196;
         VisualElement sheetHome;
@@ -266,7 +265,7 @@ namespace Bastion.UI.Hud
             foreach (var t in c.Tags) Tag(t.Text, t.Kind, t.Tip, t.Icon);
             var words = string.Join("\n", help);
             // The picked one's, with its sheet in it (the mouse): what the line said and the card doesn't show (the rank,
-            // the aims), and that a click opens the soldier's sheet; asked as the pointer comes, the sheet is drawn after.
+            // the aims); asked as the pointer comes, the sheet is drawn after.
             var withSheet = c.Selected && UnitPanel.InCard && Sheet != null;
             if (withSheet)
                 tips.Attach(card, () =>
@@ -278,7 +277,7 @@ namespace Bastion.UI.Hud
                 });
             else tips.Attach(card, words);
             var id = c.Id;
-            if (c.Mine && !c.Dead) card.RegisterCallback<ClickEvent>(_ => Click(id, withSheet));
+            if (c.Mine && !c.Dead) card.RegisterCallback<ClickEvent>(_ => Click(id));
             // The partner's: the camera to it (Ana, 7/11 #12).
             else if (!c.Dead && !c.Evacuated) card.RegisterCallback<ClickEvent>(_ => handlers.OnLookUnit(id));
             if (!c.Dead && !c.Evacuated)
@@ -387,15 +386,13 @@ namespace Bastion.UI.Hud
         }
 
         /// <summary>A click picks the soldier; the second on the same card soon after takes the camera to it (UI-08).</summary>
-        /// <param name="picked">The card is the picked one's, with its sheet: a click opens the soldier's sheet (cuadro 179).</param>
-        void Click(string id, bool picked = false)
+        void Click(string id)
         {
             var now = Time.realtimeSinceStartup;
             var twice = clicked == id && now - clickedAt < DoubleClick;
             clicked = twice ? null : id;
             clickedAt = now;
             if (twice) handlers.OnLookUnit(id);
-            else if (picked && SheetOpens?.Invoke() == true) handlers.OnSheet(id);
             else handlers.OnSelectUnit(id);
         }
     }
