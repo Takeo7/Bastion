@@ -85,7 +85,8 @@ namespace Bastion.UI.Hud
             var cls = tree.Q<Label>("class");
             var theirs = !string.IsNullOrEmpty(view.Whose);
             Ui.Show(whose, theirs);
-            Ui.Show(cls, !theirs);
+            // With the mouse the veterancy's word goes (cuadro 177: less to read): it is the name's help, and its chevrons.
+            Ui.Show(cls, !theirs && Bastion.Client.GameInput.Touch);
             if (theirs)
             {
                 whose.text = HudText.Squad.Whose(view.Whose);

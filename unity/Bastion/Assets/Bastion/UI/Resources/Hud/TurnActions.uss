@@ -50,3 +50,20 @@
 .turn-clock--out .turn-clock__fill {
     background-color: var(--t-danger);
 }
+
+/* ================================================================ with the mouse (cuadro 177) */
+
+/* «Terminar turno», set a little apart from the actions; a ready turn keeps its green edge. */
+.desk .end-turn {
+    margin-left: 10px;
+}
+
+.desk .end-turn--ready {
+    border-width: 2px;
+    border-color: rgba(143, 208, 90, 0.7);
+}
+
+/* The turn's clock right under the bar's plate. */
+.desk .end-clock {
+    margin: 2px 8px 0;
+}

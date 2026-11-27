@@ -545,6 +545,11 @@ namespace Bastion.UI.Hud
         /// <summary>The weather (Weathers' ids; Arturo, 01/11): its name and what it changes on the card; null, clear.</summary>
         public string Weather;
         /// <summary>
+        /// The objective is the stage's plain sentence, as its first card said it, with nothing that changes in it (a Saqueo's
+        /// before anything is carried, a Limpieza's, a Travesía's): with the mouse the card leaves it to its help (cuadro 177).
+        /// </summary>
+        public bool ObjectivePlain;
+        /// <summary>
         /// The objective in steps, under the kind (La llave, U22): each a line, the done ones dimmed with «✓»; null, the
         /// one line of `Objective`.
         /// </summary>

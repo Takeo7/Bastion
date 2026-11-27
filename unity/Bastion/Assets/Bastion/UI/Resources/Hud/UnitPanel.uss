@@ -594,3 +594,61 @@
 .pack-act:disabled .pack-act__cost {
     color: var(--t-warn);
 }
+
+/* ================================================================ with the mouse (cuadro 177) */
+
+/* «PUNT.» and «CaC» go: their icons, lit, and their figures say it (their help, the whole of it). */
+.desk .stat__word {
+    display: none;
+}
+
+.desk .unit-panel {
+    padding: 6px 8px 6px 12px;
+    min-height: 32px;
+}
+
+.desk .unit-name {
+    font-size: 15px;
+    margin-right: 2px;
+}
+
+.desk .cover-shield {
+    margin-left: 8px;
+}
+
+.desk .unit-weapon,
+.desk .unit-stats {
+    margin-left: 10px;
+    padding-left: 10px;
+    border-left-color: rgba(255, 255, 255, 0.2);
+}
+
+.desk .stat--group {
+    padding-left: 10px;
+    margin-left: 2px;
+}
+
+.desk .stat {
+    margin-right: 8px;
+}
+
+.desk .unit-weapon__name {
+    font-size: 12.5px;
+    color: var(--t-text);
+}
+
+.desk .stat-icon {
+    width: 15px;
+    height: 15px;
+    margin-right: 4px;
+    -unity-background-image-tint-color: var(--t-text);
+}
+
+.desk .stat__value {
+    font-size: 13.5px;
+    margin-left: 0;
+}
+
+.desk .unit-pack-mark {
+    margin-left: 4px;
+}

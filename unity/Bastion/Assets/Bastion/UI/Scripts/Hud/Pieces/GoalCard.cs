@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -63,7 +64,9 @@ namespace Bastion.UI.Hud
             host.Clear();
             if (m == null) return;
             var kind = Ui.Text(m.Label.ToUpperInvariant(), "mission-kind font-title", host);
-            tips.Attach(kind, m.Area);
+            // With the mouse, the stage's plain sentence is its name's help, not a line of the card (cuadro 177).
+            var quiet = m.ObjectivePlain && !Bastion.Client.GameInput.Touch;
+            tips.Attach(kind, quiet ? string.Join("\n", new[] { m.Objective, m.ObjectiveTip, m.Area }.Where(x => !string.IsNullOrEmpty(x))) : m.Area);
             if (m.Steps != null && m.Steps.Count > 0)
             {
                 // In steps (La llave, U22): its number before each, «✓» and dimmed once done (not struck out: it reads worse
@@ -82,7 +85,7 @@ namespace Bastion.UI.Hud
                 }
                 tips.Attach(steps, string.IsNullOrEmpty(m.ObjectiveTip) ? m.Objective : m.ObjectiveTip);
             }
-            else
+            else if (!quiet)
             {
                 var goal = Ui.Text(m.Objective, "mission-goal", host);
                 tips.Attach(goal, string.IsNullOrEmpty(m.ObjectiveTip) ? m.Objective : m.ObjectiveTip);
@@ -108,7 +111,9 @@ namespace Bastion.UI.Hud
             {
                 var level = m.HordeFill >= 1 ? " horde--full" : m.HordeDb >= 80 ? " horde--loud" : m.HordeDb >= 60 ? " horde--raised" : "";
                 var horde = Ui.El("horde" + level, host);
-                Ui.Text(HudText.Mission.Horde, "horde__label", horde);
+                // With the mouse, the noise's own drawing (the walk's and the keys') for «RUIDO» (cuadro 177).
+                if (Bastion.Client.GameInput.Touch) Ui.Text(HudText.Mission.Horde, "horde__label", horde);
+                else Ui.El("horde__icon", horde).Add(new LineIcon("noise"));
                 var bar = Ui.El("horde__bar well", horde);
                 Ui.El("horde__fill", bar).style.width = Length.Percent(Mathf.Clamp01(m.HordeFill) * 100);
                 for (var db = 50; db < 90; db += 10) Ui.El("horde__mark", bar).style.left = Length.Percent((db - 40) * 2);

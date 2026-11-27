@@ -341,3 +341,52 @@
 .touch-hurry.ability--active .touch-hurry__glyph {
     color: var(--t-accent);
 }
+
+/* ================================================================ with the mouse (cuadro 177) */
+
+/* The bar on a plate of its own, as the squad's (Mixta.uss .panel.plate--wide). */
+.desk .actions__row {
+    padding: 6px 6px 7px;
+    background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Large_02.png");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.9);
+    -unity-slice-scale: 0.3px;
+}
+
+/* Its keys with a lit edge. */
+.desk .ability {
+    background-color: rgb(52, 57, 60);
+    border-width: 1px;
+    border-radius: 2px;
+    border-top-color: rgba(255, 255, 255, 0.3);
+    border-left-color: rgba(255, 255, 255, 0.12);
+    border-right-color: rgba(0, 0, 0, 0.6);
+    border-bottom-color: rgba(0, 0, 0, 0.75);
+}
+
+.desk .ability:hover {
+    background-color: rgb(66, 72, 75);
+    border-top-color: var(--t-accent);
+}
+
+.desk .ability--active {
+    border-width: 2px;
+    border-color: var(--t-accent);
+}
+
+/* Off, plainly off: a dark key with no edge, its icon grey. */
+.desk .ability:disabled {
+    background-color: rgb(22, 24, 26);
+    border-color: rgba(255, 255, 255, 0.04);
+}
+
+.desk .ability:disabled .ability__icon {
+    -unity-background-image-tint-color: rgb(92, 97, 92);
+}
+
+/* The movement left, in the plate's dark: the keys are what stands out. */
+.desk .bar-moves {
+    background-color: rgb(30, 33, 35);
+    border-width: 1px;
+    border-radius: 2px;
+    border-color: rgba(255, 255, 255, 0.06);
+}

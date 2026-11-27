@@ -323,3 +323,10 @@
     color: #f3ecdc;
     background-color: rgba(0, 0, 0, 0.8);
 }
+
+/* ================================================================ with the mouse (cuadro 177) */
+
+/* The goal's arrow on the corners' one margin. */
+.desk .goal-arrow {
+    right: var(--edge);
+}

@@ -70,7 +70,8 @@ namespace Bastion.UI.Hud
                 Ui.Text(p.Name, "player__name", row);
                 // Who holds the command, in words beside the name, in their colour (Arturo, 7/11: «no queda claro»).
                 if (p.Command) Ui.Text(HudText.Players.Command, "player__command font-title", row).style.color = colour;
-                if (!string.IsNullOrEmpty(p.Status)) Ui.Text(p.Status, "player__status", row);
+                // «Con acciones» is what a player has unless said otherwise: with the mouse it goes (cuadro 177); the rest stay.
+                if (!string.IsNullOrEmpty(p.Status) && (Bastion.Client.GameInput.Touch || p.Status != HudText.Players.WithActions)) Ui.Text(p.Status, "player__status", row);
                 // With the finger, by the partner: hand the command over (Lore: «Ceder»).
                 if (v.CanPass && !p.Me && pass != null)
                 {

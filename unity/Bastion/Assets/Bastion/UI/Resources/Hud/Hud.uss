@@ -257,3 +257,14 @@
 .boss-bar__chip--ready {
     color: #ff8a7a;
 }
+
+/* ================================================================ with the mouse (cuadro 177) */
+
+/*
+   The combat's finished look (Arturo, 27/11: «Sí, que entre»), with the mouse alone (.desk, HudRoot; the iPad and the Duo
+   keep theirs): one margin for the four corners, the bar and the players on plates as the squad's, the words an icon
+   already says gone. Each piece's rules are at the foot of its own sheet.
+*/
+.desk {
+    --edge: 12px;
+}

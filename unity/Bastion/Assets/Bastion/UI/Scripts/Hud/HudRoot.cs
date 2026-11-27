@@ -80,6 +80,9 @@ namespace Bastion.UI.Hud
             doc.rootVisualElement.Clear();
             tree.CloneTree(doc.rootVisualElement);
             root = doc.rootVisualElement.Q("hud");
+            // With the mouse, the combat's finished look (Arturo, 27/11, cuadro 177): its rules go by this class, so that
+            // nothing changes with the finger (the iPad and the Duo keep theirs).
+            root.EnableInClassList("desk", !Bastion.Client.GameInput.Touch);
             icons = Resources.Load<HudIconTable>("HudIcons");
             tips = new TooltipLayer(root);
             strip = new TurnStrip(root, tips, relay.OnPassCommand);
@@ -124,6 +127,12 @@ namespace Bastion.UI.Hud
             goalArrow = new GoalArrow(root.Q("goal-arrow"), tips);
             sight = new SightButton(root.Q("sight"), tips);
             sight.Toggled += () => SightToggled?.Invoke();
+            // And off the corner's round keys (cuadro 177): the goal's arrow, the eye and the storeys'.
+            if (!Bastion.Client.GameInput.Touch)
+            {
+                foreach (var corner in new[] { root.Q("goal-arrow"), root.Q(className: "sight__button"), root.Q(className: "floors__up"), root.Q(className: "floors__name"), root.Q(className: "floors__down") })
+                    if (corner != null) flags.Under.Add(corner);
+            }
             // The corner's buttons on the keys' line (the eye, the goal's arrow): the row never goes under them (PlaceActions).
             foreach (var corner in new[] { root.Q(className: "sight__button"), root.Q("goal-arrow") })
                 corner?.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());

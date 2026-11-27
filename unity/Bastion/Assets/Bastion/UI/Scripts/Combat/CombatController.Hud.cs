@@ -1145,6 +1145,8 @@ namespace Bastion.UI.Combat
                 HordeTitle = !fill.HasValue ? null : m.HordeFrom is int comes && s.Turn < comes ? HudText.Mission.HordeFromTip(comes) : HudText.Mission.NoiseTip,
                 Weather = s.Weather,
                 Steps = steps,
+                // (Cuadro 177: the sentence that says nothing new goes off the card; one that counts or changes stays.)
+                ObjectivePlain = steps == null && (objective == Lore.Scavenge.Objective || objective == "Abatid a todo lo que haya" || objective == HudText.Mission.Crossing),
             };
         }
 

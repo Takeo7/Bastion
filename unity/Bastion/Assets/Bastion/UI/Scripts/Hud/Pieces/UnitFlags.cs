@@ -520,6 +520,28 @@ namespace Bastion.UI.Hud
                     }
                 }
             }
+            // An enemy off the screen's edge keeps its odds slid in at the edge, outside its flag's own box (what is tested
+            // above): those odds too, hidden while they lie on a panel (cuadro 177: «58 %» over the storeys' keys). With the
+            // mouse alone: the finger's HUD stays as it was.
+            if (Bastion.Client.GameInput.Touch) return;
+            foreach (var pair in flags)
+            {
+                var e = pair.Value;
+                if (e.ClassListContains("uflag--target") || !(e.Q(className: "uflag__hover") is VisualElement odds)) continue;
+                var box = layer.WorldToLocal(odds.worldBound);
+                var over = false;
+                if (!float.IsNaN(box.width) && box.width > 0)
+                    foreach (var panel in Under)
+                    {
+                        if (panel == null || panel.resolvedStyle.display == DisplayStyle.None || panel.resolvedStyle.visibility == Visibility.Hidden) continue;
+                        var r = layer.WorldToLocal(panel.worldBound);
+                        if (float.IsNaN(r.width) || r.width <= 0 || !box.Overlaps(r)) continue;
+                        over = true;
+                        break;
+                    }
+                if (over) odds.style.visibility = Visibility.Hidden;
+                else if (odds.style.visibility == Visibility.Hidden) odds.style.visibility = StyleKeyword.Null;
+            }
         }
 
         /// <summary>
