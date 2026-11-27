@@ -181,6 +181,59 @@ namespace Bastion.Net
             return version?.Type == JTokenType.Integer && (int)version < FreshVersion;
         }
 
+        /// <summary>
+        /// The files an older Bastión leaves a campaign it can't read in, next to the save (27/11: the 0.12 line, opened again
+        /// over an expedition): «Alojar partida» moves it aside as unreadable, «Nueva partida» copies it first.
+        /// </summary>
+        private static readonly string[] OlderAside = { "ilegible", NewCampaignLabel };
+
+        /// <summary>What a save with nothing in it (a lobby's) is kept aside as when RecoverSetAside brings a campaign back over it.</summary>
+        public const string LobbyLabel = "vestibulo";
+
+        /// <summary>
+        /// Brings back a campaign an older Bastión set aside (Producto, 27/11: Arturo and Ana opened the 0.12.26 and the
+        /// 0.12.27 over their expedition, and the start screen had no «Continuar partida» after). Only with no campaign to go
+        /// on with (Peek null), and over a save only an older one leaves behind:
+        /// - a campaign from before the runs (its «Nueva partida», or one begun in its room): kept aside as the room keeps it
+        ///   (OutdatedLabel), and the campaign looked for in both of OlderAside's files;
+        /// - one with neither a campaign nor a mission (its «Alojar partida», in the lobby), or none: kept aside as LobbyLabel,
+        ///   and the campaign looked for only among the unreadable ones, since this version never sets aside a campaign it can
+        ///   read as that (its own «Nueva partida» copies are left alone).
+        /// Of those holding a campaign to go on with, the newest on disk is moved back to the save's name. Where it came from,
+        /// or null if nothing was done; throws if the save can't be kept aside, having moved nothing.
+        /// </summary>
+        public string? RecoverSetAside()
+        {
+            if (campaignRules == null || Peek() != null) return null;
+            bool outdated = Outdated(path);
+            if (File.Exists(path) && !outdated && !(Read(path, out var now, out _, false) && now != null && now.Campaign == null && now.State == null)) return null;
+            var name = Path.GetFileNameWithoutExtension(path);
+            var dir = Path.GetDirectoryName(path) ?? "";
+            var labels = outdated ? OlderAside : new[] { "ilegible" };
+            var from = Directory.Exists(dir)
+                ? Directory.GetFiles(dir, $"{name}.*.json")
+                    .Where((f) => labels.Any((l) => Regex.IsMatch(Path.GetFileName(f), $@"^{Regex.Escape(name)}\.{Regex.Escape(l)}(-\d+)?\.json$")))
+                    .Where((f) => Read(f, out var save, out _, false) && save != null && SavedCampaign.Of(save.Campaign, null) != null)
+                    .OrderByDescending((f) => File.GetLastWriteTimeUtc(f)).ThenByDescending((f) => f, StringComparer.Ordinal)
+                    .FirstOrDefault()
+                : null;
+            if (from == null) return null;
+            var aside = File.Exists(path) ? KeepAside(outdated ? OutdatedLabel : LobbyLabel, path, true) : null;
+            try
+            {
+                File.Move(from, path);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                // Nothing done: the save back where it was.
+                if (aside != null) File.Move(aside, path);
+                Log($"[save] No se pudo recuperar la campaña de {from} ({e.Message}); no se toca.");
+                return null;
+            }
+            Log($"[save] Recuperada la campaña que una versión anterior apartó en {from}: vuelve a ser la partida guardada{(aside != null ? $"; la que había queda en {aside}" : "")}.");
+            return from;
+        }
+
         /// <summary>A mission left half played, as the lobby names it: the campaign's mission, or the map.</summary>
         public static string MissionName(GameState state)
         {

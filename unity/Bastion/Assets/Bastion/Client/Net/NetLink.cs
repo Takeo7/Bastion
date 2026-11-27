@@ -279,6 +279,22 @@ namespace Bastion.Client.Net
             }
         }
 
+        /// <summary>
+        /// SaveStore.RecoverSetAside on this computer's save (Producto, 27/11: Arturo and Ana opened the 0.12.26 and the
+        /// 0.12.27 over their expedition). What it did goes to red.log; if it fails, the files stay as they are.
+        /// </summary>
+        private void RecoverSetAside()
+        {
+            try
+            {
+                new SaveStore(Path.Combine(DataDir, "save.json"), log.Write, CampaignRules).RecoverSetAside();
+            }
+            catch (Exception e)
+            {
+                log.Write($"[save] no se pudo recuperar la partida apartada: {e.GetType().Name}: {e.Message}");
+            }
+        }
+
         private static string Stamp(string file)
         {
             var f = new FileInfo(file);
@@ -397,6 +413,8 @@ namespace Bastion.Client.Net
             settings = NetSettings.Load(Path.Combine(DataDir, driven ? "conexion.prueba.json" : "conexion.json"));
             LocalOnly = Environment.GetEnvironmentVariable("BASTION_SOLO_LOCAL") == "1" || driven;
             if (LocalOnly) log.Write("[prueba] app de prueba: la sala solo en 127.0.0.1, sin anunciarse ni escuchar la red");
+            // An expedition the 0.12 line set aside (27/11), back as the save before the start screen looks; a driver's save is its own.
+            if (!driven) RecoverSetAside();
             var mission = Environment.GetEnvironmentVariable("BASTION_MISION");
             if (!string.IsNullOrEmpty(mission)) Rules = EngineRules.Recorded(mission!);
             Application.logMessageReceivedThreaded += OnLog;
