@@ -26,6 +26,13 @@ namespace Bastion.Net
 
         /// <summary>The host's build: only one of the same version can be joined (the hello says so).</summary>
         public string Version { get; set; } = "";
+
+        /// <summary>
+        /// The room's key, as its announcement brought it (cuadro 186, Arturo 27/11): the right card joins with it, so a
+        /// game heard in the house goes in with the router's port open and nothing typed. Only what hears the broadcast
+        /// has it, never the internet. Null from a build that doesn't say it.
+        /// </summary>
+        public string? Key { get; set; }
     }
 
     /// <summary>
@@ -49,9 +56,9 @@ namespace Bastion.Net
         /// <summary>
         /// Announces the game on `port` every two seconds, of build `version`; `about` says who is in it and in which phase.
         /// Dispose stops it. `toPort`: where else to send it (the tests' own port); by default, every local network's
-        /// broadcast and this machine.
+        /// broadcast and this machine. `key`: the room's, for the house to join with (LanGame.Key).
         /// </summary>
-        public static IDisposable Announce(int port, string computer, string version, Func<(IReadOnlyList<string> players, string phase)> about, int toPort = Port)
+        public static IDisposable Announce(int port, string computer, string version, Func<(IReadOnlyList<string> players, string phase)> about, int toPort = Port, string? key = null)
         {
             var udp = new UdpClient(AddressFamily.InterNetwork) { EnableBroadcast = true };
             var cancel = new CancellationTokenSource();
@@ -63,16 +70,7 @@ namespace Bastion.Net
                     while (!cancel.IsCancellationRequested)
                     {
                         var (players, phase) = about();
-                        var beacon = new JObject
-                        {
-                            ["game"] = Game,
-                            ["port"] = port,
-                            ["name"] = players.Count > 0 ? players[0] : computer,
-                            ["players"] = new JArray(players),
-                            ["phase"] = phase,
-                            ["version"] = version,
-                        };
-                        var data = Encoding.UTF8.GetBytes(beacon.ToString(Newtonsoft.Json.Formatting.None));
+                        var data = Beacon(port, computer, version, players, phase, key);
                         // This machine too: a second copy of the app on it hears the game (tests, two players on one computer).
                         foreach (var to in Broadcasts().Append(IPAddress.Loopback))
                         {
@@ -100,6 +98,22 @@ namespace Bastion.Net
             });
         }
 
+        /// <summary>One announcement, as Announce sends it and Read takes it.</summary>
+        public static byte[] Beacon(int port, string computer, string version, IReadOnlyList<string> players, string phase, string? key = null)
+        {
+            var beacon = new JObject
+            {
+                ["game"] = Game,
+                ["port"] = port,
+                ["name"] = players.Count > 0 ? players[0] : computer,
+                ["players"] = new JArray(players),
+                ["phase"] = phase,
+                ["version"] = version,
+            };
+            if (key != null) beacon["key"] = key;
+            return Encoding.UTF8.GetBytes(beacon.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
         /// <summary>
         /// Listens for announcements: `changed` gets the games heard in the last few seconds whenever that list changes
         /// (on a network thread). `skip(port)` leaves out a game of this machine (the app's own). Dispose stops it.
@@ -123,7 +137,8 @@ namespace Bastion.Net
                     foreach (var key in games.Where((g) => (DateTime.UtcNow - g.Value.seen).TotalMilliseconds > GoneMs).Select((g) => g.Key).ToList()) games.Remove(key);
                     list = games.Values.Select((g) => g.game).OrderBy((g) => g.Name, StringComparer.Ordinal).ToList();
                 }
-                var now = string.Join("|", list.Select((g) => $"{g.Name}/{g.Address}/{string.Join(",", g.Players)}/{g.Phase}/{g.Version}"));
+                // The key too: hosted again on the same port, the card must have the new one (an old one is refused).
+                var now = string.Join("|", list.Select((g) => $"{g.Name}/{g.Address}/{string.Join(",", g.Players)}/{g.Phase}/{g.Version}/{g.Key}"));
                 if (now == last) return;
                 last = now;
                 changed(list);
@@ -219,7 +234,9 @@ namespace Bastion.Net
                 static string Text(JToken? v, int max) => v?.Type == JTokenType.String ? Cut((string)v!, max) : "";
                 var players = b["players"] is JArray list ? list.Take(2).Select((p) => Text(p, 32)).ToList() : new List<string>();
                 string name = Text(b["name"], 32);
-                return new LanGame { Name = name.Length > 0 ? name : from.ToString(), Address = $"{from}:{port}", Players = players, Phase = Text(b["phase"], 16), Version = Text(b["version"], 16) };
+                // A key as one is typed (GameAddress.IsKey), or none: anything else in it is not one.
+                string? key = b["key"]?.Type == JTokenType.String && GameAddress.IsKey((string)b["key"]!) ? Room.NormalKey((string)b["key"]!) : null;
+                return new LanGame { Name = name.Length > 0 ? name : from.ToString(), Address = $"{from}:{port}", Players = players, Phase = Text(b["phase"], 16), Version = Text(b["version"], 16), Key = key };
             }
             catch (Exception)
             {

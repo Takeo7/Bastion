@@ -139,6 +139,64 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public async Task WhyAConnectionNeverReachedTheHostIsSaid()
+        {
+            // Refused (nobody on that port), no route (a Mac without the local network for the app) and no answer in time:
+            // the player sees «No responde nadie» for all of them, red.log says which (0.14.11, Arturo and Ana on one Wi-Fi).
+            var failures = new Queue<Exception>(new Exception[]
+            {
+                new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionRefused),
+                new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.HostUnreachable),
+                new TimeoutException("No responde nadie en 192.168.1.20:41391."),
+            });
+            var clock = new FakeClock();
+            var session = new ClientSession((cancel) => throw failures.Dequeue(), new MemoryTokens(), "1.0.0", clock);
+            var why = new List<string>();
+            var kinds = new List<Unreach>();
+            session.Unreached += (k, w) =>
+            {
+                kinds.Add(k);
+                why.Add(w);
+            };
+            session.Connect("Ana");
+            for (int tried = 1; tried <= 3; tried++)
+            {
+                await Wait.Until(() => why.Count == tried, () =>
+                {
+                    clock.Advance(1000);
+                    session.Pump();
+                });
+            }
+            Assert.StartsWith("ConnectionRefused: ", why[0]);
+            Assert.StartsWith("HostUnreachable: ", why[1]);
+            Assert.Equal("No responde nadie en 192.168.1.20:41391.", why[2]);
+            // What the player is told (NetLink.NotReached, cuadro 172): nobody there, the local network not allowed, no answer.
+            Assert.Equal(new[] { Unreach.Refused, Unreach.NoRoute, Unreach.NoAnswer }, kinds);
+        }
+
+        [Fact]
+        public void AFailedConnectIsReadForThePlayer()
+        {
+            System.Net.Sockets.SocketException Error(System.Net.Sockets.SocketError e) => new System.Net.Sockets.SocketException((int)e);
+            Assert.Equal(Unreach.Refused, ClientSession.Why(Error(System.Net.Sockets.SocketError.ConnectionRefused)));
+            // macOS and iOS without «Red local»: no route, at once; and a machine with no network that leads there.
+            Assert.Equal(Unreach.NoRoute, ClientSession.Why(Error(System.Net.Sockets.SocketError.HostUnreachable)));
+            Assert.Equal(Unreach.NoRoute, ClientSession.Why(Error(System.Net.Sockets.SocketError.NetworkUnreachable)));
+            Assert.Equal(Unreach.NoRoute, ClientSession.Why(Error(System.Net.Sockets.SocketError.NetworkDown)));
+            // Nobody answering on the network (no such machine there), the socket's own timeout and ours: no answer.
+            Assert.Equal(Unreach.NoAnswer, ClientSession.Why(Error(System.Net.Sockets.SocketError.HostDown)));
+            Assert.Equal(Unreach.NoAnswer, ClientSession.Why(Error(System.Net.Sockets.SocketError.TimedOut)));
+            Assert.Equal(Unreach.NoAnswer, ClientSession.Why(new TimeoutException("No responde nadie en 192.168.1.20:41391.")));
+            Assert.Equal(Unreach.NoAnswer, ClientSession.Why(null));
+            // iOS (IL2CPP): Darwin's own numbers, as the simulator gave them (0.14.12: «61: mono-io-layer-error (61)»).
+            Assert.Equal(Unreach.Refused, ClientSession.Why(new System.Net.Sockets.SocketException(61)));
+            Assert.Equal(Unreach.NoRoute, ClientSession.Why(new System.Net.Sockets.SocketException(65)));
+            Assert.Equal(Unreach.NoRoute, ClientSession.Why(new System.Net.Sockets.SocketException(51)));
+            Assert.Equal(Unreach.NoRoute, ClientSession.Why(new System.Net.Sockets.SocketException(50)));
+            Assert.Equal(Unreach.NoAnswer, ClientSession.Why(new System.Net.Sockets.SocketException(60)));
+        }
+
+        [Fact]
         public async Task ARefusedHelloIsNotRetriedOnItsOwn()
         {
             var rig = new Rig();

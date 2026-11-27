@@ -18,7 +18,7 @@ namespace Bastion.UI.Start
         public const string Back = "Volver";
 
         // «Partida multijugador» (p2): to host; to join the game heard on the network, or by address when there is none
-        // (Arturo's choice, 14/11).
+        // (Arturo's choice, 14/11). By address always since the 0.12.27: with a game heard, a key under its card (cuadro 183).
         public const string Host = "Alojar partida";
         public static string JoinOf(string name) => $"Unirte a la partida de {name}";
         public const string ByAddress = "Unirse por dirección";

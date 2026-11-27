@@ -103,6 +103,24 @@
 }
 
 /*
+   «Unirse por dirección» while the right card joins the game heard (0.12.27): a key under that card, as wide as it,
+   out of the row's flow so the cards stay where they are when it comes.
+*/
+.start__by-address {
+    position: absolute;
+    right: 10px;
+    top: 100%;
+    width: 300px;
+    margin: 12px 0 0 0;
+    font-size: 20px;
+    -unity-text-align: middle-center;
+}
+
+.start__by-address:hover {
+    translate: 0 0;
+}
+
+/*
    A card (the maqueta's): straight, dark, its edge worn light grey, a red icon on its face and its words in a band at
    its foot. Both the same size.
 */

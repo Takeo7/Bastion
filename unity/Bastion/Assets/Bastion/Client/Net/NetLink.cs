@@ -47,6 +47,27 @@ namespace Bastion.Client.Net
 
         private static string AddressProblem => $"Escribe la dirección que sale en la pantalla de quien aloja la partida, o en su «Menú»; por ejemplo, 192.168.1.20:{RoomHost.FirstPort}.";
 
+        /// <summary>
+        /// Joining, the host never reached (Arturo, cuadro 172: the cause and what to do, not only «No responde nadie»):
+        /// `where`, the address and port tried. Lore's texts (Lore.JoinText).
+        /// </summary>
+        private string NotReached(Unreach? why, string where)
+        {
+            switch (why)
+            {
+                case Unreach.NoRoute:
+                    if (Application.platform == RuntimePlatform.IPhonePlayer)
+                        return Lore.JoinText.NoLocalNetworkIos(SystemInfo.deviceModel.StartsWith("iPad", StringComparison.Ordinal) ? "iPad" : "iPhone");
+                    if (Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.OSXEditor)
+                        return Lore.JoinText.NoLocalNetworkMac;
+                    return Lore.JoinText.NoRoute(where);
+                case Unreach.Refused:
+                    return Lore.JoinText.Refused(where);
+                default:
+                    return Lore.JoinText.NoAnswer(where);
+            }
+        }
+
         private const string KeyProblem = "Escribe la clave que sale junto a la dirección, en la pantalla de quien aloja la partida o en su «Menú»; por ejemplo, KXRT5.";
 
         private static NetLink? instance;
@@ -94,6 +115,10 @@ namespace Bastion.Client.Net
         private bool joining;
         /// <summary>The hello was refused (a name taken, a full game, another version): a close then is no «nobody there».</summary>
         private bool refused;
+
+        /// <summary>Why the last try to reach the host failed (ClientSession.Unreached): the kind, for the notice, and the error, for red.log.</summary>
+        private Unreach? unreachedKind;
+        private string? unreached;
         private DateTime lastFrame;
         /// <summary>BASTION_EMPEZAR: hosting, the skirmish starts once both are in.</summary>
         private bool startWhenBoth;
@@ -444,7 +469,8 @@ namespace Bastion.Client.Net
                 log.Write($"anfitrión arrancado: tcp {host.Port} · {(LocalOnly ? "solo 127.0.0.1 (prueba)" : string.Join(", ", HostAddresses.List().Select((a) => a.Address)))} · versión {Version}");
                 if (!LocalOnly)
                 {
-                    announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
+                    // With the room's key: a game heard in the house goes in by the card with the router's port open (cuadro 186).
+                    announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary, key: room.Key);
                     if (settings.Router) OpenRouter();
                     else log.Write("[router] sin abrir: el jugador lo tiene apagado en Ajustes");
                 }
@@ -475,12 +501,28 @@ namespace Bastion.Client.Net
             return Open(h, p, name, true, Room.NormalKey(key));
         }
 
-        /// <summary>`roomKey`: the room's, to join from the internet (with the address, as Invite gives them).</summary>
-        private string? Open(string address, int port, string name, bool remember, string? roomKey = null)
+        /// <summary>
+        /// The right card's: the game heard on the network (LanBeacon), with the key its announcement brought, so the house
+        /// goes in with the router's port open and nothing typed (cuadro 186, Arturo 27/11). The address is remembered
+        /// without it: the key changes each time the game is hosted, and a typed one is asked as before.
+        /// </summary>
+        public string? Join(LanGame game, string name)
+        {
+            name = name.Trim();
+            if (name.Length < 1 || name.Length > 20) return NameProblem;
+            if (!GameAddress.TryParse(game.Address, out var h, out var p)) return AddressProblem;
+            return Open(h, p, name, true, game.Key, rememberKey: false);
+        }
+
+        /// <summary>
+        /// `roomKey`: the room's, to join from the internet (with the address, as Invite gives them); `rememberKey`, kept
+        /// with the address for the next time (not an announcement's).
+        /// </summary>
+        private string? Open(string address, int port, string name, bool remember, string? roomKey = null, bool rememberKey = true)
         {
             var key = $"{address}:{port}";
             settings.Name = name;
-            if (remember) settings.Last = roomKey != null ? $"{key} · {roomKey}" : key;
+            if (remember) settings.Last = roomKey != null && rememberKey ? $"{key} · {roomKey}" : key;
             settings.Save();
             // The same host and not in yet (a name taken): the same connection, another name.
             if (session != null && joining && target == key)
@@ -494,11 +536,19 @@ namespace Bastion.Client.Net
             target = key;
             joining = true;
             refused = false;
+            unreachedKind = null;
+            unreached = null;
             feed.Reset();
             var s = new ClientSession((cancel) => Dial(address, port, cancel), settings.TokensFor(key), Version) { Key = roomKey };
             session = s;
             s.Message += (msg) => { if (s == session) Heard(msg); };
             s.Unreadable += (why) => { if (s == session) Report($"[red] mensaje del anfitrión que no se entiende: {why}"); };
+            s.Unreached += (kind, why) =>
+            {
+                if (s != session) return;
+                unreachedKind = kind;
+                unreached = why;
+            };
             s.Status += (status) => { if (s == session) OnStatus(status); };
             s.Rejoining += (on) => { if (s == session) Rejoining?.Invoke(on); };
             s.HostClosed += () =>
@@ -539,8 +589,8 @@ namespace Bastion.Client.Net
             var where = target;
             Drop();
             if (!nobody) return;
-            log.Write($"[red] {where}: no responde nadie");
-            Failed?.Invoke($"No responde nadie en {where}. ¿Tiene ya abierta la partida quien la aloja? Desde otra red, usa la dirección «Por internet» o la de «Con Tailscale».");
+            log.Write($"[red] {where}: no responde nadie ({unreached ?? "?"})");
+            Failed?.Invoke(NotReached(unreachedKind, where));
         }
 
         /// <summary>A message from the host, already read on the network thread (ClientSession): a whole mission never costs a frame.</summary>

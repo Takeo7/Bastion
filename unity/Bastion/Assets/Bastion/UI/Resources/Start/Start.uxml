@@ -38,6 +38,8 @@
                     </ui:VisualElement>
                     <ui:Label name="join-label" class="start__card-label font-title" picking-mode="Ignore" />
                 </ui:Button>
+                <!-- With a game heard on the network, when the right card joins it: by address, under that card. -->
+                <ui:Button name="by-address" class="start__key start__by-address font-title" />
             </ui:VisualElement>
         </ui:VisualElement>
 

@@ -14,6 +14,19 @@ namespace Bastion.Net
         Closed,
     }
 
+    /// <summary>Why a try to connect never reached the host (ClientSession.Unreached), for what the player is told to do.</summary>
+    public enum Unreach
+    {
+        /// <summary>Nobody listening there: the game isn't open, or not on that port. At once.</summary>
+        Refused,
+
+        /// <summary>No way to that address: on a Mac, an iPhone or an iPad, the local network not allowed to the app. At once.</summary>
+        NoRoute,
+
+        /// <summary>No answer in time: something drops it on the way (a firewall, a VPN), or the address isn't the host's.</summary>
+        NoAnswer,
+    }
+
     /// <summary>Where a player's seat token is kept between sessions (a file in the app's data folder; in memory in the tests).</summary>
     public interface ITokenStore
     {
@@ -79,6 +92,13 @@ namespace Bastion.Net
 
         /// <summary>The hello was refused (a name the other player has, a full game, another version), with why.</summary>
         public event Action<string>? Refused;
+
+        /// <summary>
+        /// A try to connect that never reached the host, and why: the kind, for what the player is told to do (Arturo, cuadro
+        /// 172), and the socket's error, for red.log. Until 0.14.11 the player saw «No responde nadie» for all of them
+        /// (Arturo and Ana on one Wi-Fi, the game heard and the connection failing).
+        /// </summary>
+        public event Action<Unreach, string>? Unreached;
 
         /// <summary>The seat given on the last welcome (0 or 1), or -1 before.</summary>
         public int Slot { get; private set; } = -1;
@@ -224,6 +244,42 @@ namespace Bastion.Net
             });
         }
 
+        /// <summary>The socket's own error under `failed`, if it is one (a task's or a wrapper's inner exception), or `failed`.</summary>
+        private static Exception? SocketErrorOf(Exception? failed)
+        {
+            for (var e = failed; e != null; e = e.InnerException)
+                if (e is System.Net.Sockets.SocketException) return e;
+            return failed;
+        }
+
+        /// <summary>
+        /// What a failed connect means for the player. No route: what macOS and iOS answer at once when the app may not use the
+        /// local network (Privacy › Local Network), and a machine with no way to that network at all. Anything else that isn't a
+        /// refusal, a timeout among them: no answer.
+        /// </summary>
+        public static Unreach Why(Exception? failed)
+        {
+            if (!(failed is System.Net.Sockets.SocketException e)) return Unreach.NoAnswer;
+            // On iOS (IL2CPP) the code is the system's own errno, not .NET's: «61: mono-io-layer-error (61)» for a refusal in
+            // the simulator (0.14.12), where the Mac's Mono says ConnectionRefused. Both are read: Darwin's numbers are
+            // ECONNREFUSED 61, EHOSTUNREACH 65, ENETUNREACH 51 and ENETDOWN 50, none of them one of .NET's.
+            switch ((int)e.SocketErrorCode)
+            {
+                case (int)System.Net.Sockets.SocketError.ConnectionRefused:
+                case 61:
+                    return Unreach.Refused;
+                case (int)System.Net.Sockets.SocketError.HostUnreachable:
+                case (int)System.Net.Sockets.SocketError.NetworkUnreachable:
+                case (int)System.Net.Sockets.SocketError.NetworkDown:
+                case 65:
+                case 51:
+                case 50:
+                    return Unreach.NoRoute;
+                default:
+                    return Unreach.NoAnswer;
+            }
+        }
+
         private void Opened(CancellationTokenSource token, IConnection? c, Exception? failed)
         {
             if (token != attempt || token.IsCancellationRequested)
@@ -234,6 +290,8 @@ namespace Bastion.Net
             connecting = false;
             if (c == null)
             {
+                var socketError = SocketErrorOf(failed);
+                Unreached?.Invoke(Why(socketError), socketError is System.Net.Sockets.SocketException e ? $"{e.SocketErrorCode}: {e.Message}" : failed?.Message ?? "sin conexión");
                 Dropped();
                 return;
             }

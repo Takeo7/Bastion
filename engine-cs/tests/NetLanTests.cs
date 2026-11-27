@@ -51,6 +51,31 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void AnAnnouncementBringsTheRoomsKey()
+        {
+            // Cuadro 186 (Arturo, 27/11): the card joins with it. From a build without it, or anything else in its place: none.
+            var from = IPAddress.Parse("192.168.1.20");
+            Assert.Equal("KXRT5", LanBeacon.Read(LanBeacon.Beacon(3999, "mac-de-arturo", "1.0.0", new[] { "Arturo" }, "lobby", "KXRT5"), from)!.Key);
+            Assert.Null(LanBeacon.Read(LanBeacon.Beacon(3999, "mac-de-arturo", "1.0.0", new[] { "Arturo" }, "lobby"), from)!.Key);
+            foreach (var key in new[] { "\"\"", "\"KX\"", "\"KXRT5KXRT5\"", "\"KX;T5\"", "12345", "{}" })
+                Assert.Null(LanBeacon.Read(Encoding.UTF8.GetBytes("{\"game\":\"bastion-tcp\",\"port\":3999,\"name\":\"a\",\"players\":[],\"phase\":\"lobby\",\"key\":" + key + "}"), from)!.Key);
+        }
+
+        [Fact]
+        public async Task HostedAgainTheListHasTheNewKey()
+        {
+            // The same game on the same port with another key, as when it is hosted again: the card must not keep the old
+            // one, which the room refuses.
+            int udp = FreeUdpPort();
+            var keys = new List<string?>();
+            using var listen = LanBeacon.Listen((games) => { lock (keys) keys.AddRange(games.Select((g) => g.Key)); }, null, udp);
+            using (LanBeacon.Announce(3999, "mac-de-arturo", "1.0.0", () => (new[] { "Arturo" }, "lobby"), udp, "AAAA2"))
+                await Wait.Until(() => { lock (keys) return keys.Contains("AAAA2"); }, ms: 5000);
+            using var again = LanBeacon.Announce(3999, "mac-de-arturo", "1.0.0", () => (new[] { "Arturo" }, "lobby"), udp, "BBBB3");
+            await Wait.Until(() => { lock (keys) return keys.Contains("BBBB3"); }, ms: 5000);
+        }
+
+        [Fact]
         public void WithoutPlayersTheComputerNamesTheGame()
         {
             var game = LanBeacon.Read(Encoding.UTF8.GetBytes("{\"game\":\"bastion-tcp\",\"port\":3000,\"name\":\"mac-de-arturo\",\"players\":[],\"phase\":\"lobby\"}"), IPAddress.Parse("192.168.1.20"));

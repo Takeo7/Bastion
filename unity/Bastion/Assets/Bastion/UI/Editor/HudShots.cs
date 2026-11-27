@@ -56,6 +56,7 @@ namespace Bastion.UI.EditorTools
         /// The start screen (StartScreen with Red's NetLink; 0.12.24): the main menu. `BASTION_INICIO=<page>[,guardada][,red=<name>]`
         /// opens a page of it (menu, nombre, nueva, multijugador, direccion, ajustes), with a game saved or not, and one
         /// heard on the network or not (StartScreen.Preview). Over Arte's backdrop, shot from a camera that follows its own.
+        /// `BASTION_INICIO_AVISO=<text>`: what went wrong joining, in the line at the foot.
         /// </summary>
         public static void Entry()
         {
@@ -71,7 +72,7 @@ namespace Bastion.UI.EditorTools
             if (string.IsNullOrEmpty(ask)) return;
             var parts = ask.Split(',');
             var heard = System.Array.Find(parts, p => p.StartsWith("red="))?.Substring(4);
-            start.Preview(System.Array.IndexOf(parts, "guardada") >= 0, heard, parts[0]);
+            start.Preview(System.Array.IndexOf(parts, "guardada") >= 0, heard, parts[0], System.Environment.GetEnvironmentVariable("BASTION_INICIO_AVISO"));
         }
 
         /// <summary>The room menu with a made-up room (RoomLab): Arturo hosting, Ana to come, the addresses to give her.</summary>

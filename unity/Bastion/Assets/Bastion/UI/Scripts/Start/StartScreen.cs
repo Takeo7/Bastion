@@ -15,8 +15,9 @@ namespace Bastion.UI.Start
     /// top left and under it Continuar partida (with a game saved), Nueva partida, Partida multijugador, Ajustes and Salir
     /// de Bastión, on a dark band fading into the scene. «Partida multijugador»: two cards, Alojar partida and, on the
     /// right, «Unirte a la partida de Ana» when a game is heard on the network, else «Unirse por dirección», which asks
-    /// for the address and its key. The name is asked before a new game (and before anything while there is none); a new
-    /// game over a saved one is asked first.
+    /// for the address and its key; with a game heard, «Unirse por dirección» stays as a key under that card (Arturo,
+    /// cuadro 183; 0.12.27: when the game heard doesn't answer, the address has to be typed somewhere). The name is asked
+    /// before a new game (and before anything while there is none); a new game over a saved one is asked first.
     ///
     /// Red's NetLink does the rest (Continue, NewGame, Host, Join): each says at once what is wrong, else Joined or
     /// Failed come later; meanwhile the keys rest and a line at the foot says what goes on, and what went wrong.
@@ -53,7 +54,7 @@ namespace Bastion.UI.Start
         VisualElement root;
         VisualElement fade, side, menu, cards, form, nameBox, addressBox, keyBox;
         TextField nameField, addressField, keyField;
-        Button continueKey, goKey, backKey;
+        Button continueKey, goKey, backKey, byAddressKey;
         Label status, joinLabel;
         GameMenu settings;
         readonly List<Button> buttons = new List<Button>();
@@ -113,7 +114,7 @@ namespace Bastion.UI.Start
             {
                 var asked = previewAsked.Split('|');
                 previewAsked = null;
-                Preview(asked[1] == "1", asked[2], asked[0]);
+                Preview(asked[1] == "1", asked[2], asked[0], asked.Length > 3 ? asked[3] : null);
             }
         }
 
@@ -128,13 +129,14 @@ namespace Bastion.UI.Start
 
         /// <summary>
         /// For the labs' captures (HudShots.Entry, BASTION_INICIO): `saved`, a game saved (8 outings, level 3); `heardOf`, a
-        /// game on the network hosted by that name; then the page: menu, nombre, nueva, multijugador, direccion or ajustes.
+        /// game on the network hosted by that name; then the page: menu, nombre, nueva, multijugador, direccion or ajustes
+        /// (pulsa-direccion: multijugador, and the key under the right card pressed). `note`, what went wrong, at the foot.
         /// </summary>
-        public void Preview(bool saved, string heardOf, string open)
+        public void Preview(bool saved, string heardOf, string open, string note = null)
         {
             if (root == null)
             {
-                previewAsked = $"{open}|{(saved ? 1 : 0)}|{heardOf}";
+                previewAsked = $"{open}|{(saved ? 1 : 0)}|{heardOf}|{note}";
                 return;
             }
             Debug.Log($"[inicio] vista previa: {open}, guardada {saved}, en la red {heardOf ?? "nadie"}");
@@ -153,7 +155,20 @@ namespace Bastion.UI.Start
                     Go(Page.Address);
                     break;
                 case "ajustes": OpenSettings(); break;
+                // «Unirse por dirección» pressed under the card of the game heard, as Intro on it presses it.
+                case "pulsa-direccion":
+                    Go(Page.Two);
+                    root.schedule.Execute(() =>
+                    {
+                        using var press = NavigationSubmitEvent.GetPooled();
+                        press.target = byAddressKey;
+                        byAddressKey.SendEvent(press);
+                        Debug.Log($"[inicio] pulsado «{byAddressKey.text}»: página {page}");
+                    }).StartingIn(300);
+                    break;
             }
+            // What went wrong joining, as NetLink.Failed says it: to see that its lines fit (BASTION_INICIO_AVISO).
+            if (!string.IsNullOrEmpty(note)) Say(note, true);
         }
 
         SavedCampaign Saved => previewing ? previewSaved : link.Saved;
@@ -185,6 +200,7 @@ namespace Bastion.UI.Start
             join.clicked += JoinCard;
             buttons.Add(join);
             joinLabel = root.Q<Label>("join-label");
+            byAddressKey = Key("by-address", StartText.ByAddress, () => Go(Page.Address));
             Icon(root.Q("host-icon"), "Start/icono-alojar");
             Icon(root.Q("join-icon"), "Start/icono-unirse");
 
@@ -309,7 +325,10 @@ namespace Bastion.UI.Start
 
         void Host() => WithName(Page.Two, name => link.Host(name), StartText.Opening, StartText.HostGo);
 
-        /// <summary>The right card: into the game heard on the network; with none, the address and its key asked.</summary>
+        /// <summary>
+        /// The right card: into the game heard on the network; with none, the address and its key asked (with one heard,
+        /// the key under the card asks them).
+        /// </summary>
         void JoinCard()
         {
             if (heard == null)
@@ -318,7 +337,7 @@ namespace Bastion.UI.Start
                 return;
             }
             var game = heard;
-            WithName(Page.Two, name => link.Join(game.Address, name), StartText.Entering(game.Name), StartText.Join);
+            WithName(Page.Two, name => link.Join(game, name), StartText.Entering(game.Name), StartText.Join);
         }
 
         /// <summary>`run` as the name last played with; with none, the name asked first, under it `go` (what was pressed).</summary>
@@ -399,12 +418,16 @@ namespace Bastion.UI.Start
             status.EnableInClassList("start__status--bad", bad);
         }
 
-        /// <summary>The games heard on the network: the right card joins the first of this version («Unirte a la partida de Ana»).</summary>
+        /// <summary>
+        /// The games heard on the network: the right card joins the first of this version («Unirte a la partida de Ana»),
+        /// and «Unirse por dirección», which the card says with none heard, goes to the key under it.
+        /// </summary>
         void Heard(IReadOnlyList<LanGame> list)
         {
             heardList = list ?? new LanGame[0];
             heard = previewing ? previewHeard : heardList.FirstOrDefault(g => g.Version == link.Version);
             joinLabel.text = (heard != null ? StartText.JoinOf(heard.Name) : StartText.ByAddress).ToUpperInvariant();
+            Ui.Show(byAddressKey, heard != null);
         }
 
         /// <summary>
