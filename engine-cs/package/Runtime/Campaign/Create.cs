@@ -18,7 +18,7 @@ namespace Bastion.Engine
 
         /// <summary>The base's first line, and the same once the opening operation is chosen (placeholders for Lore).</summary>
         /// <remarks>TypeScript's: «El Bastión entra en servicio. Elegid la primera misión.» (text-fixes.ts, Gameplay 24/10).</remarks>
-        private const string Welcome = "Lo que se levante en este claro será el Bastión. Elegid la primera misión.";
+        private const string Welcome = "Lo que se levante en este claro será el Bastion. Elegid la primera misión.";
         private const string WelcomeOpening = "Primera salida: la insulina del consultorio de Metsovo. La escuadra espera junto a La Lata.";
 
         /// <summary>

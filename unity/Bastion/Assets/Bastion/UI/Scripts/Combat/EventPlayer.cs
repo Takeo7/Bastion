@@ -2267,6 +2267,23 @@ namespace Bastion.UI.Combat
                     else await Wait(0.4f);
                     return;
                 }
+                // Note 12 (Arturo, 28/11: «paradas al andar sin motivo»): a walk cut short because someone came into the way
+                // since it was planned (Gameplay's WalkBlockedEvent, after the walk so far). The word over the soldier and why
+                // in the log (Lore.WalkText); whoever it was is named only in sight (a pod scampering to cover may not be).
+                // One of the dead's walks cut short says nothing.
+                case WalkBlockedEvent blocked:
+                {
+                    var u = Unit(blocked.Unit);
+                    if (u == null || u.Team != Teams.Xcom || !ShownToSquad(u)) return;
+                    var cutter = Unit(blocked.By);
+                    var named = cutter != null && cutter.Alive && ShownToSquad(cutter) ? (cutter.Team == Teams.Alien ? AnEnemy(cutter) : cutter.Name) : null;
+                    Log(Lore.WalkText.Blocked(u.Name, named, blocked.Moves != null), "#ffd27a");
+                    Float(Chest(u.Id), Lore.WalkText.Float, "callout", over: u.Id);
+                    // (Its movement given back: the bar's number, now.)
+                    control.Refresh();
+                    await Wait(0.4f);
+                    return;
+                }
                 // La Camilla (0.14.11): the first of ours to fall lies badly hurt, alive, to be carried to La Lata. The blow
                 // played as a lethal one (DamagedEvent); here the word over them, what to do in the log, and the fall.
                 case DownedEvent downed:
@@ -3676,7 +3693,22 @@ namespace Bastion.UI.Combat
             }
             // The music goes tense, without the contact's sting (Sfx.Contact).
             control.Sfx.Mood("tense");
+            // Nobody of the group in sight and one of ours in the middle of its walk: no wait (note 12, Ana, 28/11, «paradas
+            // al andar sin motivo»; measured, the walker stood still 0.4 s with nothing on screen to say why). The music
+            // has said it; with any of them in sight, the «!» is read as before.
+            if (seen.Count == 0 && WalkGoesOn()) return;
             await Wait(seen.Count > 0 ? 0.6f : 0.3f);
+        }
+
+        /// <summary>Whether what comes next, past other groups waking, is one of the squad walking on (a walk in pieces: MovedEvent).</summary>
+        bool WalkGoesOn()
+        {
+            foreach (var (next, _, _) in queue)
+            {
+                if (next is PodActivatedEvent || next is PodSplitEvent) continue;
+                return next is MovedEvent m && Unit(m.Unit)?.Team == Teams.Xcom;
+            }
+            return false;
         }
 
         /// <summary>

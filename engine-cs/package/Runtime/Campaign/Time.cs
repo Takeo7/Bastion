@@ -183,7 +183,7 @@ namespace Bastion.Engine
                 if (c.Hungry != true)
                 {
                     c.Hungry = true;
-                    Log(c, "No quedan raciones: el Bastión pasa hambre. Hasta que vuelva a haberlas, −10 de voluntad en las misiones y las heridas curan más despacio.", LogTones.Bad, Alert("Despensa", "Hambre en el Bastión"));
+                    Log(c, "No quedan raciones: el Bastion pasa hambre. Hasta que vuelva a haberlas, −10 de voluntad en las misiones y las heridas curan más despacio.", LogTones.Bad, Alert("Despensa", "Hambre en el Bastion"));
                     stop = true;
                 }
             }
@@ -227,7 +227,7 @@ namespace Bastion.Engine
             {
                 c.Outcome = Outcomes.Defeat;
                 // «La Marea ha llegado al Bastión.» (text-fixes.ts, Lore 24/10): before level 4 nobody knows of the Marea.
-                Log(c, "Los muertos han llegado al Bastión.", LogTones.Bad);
+                Log(c, "Los muertos han llegado al Bastion.", LogTones.Bad);
                 return true;
             }
             // A story chapter whose wait is over opens today.

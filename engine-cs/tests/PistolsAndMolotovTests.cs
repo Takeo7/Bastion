@@ -185,7 +185,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(Content.Templates[TemplateIds.Zombie].Hp, below.Hp);
         }
 
-        [Fact(DisplayName = "molotov › before the grenades: from the Bastión's first level, the grenades from its third")]
+        [Fact(DisplayName = "molotov › before the grenades: from the Bastion's first level, the grenades from its third")]
         public void BeforeTheGrenades()
         {
             Assert.True(Progression.ItemUnlocked(1, ItemIds.Molotov));

@@ -121,7 +121,7 @@ namespace Bastion.Engine.Tests
             Days(c, 1);
             Assert.True(c.Hungry);
             Assert.Equal(0, c.Food);
-            Assert.Contains(c.Log, (l) => l.Alert?.Title == "Hambre en el Bastión");
+            Assert.Contains(c.Log, (l) => l.Alert?.Title == "Hambre en el Bastion");
             var fit = c.Soldiers[1];
             var will = Campaign.SquadMember(c, fit).Will;
             c.Hungry = false;

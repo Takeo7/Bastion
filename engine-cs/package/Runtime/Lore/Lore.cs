@@ -21,7 +21,7 @@ namespace Bastion.Engine
         /// For the log when the Bastion reaches PartituraLevel: the doom track takes the Marea's name and counts kilometres.
         /// The radio's «La Marea» said it until the transmissions went (Ana's «Informe para desarrollo 3» #1; Arturo, 2/11).
         /// </summary>
-        public const string MareaNamed = "La infestación tiene nombre: la Marea. Desde ahora, el contador dice a cuántos kilómetros está del Bastión.";
+        public const string MareaNamed = "La infestación tiene nombre: la Marea. Desde ahora, el contador dice a cuántos kilómetros está del Bastion.";
 
         /// <summary>
         /// The squad's bus (docs/LORE.md «El Bastión»), named once for every text that

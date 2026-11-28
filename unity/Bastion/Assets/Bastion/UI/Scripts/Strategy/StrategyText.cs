@@ -10,7 +10,7 @@ namespace Bastion.UI.Strategy
     /// </summary>
     public static class StrategyText
     {
-        public const string Brand = "BASTIÓN";
+        public const string Brand = "BASTION";
         public const string Menu = "Menú";
         public static string MenuTip => Bastion.UI.Hud.HudText.Keyed("Menú", "Esc");
 
@@ -313,7 +313,7 @@ namespace Bastion.UI.Strategy
             /// (all but their knife) goes to the squad's packs, and what didn't fit stays there. `gave`: anything went to the packs.
             /// </summary>
             public static string NoBedLine(string name, bool gave, IList<string> lost) =>
-                $"<b>{name}</b> no se queda: en el Bastión ya no caben más soldados."
+                $"<b>{name}</b> no se queda: en el Bastion ya no caben más soldados."
                 + (lost.Count == 0 ? (gave ? " Deja a la escuadra lo que llevaba." : "")
                     : gave ? $" Deja a la escuadra lo que cabía en las mochilas; lo demás se queda allí: {Ui.List(lost)}."
                     : $" Lo que llevaba no cabía en las mochilas y se queda allí: {Ui.List(lost)}.");

@@ -172,7 +172,7 @@ publicar() {
     echo "Este árbol no es el que pasó «probar» (o no lo pasó): unity/tools/publicar.sh $version probar"
     exit 2
   fi
-  if [ "$(sed -n 2p "$message")" != "" ] || ! head -1 "$message" | grep -q "^Bastión $version: "; then
+  if [ "$(sed -n 2p "$message")" != "" ] || ! head -1 "$message" | grep -qE "^Basti(ó|o)n $version: "; then
     echo "El mensaje empieza por «Bastión $version: …» en una línea, y la segunda va vacía."
     exit 2
   fi
@@ -200,8 +200,8 @@ principal() {
     mkdir -p "$main/$folder" && cp "$out/Bastion-$version-mac.zip" "$out/Bastion-$version-win-x64.zip" "$main/$folder/" || exit 1
   done
   # With the version in its name (cuadro 162), as in the zip: «Bastión 0.14.8.app»; the ones of before and Bastion.app out.
-  copy="$main/unity/Bastion/Builds/Mac/Bastión $version.app"
-  rm -rf "$main/unity/Bastion/Builds/Mac/Bastion.app" "$main/unity/Bastion/Builds/Mac/Bastión "*.app
+  copy="$main/unity/Bastion/Builds/Mac/Bastion $version.app"
+  rm -rf "$main/unity/Bastion/Builds/Mac/Bastion.app" "$main/unity/Bastion/Builds/Mac/Bastión "*.app "$main/unity/Bastion/Builds/Mac/Bastion "*.app
   ditto unity/Bastion/Builds/Mac/Bastion.app "$copy" || exit 1
   codesign -v --deep --strict "$copy" || echo "La firma de la app copiada no pasa."
   # The main tree onto the published commit, keeping every working file as it is.

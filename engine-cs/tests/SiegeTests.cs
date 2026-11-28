@@ -52,7 +52,7 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ the base as a battlefield
 
-        [Fact(DisplayName = "the base as a battlefield › «El Bastión» is a walled base: a gate and a barricade on each side, a watchtower on each corner, the Sala de radio in the middle")]
+        [Fact(DisplayName = "the base as a battlefield › «El Bastion» is a walled base: a gate and a barricade on each side, a watchtower on each corner, the Sala de radio in the middle")]
         public void ElBastionIsAWalledBase()
         {
             var def = Maps.All["bastion"];

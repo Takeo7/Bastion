@@ -367,7 +367,7 @@ namespace Bastion.Engine.Tests
         {
             using var rig = new Rig();
             var ana = rig.Join("Ana", version: "0.9.0");
-            Assert.Equal("Quien aloja la partida tiene Bastión 1.0.0 y tú, 0.9.0: necesitáis la misma.", (string?)ana.Take("error").Single()["message"]);
+            Assert.Equal("Quien aloja la partida tiene Bastion 1.0.0 y tú, 0.9.0: necesitáis la misma.", (string?)ana.Take("error").Single()["message"]);
             Assert.True(ana.IsClosed);
             Assert.Empty(rig.Room.Summary().players);
             // No seat was made: the next one takes the first.

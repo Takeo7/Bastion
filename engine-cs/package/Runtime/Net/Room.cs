@@ -814,7 +814,7 @@ namespace Bastion.Net
             // Two builds play by the same rules or not at all: the seat isn't asked for.
             if (hello.Version != version)
             {
-                Send(socket, new ErrorMessage { Message = $"Quien aloja la partida tiene Bastión {version} y tú, {hello.Version ?? "otra versión"}: necesitáis la misma." });
+                Send(socket, new ErrorMessage { Message = $"Quien aloja la partida tiene Bastion {version} y tú, {hello.Version ?? "otra versión"}: necesitáis la misma." });
                 socket.Close("otra versión");
                 return null;
             }

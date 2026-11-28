@@ -102,7 +102,7 @@ namespace Bastion.UI.Strategy
                     var next = Campaign.NextLevel(c);
                     if (next == null) return (rows, false);
                     rows.Add(Row("Suministros", Campaign.CostText(next.Cost)));
-                    rows.Add(Row("Qué hace", $"El Bastión pasa a ser {Lore.BastionLevelA(next.Level)}."));
+                    rows.Add(Row("Qué hace", $"El Bastion pasa a ser {Lore.BastionLevelA(next.Level)}."));
                     return (rows, false);
                 }
                 case ChooseMissionAction a:
@@ -181,7 +181,7 @@ namespace Bastion.UI.Strategy
             if (here && offer.Siege != true) return null;
             return new WaitingView
             {
-                Text = $"<color={partner.Color}><b>{partner.Name}</b></color>{(offer.Siege == true ? " está a punto para defender el Bastión." : $" está a punto para salir: {offer.Name}.")}",
+                Text = $"<color={partner.Color}><b>{partner.Name}</b></color>{(offer.Siege == true ? " está a punto para defender el Bastion." : $" está a punto para salir: {offer.Name}.")}",
                 Button = here ? null : "Ir a la Escuadra",
             };
         }
@@ -311,7 +311,7 @@ namespace Bastion.UI.Strategy
             for (var level = Progression.BastionLevel(before.Level) + 1; level <= Progression.BastionLevel(c.Level); level++)
             {
                 var page = Lore.Expediente[level - 1];
-                var v = new StrategyModalView { Kind = "alert", Tone = "good", Kicker = "Diario", Title = page.Title, Body = { page.Summary }, Text = $"El Bastión es {Lore.BastionLevelA(level)}.", Note = page.Note, Buttons = { "Entendido" } };
+                var v = new StrategyModalView { Kind = "alert", Tone = "good", Kicker = "Diario", Title = page.Title, Body = { page.Summary }, Text = $"El Bastion es {Lore.BastionLevelA(level)}.", Note = page.Note, Buttons = { "Entendido" } };
                 v.Brought.AddRange(Brought(level));
                 out_.Add((90, v));
             }

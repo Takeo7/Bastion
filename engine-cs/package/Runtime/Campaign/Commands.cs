@@ -38,7 +38,7 @@ namespace Bastion.Engine
                     return $"{(action is MendAction ? "reparar" : action is RearmAction ? "reponer" : "desmontar")} {what}";
                 }
                 case LevelUpAction _:
-                    return $"subir el Bastión a {Lore.BastionLevelThe(Progression.BastionLevel(c) + 1)}";
+                    return $"subir el Bastion a {Lore.BastionLevelThe(Progression.BastionLevel(c) + 1)}";
                 case ChooseMissionAction a:
                     return $"ir a la misión {c.Offers.FirstOrDefault((o) => o.Id == a.Id)?.Name ?? ""}";
                 case CancelMissionAction a:

@@ -35,8 +35,8 @@ namespace Bastion.UI.Hud
 
             public static string Confirm(string detail) => string.IsNullOrEmpty(detail) ? "¿Terminar? Pulsa otra vez." : $"¿Terminar? {detail}. Pulsa otra vez.";
             public static string Waiting(string name) => $"A punto. Esperando a {name}. Pulsa para cancelar.";
-            /// <summary>Ready without the command (Arturo, 7/11): the turn is over when the holder's is.</summary>
-            public static string ReadyHolder(string name) => $"A punto. {name} sigue con el mando: el turno acaba cuando termine. Pulsa para cancelar.";
+            /// <summary>Ready without the command (Arturo, 7/11): the turn is over when the holder's is. (Not taken back from there, note 10, 28/11.)</summary>
+            public static string ReadyHolder(string name) => $"A punto. {name} sigue con el mando: el turno acaba cuando termine.";
             /// <summary>
             /// With a soldier in play (Arturo, 7/11, Ana's #5: one key): «Terminar el turno de Yuki», what that does, and that
             /// a second press ends one's own turn (Lore: not «everyone's», with a partner whose soldiers go on).
@@ -343,7 +343,7 @@ namespace Bastion.UI.Hud
             public const string RunGoOn = "SEGUIR LA EXPEDICIÓN";
             public const string RunGoingOn = "SIGUIENDO LA EXPEDICIÓN…";
             public const string ToBase = "VOLVER A LA BASE";
-            public const string Returning = "VOLVIENDO AL BASTIÓN…";
+            public const string Returning = "VOLVIENDO AL BASTION…";
             public const string Again = "OTRA IGUAL (MAPA NUEVO)";
             public const string AgainSiege = "OTRO ASEDIO";
             public const string Random = "MISIÓN AL AZAR";
@@ -685,7 +685,7 @@ namespace Bastion.UI.Hud
         {
             public const string SheetKicker = "HOJA DEL SOLDADO";
             /// <summary>Over an enemy's file: the Bastión's (Lore, 16/11: no story in the runs, so not the Atalaya).</summary>
-            public const string FileKicker = "FICHA DEL BASTIÓN";
+            public const string FileKicker = "FICHA DEL BASTION";
             public const string Carries = "Lleva";
             public const string Skills = "Habilidades";
             public const string Close = "CERRAR";

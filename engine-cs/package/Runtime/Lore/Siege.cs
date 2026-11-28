@@ -26,9 +26,9 @@ namespace Bastion.Engine
             /// <summary>Once the last wave is in.</summary>
             public const string NoMoreWaves = "No vienen más";
             /// <summary>The outcomes: held to the last turn, every wave down, nobody left.</summary>
-            public const string Held = "El Bastión aguanta: los que quedan se retiran";
-            public const string Cleared = "El Bastión aguanta: no queda ninguno en pie";
-            public const string Wiped = "El Bastión ha caído: no queda nadie para defenderlo";
+            public const string Held = "El Bastion aguanta: los que quedan se retiran";
+            public const string Cleared = "El Bastion aguanta: no queda ninguno en pie";
+            public const string Wiped = "El Bastion ha caído: no queda nadie para defenderlo";
         }
 
         /// <summary>The strip's objective: a siege ends once every one of the dead is down (Ana, 23/10). `hold` is no longer used.</summary>
@@ -40,7 +40,7 @@ namespace Bastion.Engine
         /// <summary>The objective in full, for the card and the strip's tooltip.</summary>
         public static string SiegeObjectiveTip(int? hold = null)
         {
-            return "Acabad con todas las oleadas. Si caen todos, el Bastión cae.";
+            return "Acabad con todas las oleadas. Si caen todos, el Bastion cae.";
         }
 
         /// <summary>Which turn a wave lands at the end of (`turn`: Reinforcement.turn), seen on squad turn `now`: «este turno», «próximo turno», «turno 5».</summary>

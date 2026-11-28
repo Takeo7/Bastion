@@ -58,12 +58,12 @@ namespace Bastion.UI.Strategy
                         Name = PlayerName(slot), Color = PlayerColor(slot), Ready = c.LaunchReady[slot],
                         Tip = c.LaunchReady[slot] ? (siege ? "A punto para defender" : "A punto para salir") : "Aún elige la escuadra",
                     });
-            v.Launch = ready ? "A punto" : siege ? "Defender el Bastión" : "Lanzar misión";
+            v.Launch = ready ? "A punto" : siege ? "Defender el Bastion" : "Lanzar misión";
             v.LaunchReady = ready;
             v.LaunchWaiting = together && !ready && c.LaunchReady[partner.Slot];
             v.LaunchEnabled = c.Squad.Count > 0;
             // The first mission is the only way in: no going back to the base before it (Ana, 22/10).
-            v.Back = c.Story.Done == 0 && offer.Story == 1 ? null : "Volver al Bastión";
+            v.Back = c.Story.Done == 0 && offer.Story == 1 ? null : "Volver al Bastion";
             // One card under each pad of the row; a free one this player could take but has nobody for: recruit into it (#39).
             // In a siege there is no row: each defender stands on the clearing where they will start (#58).
             var pads = siege ? new List<CampaignSoldier>() : Campaign.SquadPads(c).Select(id => squad.FirstOrDefault(s => s.Id == id)).ToList();
@@ -115,8 +115,8 @@ namespace Bastion.UI.Strategy
             v.MineHead = $"Tus defensores · {mine.Count}";
             v.PostHelp = picked != null
                 ? $"{Appearances.DisplayName(picked.Name, picked.Nickname)}: clic para elegir su puesto, Esc para soltar."
-                : "Elige un soldado y haz clic en el claro donde empezará el asedio. Si no tiene puesto, empieza junto al Bastión.";
-            if (picked != null && posts.ContainsKey(picked.Id)) v.PostHome = "Que empiece junto al Bastión";
+                : "Elige un soldado y haz clic en el claro donde empezará el asedio. Si no tiene puesto, empieza junto al Bastion.";
+            if (picked != null && posts.ContainsKey(picked.Id)) v.PostHome = "Que empiece junto al Bastion";
             PickRowView Row(CampaignSoldier s)
             {
                 var row = new PickRowView
@@ -126,7 +126,7 @@ namespace Bastion.UI.Strategy
                     Peek = Peek(c, s),
                 };
                 if (posts.ContainsKey(s.Id)) (row.Chip, row.ChipTone, row.ChipTip) = ("Puesto", "good", "Empieza el asedio donde está en el claro");
-                else (row.Chip, row.ChipTone, row.ChipTip) = ("Junto al Bastión", null, "Sin puesto: empieza junto al Bastión");
+                else (row.Chip, row.ChipTone, row.ChipTip) = ("Junto al Bastion", null, "Sin puesto: empieza junto al Bastion");
                 return row;
             }
             foreach (var s in mine) v.Mine.Add(Row(s));

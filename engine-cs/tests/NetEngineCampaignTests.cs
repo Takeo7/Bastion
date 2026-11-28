@@ -216,8 +216,8 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void APartnerJoiningARunUnderWayIsHandedHalfTheSquad()
         {
-            // Runs.HandOver (16/11): Ana went out alone with two of her four (the motorbike's seats, N4); Pepe, coming, takes
-            // one of them till the run ends, and gets two of his own on the base.
+            // Runs.AddPlayer (16/11; note 9, 28/11): Ana went out alone with two of her four (the motorbike's seats, N4);
+            // Pepe, coming, gets one of them, his own, and one on the base: nothing lent (RunState.hands).
             using var host = new Host();
             var ana = host.Join("Ana");
             host.Say(ana, new { t = "newCampaign" });
@@ -226,11 +226,10 @@ namespace Bastion.Engine.Tests
             Assert.Equal(2, squad.Count);
             var pepe = host.Join("Pepe");
             var c = CampaignSent(pepe);
-            var hands = ((JObject)c["run"]!["hands"]!).Properties().ToDictionary((p) => p.Name, (p) => (int)p.Value);
-            Assert.Single(hands);
-            Assert.All(hands, (h) => Assert.Equal(1, h.Value));
-            Assert.All(hands.Keys, (id) => Assert.Contains(id, squad));
-            Assert.Equal(2, c["soldiers"]!.Count((s) => (int)s["owner"]! == 1));
+            Assert.Null((c["run"]!["hands"] as JObject)?.Properties().FirstOrDefault());
+            var his = c["soldiers"]!.Where((s) => (int)s["owner"]! == 1).Select((s) => (string)s["id"]!).ToList();
+            Assert.Equal(2, his.Count);
+            Assert.Single(his, (id) => squad.Contains(id));
             Assert.NotEmpty(ana.Take("campaign"));
         }
 

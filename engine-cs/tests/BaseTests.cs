@@ -489,7 +489,7 @@ namespace Bastion.Engine.Tests
                 Assert.Equal(new[] { PieceIds.Caravan }, c.Bastion.Pieces.Select((p) => p.Piece));
                 Assert.Equal(new int?[] { 0, 0 }, new int?[] { c.Credits, c.Parts });
                 Assert.True(home.Alive);
-                Assert.Contains(c.Log, (l) => l.Alert?.Title == "El Bastión ha caído");
+                Assert.Contains(c.Log, (l) => l.Alert?.Title == "El Bastion ha caído");
                 // Only the wounded left and nothing to recruit with: time would stand still, so one waits for them to heal.
                 Assert.True(Campaign.MustWait(c));
                 Assert.Contains(Campaign.NextSteps(c, 0), (x) => x.View == BaseViews.Barracks && x.Label == "Nadie puede salir: esperad a que se curen" && x.Tone == NextStepTones.Urgent && x.Count == null && x.Go == null);

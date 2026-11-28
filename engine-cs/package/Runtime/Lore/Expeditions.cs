@@ -532,7 +532,7 @@ namespace Bastion.Engine
                     // Runs.Trained: a point a level, to a survivor who joins and to a recruit (Runs.NewSoldier). Never «barra»
                     // here (Arturo, cuadro 166): the player sees «puntos por gastar».
                     var points = Math.Max(1, level);
-                    return $"Quien se une al Bastión, un superviviente o un recluta, llega con {points} {(points == 1 ? "punto" : "puntos")} de habilidad por gastar.";
+                    return $"Quien se une al Bastion, un superviviente o un recluta, llega con {points} {(points == 1 ? "punto" : "puntos")} de habilidad por gastar.";
                 }
                 case UpgradeIds.Route:
                     return "Desde un Trueque también se puede volver a la base, no solo desde un Refugio.";

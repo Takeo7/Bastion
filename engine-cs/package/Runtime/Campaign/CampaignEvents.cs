@@ -44,7 +44,7 @@ namespace Bastion.Engine
             {
                 Id = CampaignEventIds.Refugees,
                 Title = "Refugiados",
-                Text = "Familias huidas de un enclave caído piden asilo en el Bastión. Entre ellas hay antiguos soldados.",
+                Text = "Familias huidas de un enclave caído piden asilo en el Bastion. Entre ellas hay antiguos soldados.",
                 Options = new[]
                 {
                     // Either way they tell what they saw (Ana, 20/10: taken in, they would tell it too); taking them in costs, and gives a soldier.
@@ -52,7 +52,7 @@ namespace Bastion.Engine
                     {
                         Credit(c, -30);
                         var s = AddSoldier(c, NeediestPlayer(c), rng);
-                        Log(c, $"{s.Name} se une al Bastión ({VeterancyName(s)}).", LogTones.Good);
+                        Log(c, $"{s.Name} se une al Bastion ({VeterancyName(s)}).", LogTones.Good);
                         TipOff(c, rng);
                     }, (c) => c.Credits >= 30),
                     Option("Que sigan su camino", "Antes de irse, cuentan lo que vieron: una misión nueva", (c, rng) => TipOff(c, rng)),
@@ -74,7 +74,7 @@ namespace Bastion.Engine
             {
                 Id = CampaignEventIds.Convoy,
                 Title = "Convoy emboscado",
-                Text = "Un convoy de los Camioneros ha caído en una emboscada de los Cuervos cerca del Bastión. Pagan si alguien los saca de ahí.",
+                Text = "Un convoy de los Camioneros ha caído en una emboscada de los Cuervos cerca del Bastion. Pagan si alguien los saca de ahí.",
                 Options = new[]
                 {
                     Option("Enviar a alguien a socorrerlo", "Un soldado al azar, de baja una misión; +60 suministros", (c, rng) =>
@@ -161,7 +161,7 @@ namespace Bastion.Engine
             {
                 Id = CampaignEventIds.Simon,
                 Title = "Simão Ferreira",
-                Text = "Un desertor de los Cuervos llama a la puerta del Bastión. Se llama Simão Ferreira. Dice que sabe dónde tienen los Cuervos a la niña inmune, y cómo entrar sin que se enteren.",
+                Text = "Un desertor de los Cuervos llama a la puerta del Bastion. Se llama Simão Ferreira. Dice que sabe dónde tienen los Cuervos a la niña inmune, y cómo entrar sin que se enteren.",
                 Story = true,
                 Options = new[]
                 {
@@ -186,7 +186,7 @@ namespace Bastion.Engine
                         c.Ending = Endings.Break;
                         c.Outcome = Outcomes.Victory;
                     }),
-                    Option("Para quienes cumplieron", "La Lata reparte las dosis solo a quienes cumplieron sus tratos. La fórmula se queda en el Bastión, bajo llave.", (c, rng) =>
+                    Option("Para quienes cumplieron", "La Lata reparte las dosis solo a quienes cumplieron sus tratos. La fórmula se queda en el Bastion, bajo llave.", (c, rng) =>
                     {
                         c.Ending = Endings.Record;
                         c.Outcome = Outcomes.Victory;

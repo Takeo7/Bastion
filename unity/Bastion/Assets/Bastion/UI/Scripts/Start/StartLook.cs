@@ -6,103 +6,35 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Start
 {
     /// <summary>
-    /// The start screen's look as Arturo approved it (cuadros 149–151, ronda2-1280.png), shared by the start screen's pages and
-    /// the room: the dark veil with Arte's grain over the top left, on a slant; the entries with no plates, the chosen one on
-    /// Arte's brush stroke, its words dark.
+    /// The start screen's look as Arturo approved it (cuadros 149–151, ronda2-1280.png; his final picture of 28/11,
+    /// producto/notas-2026-11-28/menu/maqueta-final.jpg), shared by the start screen's pages and the room: the dark veil of
+    /// his own texture over the top left, its edge ragged, on a slant; the entries with no plates, their words bone and worn,
+    /// the chosen one's too, on his dark red brush stroke.
     /// </summary>
     public static class StartLook
     {
         // ------------------------------------------------------------------ the veil
 
-        /// <summary>The veil, to go over the scene and under the words: it draws itself to its own size.</summary>
+        /// <summary>
+        /// The veil, to go over the scene and under the words: Arturo's texture (28/11: «con sus manchas, marcas y arañazos.
+        /// Los bordes deben ser irregulares y texturizados»), baked into one picture stretched over the screen
+        /// (Resources/Start/velo.png; .dev-snapshots/ui/unity/runs/portada-0.14.15/horno/bake.py). In the picture: his texture
+        /// tinted to the night's blue, its dark blotches thicker; the veil's strength (0.62 behind the words, on the left, to
+        /// 0.52 from the middle on: Arturo, cuadro 193, «velo suave», the left's pines and the tower seen through it as in
+        /// his picture; the 26/11's was 0.85 to 0.62); and its edge, from (100 %, 8.5 %) to (0 %, 80 %) as before, bowed up
+        /// in the middle as his picture's, wavy, frayed by the texture's own marks and melted over a wide band, not to
+        /// read as a line across the picture.
+        /// </summary>
         public static VisualElement Veil()
         {
-            grain = grain != null ? grain : Resources.Load<Texture2D>("Start/grano");
             var veil = new VisualElement { pickingMode = PickingMode.Ignore };
             veil.AddToClassList("start__veil");
-            veil.generateVisualContent += DrawVeil;
-            veil.RegisterCallback<GeometryChangedEvent>(_ => veil.MarkDirtyRepaint());
+            if (Resources.Load<Texture2D>(VeilArt) is Texture2D art) veil.style.backgroundImage = art;
             return veil;
         }
 
-        static Texture2D grain;
-
-        /// <summary>
-        /// The veil of Arturo's picture (cuadro 150: «el degradado en diagonal»): the top left darker, with Arte's grain strong,
-        /// its edge falling on a slant from the top right (VeilRight) to the left (VeilLeft), behind the tower, soft over
-        /// VeilSoft each side; under it the scene clean, as a beam of light. In cells of VeilCell, each corner's strength by how
-        /// far over the edge it is; the grain's cells on its tiles of 512.
-        /// </summary>
-        static void DrawVeil(MeshGenerationContext ctx)
-        {
-            var r = ctx.visualElement.contentRect;
-            if (r.width <= 0 || r.height <= 0) return;
-            // Its cells bigger on a very wide screen: one mesh holds 65 535 vertices (the review: 5120 × 1440 made 69 160).
-            var cellSize = VeilCell;
-            int nx, ny;
-            while ((nx = Mathf.CeilToInt(r.width / cellSize)) * (ny = Mathf.CeilToInt(r.height / cellSize)) * 4 > 64000) cellSize += 4;
-            float Weight(float x, float y)
-            {
-                var edge = Mathf.Lerp(VeilLeft.y, VeilRight.y, x / r.width) * r.height;
-                return Mathf.SmoothStep(0, 1, Mathf.InverseLerp(-VeilSoft * r.height, VeilSoft * r.height, edge - y));
-            }
-            void Cells(MeshWriteData mesh, Func<float, float, Color32> tint, bool textured)
-            {
-                var region = mesh.uvRegion;
-                ushort at = 0;
-                for (var j = 0; j < ny; j++)
-                    for (var i = 0; i < nx; i++)
-                    {
-                        float x0 = i * cellSize, y0 = j * cellSize, x1 = Mathf.Min(x0 + cellSize, r.width), y1 = Mathf.Min(y0 + cellSize, r.height);
-                        Vertex V(float x, float y, float ux, float uy) => new Vertex
-                        {
-                            position = new Vector3(x, y, Vertex.nearZ), tint = tint(x, y),
-                            uv = textured ? new Vector2(region.x + ux / GrainTile * region.width, region.y + (1 - uy / GrainTile) * region.height) : Vector2.zero,
-                        };
-                        float u0 = x0 % GrainTile, v0 = y0 % GrainTile;
-                        mesh.SetNextVertex(V(x0, y0, u0, v0));
-                        mesh.SetNextVertex(V(x1, y0, u0 + x1 - x0, v0));
-                        mesh.SetNextVertex(V(x1, y1, u0 + x1 - x0, v0 + y1 - y0));
-                        mesh.SetNextVertex(V(x0, y1, u0, v0 + y1 - y0));
-                        foreach (var k in new[] { 0, 1, 2, 0, 2, 3 }) mesh.SetNextIndex((ushort)(at + k));
-                        at += 4;
-                    }
-            }
-            // The canvas (Arturo, 26/11: «no está por encima»): the dark blue grey mottled with a lighter one in big and small
-            // blotches, as the picture's, so that it reads over a scene as dark as the menu's.
-            Color32 Dark(float x, float y)
-            {
-                var h = r.height;
-                var m = MottleBig * Mathf.PerlinNoise(x / (MottleBigSize * h) + 3.1f, y / (MottleBigSize * h) + 7.7f)
-                    + (1 - MottleBig) * Mathf.PerlinNoise(x / (MottleSmallSize * h) + 11.3f, y / (MottleSmallSize * h) + 5.9f);
-                var c = Color.Lerp(VeilColour, VeilLight, Mathf.SmoothStep(0, 1, Mathf.InverseLerp(MottleFrom, 1, m)) * MottleStrength);
-                // Darkest behind the words, on the left, as the picture's: VeilLeftAlpha there, VeilColour's from VeilReach of the
-                // width on (measured against the app's picture of the 0.14.11, Pruebas, 26/11).
-                c.a = Mathf.Lerp(VeilLeftAlpha, VeilColour.a, Mathf.SmoothStep(0, 1, x / r.width / VeilReach)) * Weight(x, y);
-                return c;
-            }
-            Cells(ctx.Allocate(nx * ny * 4, nx * ny * 6), Dark, false);
-            if (grain == null) return;
-            Color32 Grain(float x, float y) => new Color(1, 1, 1, GrainStrength * Weight(x, y));
-            Cells(ctx.Allocate(nx * ny * 4, nx * ny * 6, grain), Grain, true);
-        }
-
-        /// <summary>
-        /// The veil's edge where it meets the right side and the left (as parts of the height), how soft (a part of the height
-        /// each side), its colour and the grain's strength over it. (CORRECCIONES-2: the edge from (100 %, 9 %) to (0 %, 80 %),
-        /// through the tower's foot; a dark, dull blue grey, thin enough for the left's pines to show through it. Producto's
-        /// final word, 24/11: ronda2's veil over Arte's fixed scene.)
-        /// (Arturo, 26/11, «no está por encima»: in the app, over the menu's night scene with its pines sharp and snowy, the
-        /// 0.6 of a dark blue hardly showed. Stronger behind the words (0.85, to 0.62 from the middle on), greyer, and mottled
-        /// as a canvas: VeilLight's blotches, big and small, by Perlin noise, a part of the height across; the grain's dots a
-        /// little bigger. Set by its effect on the app's picture of the 0.14.11: the lab's shot draws the scene hazier and
-        /// lays the panels over it apart, so it isn't the measure.)
-        /// </summary>
-        static readonly Vector2 VeilRight = new Vector2(1f, 0.09f), VeilLeft = new Vector2(0f, 0.80f);
-        const float VeilSoft = 0.012f, VeilCell = 16, GrainTile = 320, GrainStrength = 1f;
-        static readonly Color VeilColour = new Color(20 / 255f, 27 / 255f, 45 / 255f, 0.62f), VeilLight = new Color(70 / 255f, 82 / 255f, 108 / 255f, 1f);
-        const float VeilLeftAlpha = 0.85f, VeilReach = 0.5f;
-        const float MottleBig = 0.65f, MottleBigSize = 0.30f, MottleSmallSize = 0.08f, MottleFrom = 0.35f, MottleStrength = 0.5f;
+        /// <summary>(The short stroke, for a form's key: the long one's right part with its left end's shape, not to squeeze it.)</summary>
+        public const string VeilArt = "Start/velo", BrushArt = "Start/pincelada", BrushShortArt = "Start/pincelada-corta", WearArt = "Start/desgaste";
 
         // ---------------------------------------------------------------- the entries
 
@@ -110,9 +42,12 @@ namespace Bastion.UI.Start
         /// Arturo's picture's measures (Producto, CORRECCIONES-2, on the screen's height and width): an entry's step, its brush
         /// stroke's height, where the stroke starts and how long it is. (The stroke's paint is inset in its picture, 2 % at the
         /// ends and 8 % above and below: measured the same way on both images at 1280 × 800, its paint from 4 % to 25.3 % of
-        /// the width and 6 % high, as the picture's.)
+        /// the width and 6 % high, as the picture's. Arturo's dark red stroke of 28/11, pincelada.png, cut from his original
+        /// with the same insets, its paint 6.4 % high in his picture; a quarter lighter than the original, to that picture's
+        /// tone.)
+        /// WearWide: the letters' wear's tile (4 to 1) across, as a part of the screen's height.
         /// </summary>
-        const float EntryStep = 0.065f, BrushHigh = 0.075f, BrushFrom = 0.036f, BrushLong = 0.233f;
+        const float EntryStep = 0.065f, BrushHigh = 0.080f, BrushFrom = 0.036f, BrushLong = 0.233f, BrushShortHigh = 0.06f, WearWide = 0.64f;
 
         /// <summary>
         /// A screen's entries (a page's column, a form's keys): one chosen at a time, by the pointer over it, the finger on it or
@@ -132,8 +67,10 @@ namespace Bastion.UI.Start
 
             /// <summary>
             /// `b` as an entry: its words as written («Nueva partida»), over the brush stroke shown when it is the chosen one
-            /// (Arte's, else plain amber). `column`, one of a page's column, as the picture's (its step and its stroke's place
-            /// and length on the screen); else a key of a form, its stroke round its words.
+            /// (Arturo's dark red, else a plain one), and worn: the scratches of his texture over them (28/11: «con la textura
+            /// de la maqueta final en todas las opciones, incluida la seleccionada»). `column`, one of a page's column, as the
+            /// picture's (its step and its stroke's place and length on the screen); else a key of a form, its stroke round
+            /// its words.
             /// </summary>
             public Button Make(Button b, string text, Action click, bool column = true)
             {
@@ -147,7 +84,7 @@ namespace Bastion.UI.Start
                 b.EnableInClassList("start__entry--short", !column);
                 var brush = new VisualElement { pickingMode = PickingMode.Ignore };
                 brush.AddToClassList("start__brush");
-                if (Resources.Load<Texture2D>("Start/brochazo") is Texture2D art)
+                if (Resources.Load<Texture2D>(column ? BrushArt : BrushShortArt) is Texture2D art)
                 {
                     brush.style.backgroundImage = art;
                     brush.AddToClassList("start__brush--art");
@@ -157,8 +94,14 @@ namespace Bastion.UI.Start
                 words.AddToClassList("start__entry-text");
                 words.AddToClassList("font-title");
                 b.Add(words);
-                words.RegisterCallback<GeometryChangedEvent>(_ => Size(b, brush, words, column));
-                screen.RegisterCallback<GeometryChangedEvent>(_ => Size(b, brush, words, column));
+                // The wear over the words alone, a different part of its tile for each entry.
+                var wear = new VisualElement { pickingMode = PickingMode.Ignore };
+                wear.AddToClassList("start__wear");
+                if (Resources.Load<Texture2D>(WearArt) is Texture2D worn) wear.style.backgroundImage = worn;
+                b.Add(wear);
+                var nth = all.Count;
+                words.RegisterCallback<GeometryChangedEvent>(_ => Size(b, brush, words, wear, nth, column));
+                screen.RegisterCallback<GeometryChangedEvent>(_ => Size(b, brush, words, wear, nth, column));
                 if (click != null) b.clicked += click;
                 b.clicked += () => Debug.Log($"[entrada] pulsada «{(b.Q<Label>(className: "start__entry-text")?.text ?? text)}»");
                 b.RegisterCallback<PointerEnterEvent>(_ => Choose(b));
@@ -229,12 +172,13 @@ namespace Bastion.UI.Start
             /// stroke 6 % high, from 4 % of the width and 21.7 % long whatever its words (never shorter than them with a
             /// margin). A form's key: its stroke as high, round its words, longer after them, where it frays.
             /// </summary>
-            void Size(Button entry, VisualElement brush, Label words, bool column)
+            void Size(Button entry, VisualElement brush, Label words, VisualElement wear, int nth, bool column)
             {
                 var s = screen.layout;
                 var t = words.layout;
                 if (float.IsNaN(s.height) || float.IsNaN(t.width) || t.width <= 0) return;
-                var h = Mathf.Round(Mathf.Max(s.height * BrushHigh, t.height + 4));
+                // (A form's key's stroke lower: at the column's height the form's plate cut it, at its foot.)
+                var h = Mathf.Round(column ? Mathf.Max(s.height * BrushHigh, t.height + 4) : Mathf.Max(s.height * BrushShortHigh, t.height + 12));
                 float left, w;
                 if (column)
                 {
@@ -259,6 +203,14 @@ namespace Bastion.UI.Start
                 brush.style.height = h;
                 brush.style.right = StyleKeyword.Auto;
                 brush.style.bottom = StyleKeyword.Auto;
+                wear.style.left = t.x;
+                wear.style.top = t.y;
+                wear.style.width = t.width;
+                wear.style.height = t.height;
+                var tile = Mathf.Round(s.height * WearWide);
+                wear.style.backgroundSize = new BackgroundSize(new Length(tile), new Length(tile / 4));
+                wear.style.backgroundPositionX = new BackgroundPosition(BackgroundPositionKeyword.Left, new Length(-Mathf.Round(tile * (nth * 0.37f % 1))));
+                wear.style.backgroundPositionY = new BackgroundPosition(BackgroundPositionKeyword.Top, new Length(-Mathf.Round(tile / 4 * (nth * 0.29f % 1))));
                 Sized?.Invoke(entry, left, w);
             }
         }

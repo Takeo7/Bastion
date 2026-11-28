@@ -62,11 +62,11 @@ namespace Bastion.Engine
                 Region = "afr",
                 Difficulty = 1,
                 Reward = new MissionReward { Credits = 60 },
-                Prize = "la Dra. Nwosu se une al Bastión (el botín vale un 25 % más)",
+                Prize = "la Dra. Nwosu se une al Bastion (el botín vale un 25 % más)",
                 Briefing = "Una doctora lleva una semana encerrada en **el hospital de Tarbes**, con el edificio lleno de zombis. Se llama **Amara Nwosu** y trabajaba en el Instituto Koper. ==Llegad hasta ella y sacadla con vida.==",
                 Signature = "— N. A.",
                 Vip = "Dra. Amara Nwosu",
-                After = "La Dra. Nwosu se queda en el Bastión. Sabe qué aprovechar de cada saqueo: el botín valdrá un 25 % más.",
+                After = "La Dra. Nwosu se queda en el Bastion. Sabe qué aprovechar de cada saqueo: el botín valdrá un 25 % más.",
             },
             new StoryChapter
             {
@@ -102,7 +102,7 @@ namespace Bastion.Engine
                 Region = "eeu",
                 Difficulty = 3,
                 Reward = new MissionReward { Credits = 80, Recruit = true },
-                Prize = "una niña inmune a salvo en el Bastión",
+                Prize = "una niña inmune a salvo en el Bastion",
                 Briefing = "Simão entró en el campamento de los Cuervos a por **la niña inmune**, pero lo han descubierto. Sabe dónde la esconden. ==Llegad hasta él y sacadlo con vida.==",
                 Signature = "— N. A.",
                 Vip = "Simão Ferreira",
@@ -119,7 +119,7 @@ namespace Bastion.Engine
                 Briefing = "Los cuadernos del Instituto Koper siguen en el laboratorio donde empezó todo. **Sin ellos no habrá vacuna.** ==Recuperad los cuadernos y sacadlos por la zona de evacuación.==",
                 Signature = "— T. V.",
                 Item = "los cuadernos",
-                After = "Los cuadernos ya están en el Bastión. Teo los ha leído enteros y lleva dos días sin hablar.",
+                After = "Los cuadernos ya están en el Bastion. Teo los ha leído enteros y lleva dos días sin hablar.",
             },
             new StoryChapter
             {
@@ -130,11 +130,11 @@ namespace Bastion.Engine
                 Region = "na",
                 Difficulty = 4,
                 Reward = new MissionReward { Credits = 100 },
-                Prize = "cómo parar la Marea (la misión final, con el Bastión en su último nivel)",
+                Prize = "cómo parar la Marea (la misión final, con el Bastion en su último nivel)",
                 Briefing = "**Celia Marsh, la Voz** de la Congregación, emite cada noche desde una vieja emisora de los Llanos. Es la única que sabe cómo parar la Marea. ==Asaltad la emisora, llegad hasta ella y sacadla con vida.==",
                 Signature = "— N. A.",
                 Vip = "Celia Marsh",
-                After = "La Voz está en el Bastión. Ha pasado una hora callada. Luego ha dicho cómo se para la Marea.",
+                After = "La Voz está en el Bastion. Ha pasado una hora callada. Luego ha dicho cómo se para la Marea.",
             },
         };
 

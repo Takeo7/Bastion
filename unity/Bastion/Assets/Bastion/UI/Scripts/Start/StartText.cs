@@ -9,7 +9,7 @@ namespace Bastion.UI.Start
     /// </summary>
     public static class StartText
     {
-        public const string Title = "BASTIÓN";
+        public const string Title = "BASTION";
 
         // The main menu (p1), in this order; «Continuar» only with a game saved. (Arturo, 26/11: fewer words, «Salir», not
         // «Salir de Bastión»; Producto's table, Lore to review.)

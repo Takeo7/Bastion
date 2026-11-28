@@ -264,7 +264,7 @@ namespace Bastion.Engine
         public static string? LevelUpBlocker(CampaignState c)
         {
             var next = NextLevel(c);
-            if (next == null) return "El Bastión ya está en su nivel más alto.";
+            if (next == null) return "El Bastion ya está en su nivel más alto.";
             if (next.Flown < next.Missions) return $"Para {Lore.BastionLevelThe(next.Level)} hacen falta {next.Missions} misiones hechas: lleváis {next.Flown}.";
             return CostBlocker(c, next.Cost, 0);
         }

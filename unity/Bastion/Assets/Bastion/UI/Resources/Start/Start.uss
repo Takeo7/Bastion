@@ -47,19 +47,19 @@
     text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
 }
 
-/* (Placed by StartScreen.PlaceTitle: 29 % of the width, its letters from 5.9 % of the height.) */
+/* (Placed by StartScreen.PlaceTitle: 29 % of the width, its letters from 5.8 % of the height.) */
 .start__title--art {
     -unity-background-scale-mode: scale-to-fit;
 }
 
-/* Arte's grain over the whole picture and its darker edges (cuadro 149), under the words. */
-/* The dark veil with the grain, on a slant over the top left (cuadro 150; drawn by StartScreen.DrawVeil). */
+/* The dark veil on a slant over the top left (cuadro 150), Arturo's texture since 28/11: one picture, stretched (StartLook.Veil). */
 .start__veil {
     position: absolute;
     left: 0;
     top: 0;
     right: 0;
     bottom: 0;
+    -unity-background-scale-mode: stretch-to-fill;
 }
 
 .start__edges {
@@ -72,8 +72,9 @@
 }
 
 /*
-   An entry (cuadro 149): no plate, its words as written, bone; the chosen one (start__entry--chosen) on an amber brush
-   stroke wider than its words, the words dark. Its words start at the column's edge; the stroke a little before them.
+   An entry (cuadro 149): no plate, its words as written, bone and worn (start__wear: the scratches over them); the chosen
+   one (start__entry--chosen) on Arturo's dark red brush stroke, wider than its words, its words bone as the others' (28/11).
+   Its words start at the column's edge; the stroke a little before them.
 */
 .start__entry {
     margin: 0 0 0 -22px;
@@ -106,13 +107,14 @@
 }
 
 /* The family's Regular (cuadro 150: the picture's words are thin, not bold; its download, Arturo's yes). */
+/* (28/11, his final picture: its capitals 3.3 % of the height, 36px on the 800 of the panel; a duller bone, measured there.) */
 .start__entry-text {
     -unity-font-definition: url("../../Fonts/Oswald-Regular SDF.asset");
     margin: 0;
     padding: 0;
-    font-size: 32px;
+    font-size: 36px;
     letter-spacing: 0.5px;
-    color: #e6dccb;
+    color: #cbbfae;
     text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
 }
 
@@ -123,7 +125,7 @@
     right: 0;
     bottom: 1px;
     display: none;
-    background-color: #db9a30;
+    background-color: #5a2414;
 }
 
 .start__brush--art {
@@ -135,9 +137,10 @@
     display: flex;
 }
 
-.start__entry--chosen > .start__entry-text {
-    color: #1a1712;
-    text-shadow: none;
+/* (Placed and sized over the words by StartLook.Entries.Size.) */
+.start__wear {
+    position: absolute;
+    background-repeat: repeat repeat;
 }
 
 .start__menu {

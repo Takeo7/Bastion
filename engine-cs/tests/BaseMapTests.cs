@@ -97,7 +97,7 @@ namespace Bastion.Engine.Tests
             var @base = Base.FreshBase(new Rng(1));
             var caravan = @base.Pieces[0];
             Same(new PlanRect { X = caravan.X - 2, Y = caravan.Y - 3, W = 9, H = 9 }, Base.BastionLot(@base));
-            Assert.Equal("Ahí no: ese sitio es para el Bastión, que crece con cada nivel.", Base.PlaceBlocker(@base, PieceIds.Sandbags, caravan.X - 2, caravan.Y - 3, 0));
+            Assert.Equal("Ahí no: ese sitio es para el Bastion, que crece con cada nivel.", Base.PlaceBlocker(@base, PieceIds.Sandbags, caravan.X - 2, caravan.Y - 3, 0));
             Assert.Null(Base.PlaceBlocker(@base, PieceIds.Sandbags, caravan.X - 3, caravan.Y - 3, 0));
             // Each stage, two levels: the caravan where it is, the mobile home, the barracón, the house.
             int[] Box(int level)

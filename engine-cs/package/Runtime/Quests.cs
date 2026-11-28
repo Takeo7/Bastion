@@ -32,7 +32,7 @@ namespace Bastion.Engine
                 Title = "Caras conocidas",
                 Signature = "— N. A.",
                 Hook = "{soldier} ha reconocido un nombre en la radio de los Cuervos.",
-                Prize = "{relative} se une al Bastión",
+                Prize = "{relative} se une al Bastion",
                 Region = null,
                 Rumor = false,
                 Steps = new QuestStep[]
@@ -82,7 +82,7 @@ namespace Bastion.Engine
                 },
                 Outcomes = new Dictionary<string, QuestOutcome>
                 {
-                    ["success"] = new QuestOutcome { Text = "{relative} llega al Bastión en los huesos. Al día siguiente pide un fusil.", Tone = "good", Recruit = new QuestRecruit { Name = "{relative}" }, Retry = 40 },
+                    ["success"] = new QuestOutcome { Text = "{relative} llega al Bastion en los huesos. Al día siguiente pide un fusil.", Tone = "good", Recruit = new QuestRecruit { Name = "{relative}" }, Retry = 40 },
                     ["refused"] = new QuestOutcome { Text = "{soldier} no dice nada. Desde entonces dispara antes de preguntar.", Tone = "bad", Trait = "grudge", Retry = 30 },
                     ["failure"] = new QuestOutcome { Text = "El campamento estaba vacío cuando llegamos. {soldier} no habla de ello. Ahora dispara antes de preguntar.", Tone = "bad", Trait = "grudge", Retry = 30 },
                 },
@@ -125,15 +125,15 @@ namespace Bastion.Engine
                         Text = "Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.",
                         Options = new[]
                         {
-                            new QuestChoice { Label = "Llevarla al Bastión", Effect = "Se une con tres barras llenas y el rasgo «Pesadillas»", Then = "captured" },
+                            new QuestChoice { Label = "Llevarla al Bastion", Effect = "Se une con tres barras llenas y el rasgo «Pesadillas»", Then = "captured" },
                             new QuestChoice { Label = "Acabar con esto", Effect = "+150 suministros de su alijo", Then = "killed" },
                         },
                     },
                 },
                 Outcomes = new Dictionary<string, QuestOutcome>
                 {
-                    ["captured"] = new QuestOutcome { Text = "Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Tone = "good", Recruit = new QuestRecruit { Name = "Vera Lindqvist", Rank = 3, Trait = "scarred" } },
-                    ["killed"] = new QuestOutcome { Text = "Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).", Tone = "good", Credits = 150 },
+                    ["captured"] = new QuestOutcome { Text = "Lindqvist duerme en el Bastion, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Tone = "good", Recruit = new QuestRecruit { Name = "Vera Lindqvist", Rank = 3, Trait = "scarred" } },
+                    ["killed"] = new QuestOutcome { Text = "Lindqvist está muerta. Su alijo pasa al Bastion (+150 suministros).", Tone = "good", Credits = 150 },
                     ["failure"] = new QuestOutcome { Text = "Lindqvist ha escapado. Volverá a aparecer.", Tone = "bad", Retry = 25 },
                 },
             },
@@ -257,7 +257,7 @@ namespace Bastion.Engine
                 },
                 Outcomes = new Dictionary<string, QuestOutcome>
                 {
-                    ["success"] = new QuestOutcome { Text = "Otto Brandt monta su radio en el Bastión. Con él, la radio llega a una zona más.", Tone = "good", Contacts = 1 },
+                    ["success"] = new QuestOutcome { Text = "Otto Brandt monta su radio en el Bastion. Con él, la radio llega a una zona más.", Tone = "good", Contacts = 1 },
                     ["failure"] = new QuestOutcome { Text = "No llegamos a tiempo. Morse firma el informe y no añade nada.", Tone = "bad" },
                 },
             },
@@ -354,7 +354,7 @@ namespace Bastion.Engine
                     new QuestDecision
                     {
                         Title = "El topo",
-                        Text = "Alguien del Bastión pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.",
+                        Text = "Alguien del Bastion pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.",
                         Options = new[]
                         {
                             new QuestChoice { Label = "Vigilar a {a}", Effect = "Una semana de vigilancia", Then = "next", Clue = true },

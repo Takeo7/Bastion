@@ -31,13 +31,13 @@ namespace Bastion.Engine
                 }
                 if (ending == "record")
                 {
-                    return "La Marea se deshizo en la sierra. La vacuna salió del Bastión en La Lata, punto de cambio por punto de cambio, solo para quienes cumplieron sus tratos. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en el Bastión, bajo llave.";
+                    return "La Marea se deshizo en la sierra. La vacuna salió del Bastion en La Lata, punto de cambio por punto de cambio, solo para quienes cumplieron sus tratos. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en el Bastion, bajo llave.";
                 }
                 return "La Marea se ha deshecho en la sierra. Por primera vez en dos inviernos, el valle duerme sin oír pasos.";
             }
             return doomFull
-                ? "Kilómetro cero. La Marea llegó al Bastión con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir."
-                : "No queda nadie que conteste por radio. El Bastión se queda a oscuras.";
+                ? "Kilómetro cero. La Marea llegó al Bastion con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir."
+                : "No queda nadie que conteste por radio. El Bastion se queda a oscuras.";
         }
     }
 }

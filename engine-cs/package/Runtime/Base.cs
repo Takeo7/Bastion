@@ -444,7 +444,7 @@ namespace Bastion.Engine
                 if (c.X < BaseEdge || c.Y < BaseEdge || c.X >= @base.Width - BaseEdge || c.Y >= @base.Height - BaseEdge) return "Ahí no: es el borde del claro.";
                 if (TreeAt(@base, c.X, c.Y)) return "Hay árboles: tala antes.";
                 if (PieceAt(@base, c.X, c.Y) != null) return "Ahí ya hay algo.";
-                if (id != PieceIds.Caravan && OnBastionLot(@base, c.X, c.Y)) return "Ahí no: ese sitio es para el Bastión, que crece con cada nivel.";
+                if (id != PieceIds.Caravan && OnBastionLot(@base, c.X, c.Y)) return "Ahí no: ese sitio es para el Bastion, que crece con cada nivel.";
             }
             return null;
         }
@@ -907,7 +907,7 @@ namespace Bastion.Engine
             return new MissionLayout
             {
                 Id = "base",
-                Name = "El Bastión",
+                Name = "El Bastion",
                 Biome = Biomes.Wilds,
                 Width = width,
                 Height = height,

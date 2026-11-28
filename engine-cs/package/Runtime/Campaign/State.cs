@@ -128,7 +128,7 @@ namespace Bastion.Engine
                 if (c.Soldiers.Any((s) => s.Owner == owner && s.Alive)) continue;
                 var s = AddSoldier(c, owner, rng);
                 // Whose it is, without naming a side: left and right are each player's own (Lore, 2/11).
-                Log(c, $"{s.Name} se une al Bastión como recluta: {(c.Players.Count > 1 ? "a un jugador no le quedaban" : "no quedaban")} soldados vivos.", LogTones.Good);
+                Log(c, $"{s.Name} se une al Bastion como recluta: {(c.Players.Count > 1 ? "a un jugador no le quedaban" : "no quedaban")} soldados vivos.", LogTones.Good);
                 came = true;
             }
             return came;

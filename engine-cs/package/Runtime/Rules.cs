@@ -922,9 +922,12 @@ namespace Bastion.Engine
             var pendingAp = ap >= 2 ? 1 : 0;
             int? pendingMoves = ap >= 2 ? Paths.MoveBudget(S, u) : ap == 1 ? Math.Min(Paths.CostAlong(S, u, u.Pos, path), Paths.MoveBudget(S, u)) : (int?)null;
             bool? pendingRun = run ? true : (bool?)null;
+            // What the first segment took off its movement for the whole way (ap 1): given back for the way not walked, cut short.
+            var taken = 0;
             void Flush()
             {
                 if (segment.Count == 0) return;
+                if (ap == 1) taken += pendingMoves ?? 0;
                 Emit(new MovedEvent { Unit = u.Id, Path = segment, Ap = pendingAp, Moves = pendingMoves, Run = pendingRun });
                 pendingAp = 0;
                 pendingMoves = null;
@@ -958,6 +961,12 @@ namespace Bastion.Engine
                         }
                         var end = back.Count > 0 ? back[back.Count - 1] : null;
                         if (end != null && Flights.CanStopAt(S, end) && Grid.UnitAt(S, end) == null) Emit(new MovedEvent { Unit = u.Id, Path = back, Ap = 0 });
+                    }
+                    // Note 12 (28/11): why it stopped, and the way it didn't walk given back (the steps back are free, as before).
+                    if (u.Alive)
+                    {
+                        var unwalked = taken - Paths.CostAlong(S, u, origin, path.Take(i).ToList());
+                        Emit(new WalkBlockedEvent { Unit = u.Id, By = blocker.Id, At = Engine.Events.CopyPos(step), Moves = unwalked > 0 ? unwalked : (int?)null });
                     }
                     return;
                 }
@@ -2097,6 +2106,21 @@ namespace Bastion.Engine
 
     public static partial class Rules
     {
+        /// <summary>
+        /// Whether `slot` holds the squad's command: theirs, nobody's, or of one not here (`connected`: the room's, a seat
+        /// dropped in its grace too). Who holds it acts (ExecuteCommand).
+        /// </summary>
+        public static bool HoldsCommand(GameState s, int slot, IReadOnlyList<int> connected) => s.Command == slot || s.Command == null || !connected.Contains(s.Command.Value);
+
+        /// <summary>
+        /// «Terminar turno» (note 10, Arturo, cuadro 189: «solo con el mando en tu mano»): the squad's turn, the fight going
+        /// on, and the command in `slot`'s hand (HoldsCommand). No turn waits on one without it: the one who holds it passes
+        /// it on, ending (EndTurnCommand) or once they have nothing left to do (AutoPassCommand); their clock run out, it goes
+        /// (RunOutOfTime); one gone, theirs pass to who is here (SyncTurn); and with nothing left to anyone the turn ends by
+        /// itself (MaybeEndXcomTurn). The rules still take the order from anyone (a click as the command passes; the bots).
+        /// </summary>
+        public static bool MayEndTurn(GameState s, int slot, IReadOnlyList<int> connected) => s.Outcome == null && s.ActiveTeam == Teams.Xcom && s.Realtime == null && HoldsCommand(s, slot, connected);
+
         /// <summary>Everything the squad does makes this much more noise than its table says (Ana, 23/10: «un 15 % más de ruido»).</summary>
         public const double SquadLouder = 1.15;
 
@@ -2303,7 +2327,7 @@ namespace Bastion.Engine
                     if (!string.IsNullOrEmpty(loot.Item) && Beltable(loot.Item!)) return Content.Items[loot.Item!].Charges == null && u.Gear.Contains(loot.Item!) ? "Ya lleva eso puesto." : null;
                     if (!string.IsNullOrEmpty(loot.Item)) return "La munición se monta en el arma, en la Armería.";
                     if (string.IsNullOrEmpty(loot.Weapon)) return "Solo se equipan las armas, los chalecos y lo del cinturón.";
-                    if (u.Arms == null) return "Las armas encontradas son para el Bastión.";
+                    if (u.Arms == null) return "Las armas encontradas son para el Bastion.";
                     return null;
             }
             return null;
@@ -2367,7 +2391,7 @@ namespace Bastion.Engine
 
             var partner = ctx.Slot == 0 ? 1 : 0;
             // Whoever holds the command acts; if it's held by nobody here, the first to act takes it.
-            var holds = s.Command == ctx.Slot || s.Command == null || !ctx.Connected.Contains(s.Command.Value);
+            var holds = Rules.HoldsCommand(s, ctx.Slot, ctx.Connected);
 
             if (cmd is EndTurnCommand end)
             {

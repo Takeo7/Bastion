@@ -323,12 +323,13 @@ namespace Bastion.UI.Start
             return b;
         }
 
-        /// <summary>Arte's worn «BASTIÓN» (cuadro 149); the boot's sheet takes it too (LoadWindow.StartTitle).</summary>
+        /// <summary>Arte's worn, stencilled «BASTION» (cuadro 149; without its accent since 28/11); the boot's sheet takes it too (LoadWindow.StartTitle).</summary>
         public const string TitleArt = "Start/titulo";
 
         /// <summary>
-        /// Arte's title placed as Arturo's picture's (CORRECCIONES-2): 29 % of the screen's width, as high as its own shape
-        /// makes it, its letters (from TitleAccent of the picture down: the accent stands over them) from 5.9 % of the height.
+        /// Arte's title placed as Arturo's picture's (CORRECCIONES-2; his final one of 28/11, measured: its letters from
+        /// 35.4 % to 64.4 % of the width and from 5.8 % of the height): 29 % of the screen's width, as high as its own shape
+        /// makes it (Arte's picture ends at its letters, no accent over them any more), from 5.8 % of the height.
         /// </summary>
         public static void PlaceTitle(VisualElement title, Texture2D art, float w, float h)
         {
@@ -338,11 +339,11 @@ namespace Bastion.UI.Start
             title.style.left = Mathf.Round((w - width) / 2);
             title.style.right = StyleKeyword.Auto;
             title.style.width = width;
-            title.style.top = Mathf.Round(h * TitleLetters - TitleAccent * high);
+            title.style.top = Mathf.Round(h * TitleLetters);
             title.style.height = high;
         }
 
-        const float TitleWide = 0.29f, TitleLetters = 0.059f, TitleAccent = 0.242f;
+        const float TitleWide = 0.29f, TitleLetters = 0.058f;
 
         /// <summary>A main menu's entry (cuadro 149; StartLook): the button of the layout by its name.</summary>
         Button Entry(string name, string text, Action click)

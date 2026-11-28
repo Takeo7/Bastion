@@ -78,7 +78,7 @@ namespace Bastion.Engine.Tests
             Campaign.AdvanceTime(c, new Rng(2));
             Assert.Equal(1, c.Soldiers.Count((s) => s.Owner == 1 && s.Alive));
             Assert.Equal(credits, c.Credits);
-            Assert.Contains(c.Log, (l) => l.Text.EndsWith(" se une al Bastión como recluta: a un jugador no le quedaban soldados vivos.", System.StringComparison.Ordinal));
+            Assert.Contains(c.Log, (l) => l.Text.EndsWith(" se une al Bastion como recluta: a un jugador no le quedaban soldados vivos.", System.StringComparison.Ordinal));
         }
 
         /// <summary>A mission of the campaign flown to victory, with `edit` done to it first, and the siege brought on after it.</summary>

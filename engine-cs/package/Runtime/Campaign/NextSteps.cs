@@ -52,7 +52,7 @@ namespace Bastion.Engine
             {
                 // The dead at the base: straight to the squad, by La Lata, where everyone healthy is already on it.
                 var partnerReady = shared && c.LaunchReady[partner] && !c.LaunchReady[slot];
-                steps.Add(Step(BaseViews.Squad, partnerReady ? $"{partnerName} ya ha dado el sí: {mission.Name}" : $"{Lore.BaseSiegeText.Here} Defended el Bastión", NextStepTones.Urgent));
+                steps.Add(Step(BaseViews.Squad, partnerReady ? $"{partnerName} ya ha dado el sí: {mission.Name}" : $"{Lore.BaseSiegeText.Here} Defended el Bastion", NextStepTones.Urgent));
             }
             else if (mission != null)
             {
@@ -117,7 +117,7 @@ namespace Bastion.Engine
 
             // The Bastion one level up, once it can be bought (18/10 #40).
             var up = NextLevel(c);
-            if (up != null && LevelUpBlocker(c) == null) steps.Add(Step(BaseViews.Hub, $"Sube el Bastión a {Lore.BastionLevelThe(up.Level)} ({up.Cost} §)", NextStepTones.Info));
+            if (up != null && LevelUpBlocker(c) == null) steps.Add(Step(BaseViews.Hub, $"Sube el Bastion a {Lore.BastionLevelThe(up.Level)} ({up.Cost} §)", NextStepTones.Info));
             // The Taller has something within reach to make.
             var craft = Progression.CraftOrder.FirstOrDefault((id) => CraftBlocker(c, id) == null);
             if (craft != null) steps.Add(Step(BaseViews.Engineering, $"El Taller puede hacer {Progression.Crafts[craft].The}", NextStepTones.Info));

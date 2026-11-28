@@ -307,8 +307,8 @@ namespace Bastion.Engine
         /// <summary>The Bastion's level, bought now (playtest 18/10 #40: suministros and missions done, no experience).</summary>
         public static class LevelText
         {
-            public const string About = "Cada nivel del Bastión abre piezas nuevas para construir y el siguiente capítulo de la historia.";
-            public const string Top = "El Bastión ya está en su nivel más alto.";
+            public const string About = "Cada nivel del Bastion abre piezas nuevas para construir y el siguiente capítulo de la historia.";
+            public const string Top = "El Bastion ya está en su nivel más alto.";
         }
 
         /// <summary>The button's line: «Subir a la casa móvil: 160 §.» (what blocks it is levelUpBlocker's, in campaign.ts).</summary>
@@ -615,10 +615,10 @@ namespace Bastion.Engine
             public const string Night = "Es de noche: no se les ve hasta que están en la valla.";
             /// <summary>The rule, for the help and the errors (not for the notice).</summary>
             public const string Defenders = "Defienden los sanos; si no queda ninguno, los heridos.";
-            public const string Fallen = "El Bastión ha caído";
+            public const string Fallen = "El Bastion ha caído";
             public const string FallenLine = "Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la autocaravana y lo puesto, y vuelven a empezar en otro claro.";
             public const string Nobody = "No queda nadie";
-            public const string NobodyLine = "El Bastión ha caído con todos dentro. La campaña termina aquí.";
+            public const string NobodyLine = "El Bastion ha caído con todos dentro. La campaña termina aquí.";
         }
     }
 }

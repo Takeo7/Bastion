@@ -279,13 +279,13 @@ namespace Bastion.Net
                 var version = data?["version"];
                 if (data == null || version == null || version.Type != JTokenType.Integer)
                 {
-                    error = "no es una partida de Bastión";
+                    error = "no es una partida de Bastion";
                     return false;
                 }
                 // From a newer Bastión: taken down to this shape it would lose what it has, so it isn't read (Load keeps it aside).
                 if ((int)version > SaveVersion)
                 {
-                    error = "es de una versión más nueva de Bastión";
+                    error = "es de una versión más nueva de Bastion";
                     return false;
                 }
                 // A campaign older than FreshVersion doesn't go on (the runs, 16/11; the progression of the 0.7 before): the
@@ -302,7 +302,7 @@ namespace Bastion.Net
                 var campaignVersion = (data["campaign"] as JObject)?["version"];
                 if (campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion > Campaign.RunsCampaignVersion)
                 {
-                    error = "es de una versión más nueva de Bastión";
+                    error = "es de una versión más nueva de Bastion";
                     return false;
                 }
                 if (!(data["seats"] is JArray))

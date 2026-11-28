@@ -18,7 +18,7 @@ namespace Bastion.Engine
         /// </summary>
         private static void ReachedLevel(CampaignState c, int level, Rng rng)
         {
-            Log(c, $"El Bastión ya es {Lore.BastionLevelA(level)}.", LogTones.Good);
+            Log(c, $"El Bastion ya es {Lore.BastionLevelA(level)}.", LogTones.Good);
             // What only the radio told before the transmissions went (Ana's #1 of 2/11).
             if (level == Lore.PartituraLevel) Log(c, Lore.MareaNamed);
             var arms = c.Pistols != true && Progression.LevelArms.TryGetValue(level, out var brought) ? brought : new string[0];
@@ -275,7 +275,7 @@ namespace Bastion.Engine
                 if (Recruits(r))
                 {
                     var s = AddSoldier(c, NeediestPlayer(c), rng);
-                    Log(c, $"{s.Name} se une al Bastión como recluta.", LogTones.Good);
+                    Log(c, $"{s.Name} se une al Bastion como recluta.", LogTones.Good);
                 }
                 if (offer.Facility != null)
                 {
@@ -318,7 +318,7 @@ namespace Bastion.Engine
             if (!c.Soldiers.Any((s) => s.Alive))
             {
                 c.Outcome = Outcomes.Defeat;
-                Log(c, siege ? $"{Lore.BaseSiegeText.Nobody}. {Lore.BaseSiegeText.NobodyLine}" : "No quedan soldados. El Bastión ha caído.", LogTones.Bad);
+                Log(c, siege ? $"{Lore.BaseSiegeText.Nobody}. {Lore.BaseSiegeText.NobodyLine}" : "No quedan soldados. El Bastion ha caído.", LogTones.Bad);
             }
             else if (siege && !victory)
             {

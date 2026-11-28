@@ -58,6 +58,19 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// Note 12 (Arturo, 28/11): a walk cut short because someone came into the way since it was planned (WalkBlockedEvent).
+        /// The word over the soldier, as WoundedText.FellFloat; the log's line, with whoever cut it off as the log names them
+        /// (a soldier's or a civilian's name, «un corredor»), or null when they aren't in sight; and, when the way not walked
+        /// is given back (`back`: the event's Moves), that it is.
+        /// </summary>
+        public static class WalkText
+        {
+            public const string Float = "CAMINO CORTADO";
+            public static string Blocked(string who, string? by, bool back) =>
+                $"{who} se para: {(by != null ? by : "alguien que no se ve")} le corta el paso.{(back ? " Recupera el movimiento que no ha andado." : "")}";
+        }
+
+        /// <summary>
         /// The storey shown and how to change it (N4, cuadro 121): the fixed selector («▲ Planta 1 ▼») and, aiming something
         /// thrown, the line with the storey and its keys (the help's «RePág / AvPág»). «Planta», as the game says it everywhere
         /// («Subir de planta», RubbleText.FallLine), not «piso».

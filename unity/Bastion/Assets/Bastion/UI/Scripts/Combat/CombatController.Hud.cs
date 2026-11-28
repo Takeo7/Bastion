@@ -36,6 +36,11 @@ namespace Bastion.UI.Combat
             var busy = AbilityTexts.BusySlots(s);
             var partner = PartnerHere();
             var mine = HasCommand();
+            if (mine && noCommandSaid != null)
+            {
+                Hud.ClearToast(noCommandSaid);
+                noCommandSaid = null;
+            }
             ActionBarView bar;
             using (MBar.Auto()) bar = new ActionBarView { Abilities = BarKeys() };
             // The host ahead of the screen (the enemy's turn worked out, to the end even, and not played yet: R23 A1): one of
@@ -65,14 +70,17 @@ namespace Bastion.UI.Combat
             var ready = s.Ready[MySlot];
             var waiting = partner != null && busy.Contains(partner.Slot) && !s.Ready[partner.Slot] ? partner.Name : null;
             var idle = IdleSoldiers();
-            // Without the command too (Arturo, 7/11): the key ends one's own turn, «A punto» until the partner's is over.
+            // Only with the command in one's hand (note 10, Arturo, 28/11, cuadro 189, over his 7/11's «A punto» without it;
+            // the rules' MayEndTurn, which is CanAct and HasCommand here): without it the key is off and says who holds it
+            // («waiting»). «A punto», pressed with the command before it passed, stays said, and can't be taken back from
+            // there (Holder: the key off too). No turn waits on it: Gameplay's AutoPassCommand and MaybeEndXcomTurn.
             // One of mine in play: the key ends its turn first (Arturo, 7/11, Ana's #5).
             var playing = InPlayMine();
             // The stage over: no key to end a turn (Producto, 18/11: one left alone under the card); over on screen, not
             // only for the host (R23 A1: gone while the last enemy turn still played, the row empty).
-            var endMode = Shown.Outcome != null ? "over" : !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : (EndArmed && idle > 0) || (playing != null && WarnedLeft) ? "confirm" : playing != null && !EndArmed ? "done" : "act";
+            var endMode = Shown.Outcome != null ? "over" : !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : !mine ? "waiting" : (EndArmed && idle > 0) || (playing != null && WarnedLeft) ? "confirm" : playing != null && !EndArmed ? "done" : "act";
             // (With actions or movement left: the turn ends by itself only when none has either, Arturo 5/11 #14; Lore's words.)
-            var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} sin terminar" : waiting;
+            var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} sin terminar" : endMode == "waiting" ? PlayerName(s.Command) : waiting;
             Hud.SetEndTurn(new EndTurnView
             {
                 Mode = endMode, Detail = detail, Holder = ready && !mine && s.Command != null ? PlayerName(s.Command) : null,

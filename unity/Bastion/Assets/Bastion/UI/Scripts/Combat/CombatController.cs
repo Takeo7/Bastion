@@ -960,8 +960,10 @@ namespace Bastion.UI.Combat
             var away = Rig != null && (Rig.Away || Rig.Overhead) || Film;
             // Another one acting on another storey (the review of 10/11, E-08: the cutaway shows theirs while it plays): the
             // picked one's range, on its own storey, would float over theirs; back as it ends.
-            var acting = ActingFocus?.Invoke();
-            var elsewhere = acting != null && acting.Value.actor != picked && UnitById(Shown, acting.Value.actor) is Unit actor && actor.Pos.Z != Level;
+            // (Between the partner's actions too, while Arte's cutaway goes on showing the storey of the one it follows:
+            // note 11, 28/11, Cutaway.Following.)
+            var shown = ActingFocus?.Invoke()?.actor ?? Bastion.Client.Map.Cutaway.Current?.Following;
+            var elsewhere = shown != null && shown != picked && UnitById(Shown, shown) is Unit actor && actor.Pos.Z != Level;
             Overlay?.Cinematic(away || elsewhere);
             AimMarks?.Cinematic(away);
             Hud?.SetSight(SightNow());
@@ -1200,6 +1202,11 @@ namespace Bastion.UI.Combat
             var cut = Bastion.Client.Map.Cutaway.Current;
             if (cut == null) return;
             cut.Focus.selected = picked;
+            // The player's seat, for whose it is to play as the screen shows it (Arte's «mine», note 11, 28/11: not the picked
+            // soldier's owner, wrong with another's picked or none). A holder who has left blocks nobody (HasCommand): the
+            // command they still hold on screen counts as the player's.
+            var held = Shown?.Command;
+            cut.Focus.slot = held != null && !Players.Any(p => p.Slot == held && p.Connected) ? held : MySlot;
             cut.Focus.hover = hover;
             cut.Focus.target = mode == Mode.Target ? targetId : null;
             var close = CloseFocus?.Invoke();

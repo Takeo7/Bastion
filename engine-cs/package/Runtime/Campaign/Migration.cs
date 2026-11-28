@@ -52,7 +52,7 @@ namespace Bastion.Engine
                     c.Bastion.Pieces = c.Bastion.Pieces.Where((q) => q != p).ToList();
                     c.Credits += def.Cost.Supplies;
                     c.Parts = (c.Parts ?? 0) + (def.Cost.Parts ?? 0);
-                    Log(c, $"Se desmonta {Lore.PieceTexts.All[p.Piece].The} para dejar sitio al Bastión: +{def.Cost.Supplies} §.");
+                    Log(c, $"Se desmonta {Lore.PieceTexts.All[p.Piece].The} para dejar sitio al Bastion: +{def.Cost.Supplies} §.");
                 }
             }
             if (version < 23)
@@ -65,7 +65,7 @@ namespace Bastion.Engine
                     var def = Base.Pieces[p.Piece];
                     c.Credits += def.Cost.Supplies;
                     c.Parts = (c.Parts ?? 0) + (def.Cost.Parts ?? 0);
-                    Log(c, $"Se desmonta {Lore.PieceTexts.All[p.Piece].The} para dejar sitio al Bastión: +{def.Cost.Supplies} §.");
+                    Log(c, $"Se desmonta {Lore.PieceTexts.All[p.Piece].The} para dejar sitio al Bastion: +{def.Cost.Supplies} §.");
                 }
                 var o = (c.Bastion.Width - was) / 2;
                 if (o > 0 && c.SiegePosts != null)

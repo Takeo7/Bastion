@@ -91,7 +91,7 @@ namespace Bastion.Engine
         /// `trunk`: with a trunk; without one, PackFull.
         /// </summary>
         public static string NoRoomToBuy(string name, bool trunk) => trunk ? $"No cabe en la mochila de {First(name)} ni en el baúl." : PackFull(name);
-        public const string NoBeds = "No caben más soldados en el Bastión.";
+        public const string NoBeds = "No caben más soldados en el Bastion.";
         public const string Pending = "Ya hay una propuesta pendiente.";
 
         public static string Missing(int supplies) => $"Faltan {supplies} §.";
@@ -125,13 +125,13 @@ namespace Bastion.Engine
         public static string RunStarted(int chapter) => $"Parte la escuadra: expedición al capítulo {chapter}.";
         public static string ChapterDone(int chapter) => $"Capítulo {chapter} superado. La escuadra vuelve a la base.";
         /// <summary>Someone joins (a Rescate, a Suceso): with the squad, or at the base when it goes full (`inSquad` false).</summary>
-        public static string SurvivorJoins(string name, bool inSquad = true) => inSquad ? $"{name} se une a la escuadra." : $"{name} se une al Bastión y espera en la base: la escuadra va completa.";
+        public static string SurvivorJoins(string name, bool inSquad = true) => inSquad ? $"{name} se une a la escuadra." : $"{name} se une al Bastion y espera en la base: la escuadra va completa.";
         /// <summary>
         /// A survivor brought out with every player at the soldiers' cap (cuadro 140, M7): they don't stay. Lore's words (23/11),
         /// as NoBeds and SurvivorJoins say the Bastión and its soldiers.
         /// </summary>
-        public static string SurvivorNoRoom(string name) => $"{name} no se queda: en el Bastión ya no caben más soldados.";
-        public static string Recruit(string name) => $"{name} se une al Bastión como recluta: no quedaban soldados vivos.";
+        public static string SurvivorNoRoom(string name) => $"{name} no se queda: en el Bastion ya no caben más soldados.";
+        public static string Recruit(string name) => $"{name} se une al Bastion como recluta: no quedaban soldados vivos.";
         public const string Wiped = "Cae toda la escuadra. Lo que llevaban se pierde.";
         /// <summary>N8 (cuadro 118): nobody left alive in the game, the base too, and it is lost.</summary>
         public const string GameLost = "No queda ningún soldado vivo, ni en la base. La partida está perdida.";

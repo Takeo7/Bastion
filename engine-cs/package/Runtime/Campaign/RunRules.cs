@@ -147,18 +147,29 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// A player who joins a run with none of their soldiers in it (the room calls it): half the squad, rounded down and
-        /// at least one if there are two, passes to them till the run ends (RunState.hands). How many.
+        /// A player who joins a run with none of their soldiers in it (the room calls it; N8: left with nobody alive): half
+        /// the squad, rounded down and at least one if there are two, passes to them till the run ends (RunState.hands). One
+        /// new to the game has that half already, theirs (AddPlayer). How many.
         /// </summary>
         public static int HandOver(CampaignState c, int slot, IReadOnlyList<int> connected)
         {
             var run = c.Run;
             if (run == null || !connected.Contains(slot)) return 0;
-            var squad = run.Squad.Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id)).Where((s) => s != null && s.Alive).Select((s) => s!).ToList();
-            if (squad.Any((s) => (run.Hands != null && run.Hands.TryGetValue(s.Id, out var hand) ? hand : s.Owner) == slot)) return 0;
+            if (SquadStanding(c).Any((s) => (run.Hands != null && run.Hands.TryGetValue(s.Id, out var hand) ? hand : s.Owner) == slot)) return 0;
+            var half = HalfTheSquad(c);
+            foreach (var s in half) (run.Hands ??= new Dictionary<string, int>())[s.Id] = slot;
+            return half.Count;
+        }
+
+        /// <summary>The run's squad alive, in its order.</summary>
+        private static List<CampaignSoldier> SquadStanding(CampaignState c) => c.Run!.Squad.Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id)).Where((s) => s != null && s.Alive).Select((s) => s!).ToList();
+
+        /// <summary>The run squad's half a partner with none of it gets (HandOver, AddPlayer): its last ones, rounded down and at least one if there are two.</summary>
+        private static List<CampaignSoldier> HalfTheSquad(CampaignState c)
+        {
+            var squad = SquadStanding(c);
             var n = squad.Count >= 2 ? Math.Max(1, squad.Count / 2) : 0;
-            foreach (var s in squad.Skip(squad.Count - n)) (run.Hands ??= new Dictionary<string, int>())[s.Id] = slot;
-            return n;
+            return squad.Skip(squad.Count - n).ToList();
         }
 
         /// <summary>
@@ -274,20 +285,23 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// A partner who joins a run campaign started without them (Campaign.AddPlayer): the other's rookies that never went
-        /// out and aren't in a run change hands, never leaving the other with fewer than two; recruits with a knife make up
-        /// the rest of their two. How many they got.
+        /// A partner who joins a run campaign started without them (Campaign.AddPlayer): with a run under way, first the half
+        /// of its squad HandOver would lend them, theirs now (note 9, 28/11: lent, the squad fallen left the base all theirs);
+        /// then the other's rookies that never went out and aren't in a run; all never leaving the other with fewer than two.
+        /// Recruits with a knife make up the rest of their two. How many they got.
         /// </summary>
         public static int AddPlayer(CampaignState c, int slot, Rng rng)
         {
             if (c.Players.Contains(slot)) return 0;
             c.Players = c.Players.Append(slot).OrderBy((p) => p).ToList();
             var rookies = new List<CampaignSoldier>();
-            foreach (var s in Enumerable.Reverse(c.Soldiers.Where((x) => x.Owner != slot && x.Alive && x.Missions == 0 && c.Run?.Squad.Contains(x.Id) != true).ToList()))
+            bool Spare(CampaignSoldier s) => c.Soldiers.Count((x) => x.Owner == s.Owner && x.Alive) - rookies.Count((r) => r.Owner == s.Owner) > StartSoldiers;
+            var lent = c.Run != null ? HalfTheSquad(c) : new List<CampaignSoldier>();
+            var home = Enumerable.Reverse(c.Soldiers.Where((x) => x.Alive && x.Missions == 0 && c.Run?.Squad.Contains(x.Id) != true).ToList());
+            foreach (var s in lent.Concat(home).Where((x) => x.Owner != slot))
             {
                 if (rookies.Count >= StartSoldiers) break;
-                if (c.Soldiers.Count((x) => x.Owner == s.Owner && x.Alive) - rookies.Count((r) => r.Owner == s.Owner) <= StartSoldiers) continue;
-                rookies.Add(s);
+                if (Spare(s)) rookies.Add(s);
             }
             foreach (var s in rookies)
             {

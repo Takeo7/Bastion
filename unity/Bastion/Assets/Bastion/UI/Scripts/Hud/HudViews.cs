@@ -99,7 +99,7 @@ namespace Bastion.UI.Hud
         public string Mode = "act";
         /// <summary>Who is waited for, or how many soldiers still have actions.</summary>
         public string Detail;
-        /// <summary>Ready without the command (Arturo, 7/11): who holds it, the turn over when theirs is; null, one holds it.</summary>
+        /// <summary>Ready without the command (Arturo, 7/11): who holds it, the turn over when theirs is, the key off (note 10); null, one holds it.</summary>
         public string Holder;
         /// <summary>Mode «done»: the soldier in play whose turn the key ends first (Arturo, 7/11, Ana's #5), and who the command passes to (null, nobody).</summary>
         public string InPlay;

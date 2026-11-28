@@ -88,7 +88,7 @@ namespace Bastion.Engine.Tests
 
             // regions
             Assert.Equal("el Refugio de Metsovo", Lore.RegionLores["weu"].Ally);
-            Assert.Equal("Los pueblos de la sierra, bajo el Bastión. La nieve y la altura frenan a los zombis; los Cuervos, no.", Lore.RegionLores["weu"].Situation);
+            Assert.Equal("Los pueblos de la sierra, bajo el Bastion. La nieve y la altura frenan a los zombis; los Cuervos, no.", Lore.RegionLores["weu"].Situation);
             Assert.Equal("los del Hospital", Lore.RegionLores["afr"].Ally);
             Assert.Equal("La primera ciudad caída. Calles llenas de zombis y farmacias que nadie ha terminado de vaciar.", Lore.RegionLores["afr"].Situation);
             Assert.Equal("la Red Callada", Lore.RegionLores["eas"].Ally);
@@ -504,11 +504,11 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Alojas tú la partida: si sales, Ana se desconecta hasta que vuelvas a abrirla.", Lore.QuitHostWarning("Ana"));
             Assert.Equal("Arturo sigue la misión sin ti, y manda en tus soldados hasta que vuelvas.", Lore.QuitGuestWarning("Arturo"));
             // Joining, the host not reached (cuadro 172): why, and what to touch.
-            Assert.Equal("Este Mac no deja a Bastión usar la red local: en Ajustes del Sistema › Privacidad y seguridad › Red local, activa «Bastión 0.14.12». Si salen otras versiones de Bastión, bórralas.", Lore.JoinText.NoLocalNetworkMac("0.14.12"));
-            Assert.Equal("Este iPad no deja a Bastión usar la red local: en Ajustes › Privacidad y seguridad › Red local, activa Bastión.", Lore.JoinText.NoLocalNetworkIos("iPad"));
+            Assert.Equal("Este Mac no deja a Bastion usar la red local: en Ajustes del Sistema › Privacidad y seguridad › Red local, activa «Bastion 0.14.12». Si salen otras versiones de Bastion, bórralas.", Lore.JoinText.NoLocalNetworkMac("0.14.12"));
+            Assert.Equal("Este iPad no deja a Bastion usar la red local: en Ajustes › Privacidad y seguridad › Red local, activa Bastion.", Lore.JoinText.NoLocalNetworkIos("iPad"));
             Assert.Equal("No hay camino hasta 192.168.1.20:41391 desde aquí. Mirad que los dos estéis en la misma wifi; desde otra red, usad la dirección «Por internet, con la clave» o la de «Con Tailscale».", Lore.JoinText.NoRoute("192.168.1.20:41391"));
             Assert.Equal("En 192.168.1.20:41391 no hay ninguna partida abierta. Que quien aloja pulse «Alojar», y copiad la dirección entera de su sala.", Lore.JoinText.Refused("192.168.1.20:41391"));
-            Assert.Equal("No responde nadie en 192.168.1.20:41391. Mirad que la dirección sea la de su sala, que quien aloja haya permitido a Bastión en su cortafuegos y que ninguno de los dos tenga una VPN puesta. Desde otra red, usad la dirección «Por internet, con la clave» o la de «Con Tailscale».", Lore.JoinText.NoAnswer("192.168.1.20:41391"));
+            Assert.Equal("No responde nadie en 192.168.1.20:41391. Mirad que la dirección sea la de su sala, que quien aloja haya permitido a Bastion en su cortafuegos y que ninguno de los dos tenga una VPN puesta. Desde otra red, usad la dirección «Por internet, con la clave» o la de «Con Tailscale».", Lore.JoinText.NoAnswer("192.168.1.20:41391"));
             Assert.Equal("Cuando la vuelva a abrir, podrás entrar de nuevo.", Lore.HostClosed.Back);
             Assert.Equal("Volver a entrar", Lore.HostClosed.Retry);
             Assert.Equal("Aún no está abierta.", Lore.HostClosed.NotYet);
@@ -598,20 +598,20 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Salen del pinar y no dejan de salir. Coged las armas.", Lore.BaseSiegeText.Arrival);
             Assert.Equal("Es de noche: no se les ve hasta que están en la valla.", Lore.BaseSiegeText.Night);
             Assert.Equal("Defienden los sanos; si no queda ninguno, los heridos.", Lore.BaseSiegeText.Defenders);
-            Assert.Equal("El Bastión ha caído", Lore.BaseSiegeText.Fallen);
+            Assert.Equal("El Bastion ha caído", Lore.BaseSiegeText.Fallen);
             Assert.Equal("Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la autocaravana y lo puesto, y vuelven a empezar en otro claro.", Lore.BaseSiegeText.FallenLine);
             Assert.Equal("No queda nadie", Lore.BaseSiegeText.Nobody);
-            Assert.Equal("El Bastión ha caído con todos dentro. La campaña termina aquí.", Lore.BaseSiegeText.NobodyLine);
+            Assert.Equal("El Bastion ha caído con todos dentro. La campaña termina aquí.", Lore.BaseSiegeText.NobodyLine);
             Assert.Equal(new string[] { "norte", "este", "sur", "oeste" }, Lore.Sides);
             Assert.Equal("Asedio", Lore.SiegeText.Name);
             Assert.Equal("La muralla, cuatro torres y ocho oleadas", Lore.SiegeText.Menu);
             Assert.Equal("Llegan en ocho oleadas, una al final de cada turno y cada vez más grandes, y van a por los vivos. Tiran puertas y barricadas para llegar a vosotros, y no se sabe por dónde entrarán.", Lore.SiegeText.Briefing);
             Assert.Equal("No vienen más", Lore.SiegeText.NoMoreWaves);
-            Assert.Equal("El Bastión aguanta: los que quedan se retiran", Lore.SiegeText.Held);
-            Assert.Equal("El Bastión aguanta: no queda ninguno en pie", Lore.SiegeText.Cleared);
-            Assert.Equal("El Bastión ha caído: no queda nadie para defenderlo", Lore.SiegeText.Wiped);
+            Assert.Equal("El Bastion aguanta: los que quedan se retiran", Lore.SiegeText.Held);
+            Assert.Equal("El Bastion aguanta: no queda ninguno en pie", Lore.SiegeText.Cleared);
+            Assert.Equal("El Bastion ha caído: no queda nadie para defenderlo", Lore.SiegeText.Wiped);
             Assert.Equal("Acabad con todos", Lore.SiegeObjective());
-            Assert.Equal("Acabad con todas las oleadas. Si caen todos, el Bastión cae.", Lore.SiegeObjectiveTip(11));
+            Assert.Equal("Acabad con todas las oleadas. Si caen todos, el Bastion cae.", Lore.SiegeObjectiveTip(11));
             Assert.Equal("Próxima oleada: al final de este turno.", Lore.WaveDueLine(3, 3));
             Assert.Equal("Este turno", Lore.WaveDueShort(3, 3));
             Assert.Equal("Próxima oleada: al final del próximo turno.", Lore.WaveDueLine(4, 3));
@@ -1479,8 +1479,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Subir a la casa fortificada: 160 §.", Lore.LevelUpLine(9, 160));
             Assert.Equal("Cada misión es un día, y esperar uno también: se curan las heridas, se come y la Marea avanza. Construir, comprar o reclutar no gasta tiempo.", Lore.TimeHelp(9));
             Assert.Equal("Se desbloquea con la casa fortificada.", Lore.NeedsLevelLine(9));
-            Assert.Equal("Cada nivel del Bastión abre piezas nuevas para construir y el siguiente capítulo de la historia.", Lore.LevelText.About);
-            Assert.Equal("El Bastión ya está en su nivel más alto.", Lore.LevelText.Top);
+            Assert.Equal("Cada nivel del Bastion abre piezas nuevas para construir y el siguiente capítulo de la historia.", Lore.LevelText.About);
+            Assert.Equal("El Bastion ya está en su nivel más alto.", Lore.LevelText.Top);
             Assert.Equal("AÚN SIN SALIR", Lore.OutingsMark(-1));
             Assert.Equal("AÚN SIN SALIR", Lore.OutingsMark(0));
             Assert.Equal("1 SALIDA", Lore.OutingsMark(1));
@@ -1890,7 +1890,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("4 disparos", Lore.WeaponFigure("clip", 4));
             Assert.Equal("Atalaya", Lore.Expediente[0].Title);
             Assert.Equal("La Pandemia lo vació todo. Atalaya cayó en otoño; los que quedan empiezan de cero en un claro del pinar.", Lore.Expediente[0].Summary);
-            Assert.Equal(new string[] { "Hace dos inviernos llegó la Pandemia. Desde entonces, quien muere se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.", "Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en una autocaravana, con el todoterreno de Teo detrás. El autobús se quedó en la cochera de Atalaya, y el nombre de La Lata ha pasado al todoterreno.", "Hemos parado en un claro del pinar, sobre Metsovo. Lo que se levante aquí será el Bastión. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida." }, Lore.Expediente[0].Paragraphs);
+            Assert.Equal(new string[] { "Hace dos inviernos llegó la Pandemia. Desde entonces, quien muere se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.", "Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en una autocaravana, con el todoterreno de Teo detrás. El autobús se quedó en la cochera de Atalaya, y el nombre de La Lata ha pasado al todoterreno.", "Hemos parado en un claro del pinar, sobre Metsovo. Lo que se levante aquí será el Bastion. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida." }, Lore.Expediente[0].Paragraphs);
             Assert.Equal("Lo que entra por la puerta se apunta aquí. — N. A.", Lore.Expediente[0].Note);
             Assert.Equal("Notas de la doctora", Lore.Expediente[1].Title);
             Assert.Equal("De noche ven igual que de día. Una puerta no los para. Un mordisco no contagia.", Lore.Expediente[1].Summary);
@@ -1927,16 +1927,16 @@ namespace Bastion.Engine.Tests
             Assert.Equal("La vacuna, para quienes cumplieron", Lore.EndingTitles["record"]);
             Assert.Equal("La Marea se deshizo en la sierra. Esa noche, Morse leyó la fórmula de la vacuna por todas las frecuencias, despacio, dos veces. La oyeron los enclaves, la oyeron los Cuervos y la oyó quien quisiera oírla. Nadie sabe qué harán con ella. Por primera vez en dos inviernos, nadie se queda fuera.", Lore.Epilogue("victory", "break", false));
             Assert.Equal("La Marea se deshizo en la sierra. Esa noche, Morse leyó la fórmula de la vacuna por todas las frecuencias, despacio, dos veces. La oyeron los enclaves, la oyeron los Cuervos y la oyó quien quisiera oírla. Nadie sabe qué harán con ella. Por primera vez en dos inviernos, nadie se queda fuera.", Lore.Epilogue("victory", "break", true));
-            Assert.Equal("La Marea se deshizo en la sierra. La vacuna salió del Bastión en La Lata, punto de cambio por punto de cambio, solo para quienes cumplieron sus tratos. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en el Bastión, bajo llave.", Lore.Epilogue("victory", "record", false));
-            Assert.Equal("La Marea se deshizo en la sierra. La vacuna salió del Bastión en La Lata, punto de cambio por punto de cambio, solo para quienes cumplieron sus tratos. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en el Bastión, bajo llave.", Lore.Epilogue("victory", "record", true));
+            Assert.Equal("La Marea se deshizo en la sierra. La vacuna salió del Bastion en La Lata, punto de cambio por punto de cambio, solo para quienes cumplieron sus tratos. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en el Bastion, bajo llave.", Lore.Epilogue("victory", "record", false));
+            Assert.Equal("La Marea se deshizo en la sierra. La vacuna salió del Bastion en La Lata, punto de cambio por punto de cambio, solo para quienes cumplieron sus tratos. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en el Bastion, bajo llave.", Lore.Epilogue("victory", "record", true));
             Assert.Equal("La Marea se ha deshecho en la sierra. Por primera vez en dos inviernos, el valle duerme sin oír pasos.", Lore.Epilogue("victory", null, false));
             Assert.Equal("La Marea se ha deshecho en la sierra. Por primera vez en dos inviernos, el valle duerme sin oír pasos.", Lore.Epilogue("victory", null, true));
-            Assert.Equal("No queda nadie que conteste por radio. El Bastión se queda a oscuras.", Lore.Epilogue("defeat", "break", false));
-            Assert.Equal("Kilómetro cero. La Marea llegó al Bastión con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.", Lore.Epilogue("defeat", "break", true));
-            Assert.Equal("No queda nadie que conteste por radio. El Bastión se queda a oscuras.", Lore.Epilogue("defeat", "record", false));
-            Assert.Equal("Kilómetro cero. La Marea llegó al Bastión con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.", Lore.Epilogue("defeat", "record", true));
-            Assert.Equal("No queda nadie que conteste por radio. El Bastión se queda a oscuras.", Lore.Epilogue("defeat", null, false));
-            Assert.Equal("Kilómetro cero. La Marea llegó al Bastión con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.", Lore.Epilogue("defeat", null, true));
+            Assert.Equal("No queda nadie que conteste por radio. El Bastion se queda a oscuras.", Lore.Epilogue("defeat", "break", false));
+            Assert.Equal("Kilómetro cero. La Marea llegó al Bastion con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.", Lore.Epilogue("defeat", "break", true));
+            Assert.Equal("No queda nadie que conteste por radio. El Bastion se queda a oscuras.", Lore.Epilogue("defeat", "record", false));
+            Assert.Equal("Kilómetro cero. La Marea llegó al Bastion con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.", Lore.Epilogue("defeat", "record", true));
+            Assert.Equal("No queda nadie que conteste por radio. El Bastion se queda a oscuras.", Lore.Epilogue("defeat", null, false));
+            Assert.Equal("Kilómetro cero. La Marea llegó al Bastion con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.", Lore.Epilogue("defeat", null, true));
 
             // backpack, scavenge, marks
             Assert.Equal("Ana se cura con una medicina.", Lore.MedicineLine("Ana", null, 0));
@@ -3137,7 +3137,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Zombi lento. Revienta al morir o al llegar a un soldado: hace daño a quien tenga al lado.", Lore.Glossary["Hinchado"]);
             Assert.Equal("Bandas de saqueadores armados. Atacan a otros vivos y atraen hordas con sirenas. Los zombis también van a por ellos.", Lore.Glossary["Cuervos"]);
             Assert.Equal("Secta que cree que los zombis están salvados. Los guía con campanas y por radio.", Lore.Glossary["Congregación"]);
-            Assert.Equal("Horda enorme que sube desde los Llanos de Ceniza. Si llega al Bastión, se pierde la campaña.", Lore.Glossary["Marea"]);
+            Assert.Equal("Horda enorme que sube desde los Llanos de Ceniza. Si llega al Bastion, se pierde la campaña.", Lore.Glossary["Marea"]);
             Assert.Equal("Sitio donde se juntan los zombis. Hace crecer la Marea; quemarlo la hace retroceder.", Lore.Glossary["Nido"]);
             Assert.Equal("Mientras suena, atrae a todos los zombis de la zona. Puede ser un coche patrulla, una ambulancia o la alarma de una nave.", Lore.Glossary["Sirena"]);
             Assert.Equal("Cada acción hace ruido. Un disparo se oye a entre 12 y 22 casillas, según el arma, y uno de arco o de ballesta, a 1 o 2; una granada, a 26; una motosierra, a 20; un registro, a 2. Los enemigos van a ver qué ha sido. El ruido no te descubre: te descubre que te vean.", Lore.Glossary["Ruido"]);
@@ -3145,7 +3145,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Una acción, dentro de una habitación; cada una se registra una vez. Casas: comida y medicinas. Oficinas: piezas. Tiendas: comida. Almacenes: de todo.", Lore.Glossary["Registrar"]);
             Assert.Equal("Hasta tres por mapa: armas, medicinas, munición o comida. Se abren con una acción, desde al lado.", Lore.Glossary["Cajas"]);
             Assert.Equal("Tres huecos, cuatro con la Chapistería. Lo que es igual va en el mismo hueco, sin límite, y cabe aunque esté llena; cada arma, en el suyo. Soltar no cuesta; pasar algo al de al lado, una acción. El botín cuenta si vuelve. Lo de un caído queda en el suelo.", Lore.Glossary["Mochila"]);
-            Assert.Equal("Las armas del Bastión. Cada una es de quien la lleva.", Lore.Glossary["Armería"]);
+            Assert.Equal("Las armas del Bastion. Cada una es de quien la lleva.", Lore.Glossary["Armería"]);
             Assert.Equal("Los hace el Taller: cada soldado sale con uno por tanda, hasta tres. Valen para todas las armas; recargar llena primero la principal.", Lore.Glossary["Cargadores"]);
             Assert.Equal("Para construir, reparar, subir de nivel, reclutar, equipar y contactar zonas.", Lore.Glossary["Suministros"]);
             Assert.Equal("Una dosis quita una misión de baja a un herido. En la misión, curan 3 con una acción; con Manos de enfermero, sin gastarla.", Lore.Glossary["Medicinas"]);
@@ -3161,7 +3161,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Lleva a la escuadra y la espera en la zona de evacuación. Moto, todoterreno, furgoneta y autobús: cada uno, más plazas.", Lore.Glossary["La Lata"]);
             Assert.Equal("Al llegar a una casilla de La Lata, el soldado sube y está a salvo; en su turno puede bajar. La Lata sale cuando lo pide un jugador y lo acepta el otro, o sola cuando ya están todos dentro. Quien esté fuera se pierde. En una Limpieza, salir antes de acabar es retirarse: la etapa se supera sin la recompensa.", Lore.Glossary["Evacuar"]);
             Assert.Equal("Abatid a todo lo que haya. Se gana sin volver a La Lata. Irse antes en La Lata es retirarse: la etapa se supera sin la recompensa.", Lore.StageLine(NodeKinds.Elimination));
-            Assert.Equal("Quien acaba de unirse al Bastión, con un cuchillo.", Lore.Glossary["Recluta"]);
+            Assert.Equal("Quien acaba de unirse al Bastion, con un cuchillo.", Lore.Glossary["Recluta"]);
             Assert.Equal("Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Registrar y Forma física. Se llenan haciendo eso mismo en los combates. Cada barra llena sube un poco su habilidad y da un punto para el tablero.", Lore.Glossary["Barras"]);
             Assert.Equal("Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, al lado de una que ya tenga.", Lore.Glossary["Tablero"]);
             Assert.Equal("Cuenta los puntos gastados en el tablero: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.", Lore.Glossary["Veteranía"]);
@@ -3201,6 +3201,11 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Salto de 3 plantas: −3 de salud, y muere", Lore.JumpText.Note(3, true));
             Assert.Equal("Salto de 2 plantas: −2 de salud. Haz clic otra vez para saltar.", Lore.JumpText.Ask(2, false, false));
             Assert.Equal("Salto de 2 plantas: −2 de salud, y muere. Toca otra vez para saltar.", Lore.JumpText.Ask(2, true, true));
+            // Note 12 (28/11): the walk cut short.
+            Assert.Equal("CAMINO CORTADO", Lore.WalkText.Float);
+            Assert.Equal("Mara Ilić se para: un corredor le corta el paso. Recupera el movimiento que no ha andado.", Lore.WalkText.Blocked("Mara Ilić", "un corredor", true));
+            Assert.Equal("Mara Ilić se para: Jonas Weber le corta el paso.", Lore.WalkText.Blocked("Mara Ilić", "Jonas Weber", false));
+            Assert.Equal("Mara Ilić se para: alguien que no se ve le corta el paso. Recupera el movimiento que no ha andado.", Lore.WalkText.Blocked("Mara Ilić", null, true));
             Assert.Equal("Planta baja", Lore.FloorText.Name(0));
             Assert.Equal("Planta 1 · RePág / AvPág: cambiar de planta", Lore.FloorText.Aim(1, false));
             Assert.Equal("Planta 2 · ▲ ▼: cambiar de planta", Lore.FloorText.Aim(2, true));
@@ -3223,7 +3228,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Herido: sale con 5 de 8 de salud. Se cura en un Refugio o con medicinas.", Lore.WoundsText.Hurt(5, 8));
             Assert.Equal(48, Lore.Glossary.Count);
             // M7 (cuadro 140) and M6 (23/11).
-            Assert.Equal("Iker no se queda: en el Bastión ya no caben más soldados.", RunTexts.SurvivorNoRoom("Iker"));
+            Assert.Equal("Iker no se queda: en el Bastion ya no caben más soldados.", RunTexts.SurvivorNoRoom("Iker"));
             Assert.Equal("Defensa 10: quien le ataca acierta 10 puntos menos.", Lore.GuardText.Defense(10));
             Assert.Equal("Defensa 1: quien le ataca acierta 1 punto menos.", Lore.GuardText.Defense(1));
             Assert.Equal("Defensa 0: sin defensa propia. Cuentan la cobertura y cubrirse.", Lore.GuardText.Defense(0));
@@ -3485,8 +3490,8 @@ namespace Bastion.Engine.Tests
             // The base's ten more, the first six (cuadros 164 and 165; producto/mejoras-base-2026-11-25/TEXTOS.md).
             Assert.Equal("Motor silencioso", Lore.UpgradeNames[UpgradeIds.Engine]);
             Assert.Equal("Botiquín de salida", Lore.UpgradeNames[UpgradeIds.Kit]);
-            Assert.Equal("Quien se une al Bastión, un superviviente o un recluta, llega con 1 punto de habilidad por gastar.", Lore.UpgradeLine(UpgradeIds.Training, level: 1));
-            Assert.Equal("Quien se une al Bastión, un superviviente o un recluta, llega con 3 puntos de habilidad por gastar.", Lore.UpgradeLine(UpgradeIds.Training, level: 3));
+            Assert.Equal("Quien se une al Bastion, un superviviente o un recluta, llega con 1 punto de habilidad por gastar.", Lore.UpgradeLine(UpgradeIds.Training, level: 1));
+            Assert.Equal("Quien se une al Bastion, un superviviente o un recluta, llega con 3 puntos de habilidad por gastar.", Lore.UpgradeLine(UpgradeIds.Training, level: 3));
             Assert.Equal("Desde un Trueque también se puede volver a la base, no solo desde un Refugio.", Lore.UpgradeLine(UpgradeIds.Route));
             Assert.Equal("La horda no llega hasta el turno 3: hasta entonces no entran muertos, ni los de cada turno ni los que trae el ruido.", Lore.UpgradeLine(UpgradeIds.Engine, level: 1));
             Assert.Equal("La horda no llega hasta el turno 5: hasta entonces no entran muertos, ni los de cada turno ni los que trae el ruido.", Lore.UpgradeLine(UpgradeIds.Engine, level: 2));
@@ -4109,7 +4114,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("El aserradero de Tarbes", Lore.MissionName("city", "Tarbes", 6, "roadside"));
             Assert.Equal("Los muelles de carga de Tarbes", Lore.MissionName("city", "Tarbes", 1, "industrial"));
             Assert.Equal("Las naves de Tarbes", Lore.MissionName("city", "Tarbes", 6, "industrial"));
-            Assert.Equal("El Bastión", Lore.Landmarks["atalaya"]);
+            Assert.Equal("El Bastion", Lore.Landmarks["atalaya"]);
             Assert.Equal("Atalaya", Lore.Landmarks["ruins"]);
             Assert.Equal("Tende", Lore.Landmarks["telm"]);
             Assert.Equal("Mina", Lore.Landmarks["mine"]);
@@ -4209,13 +4214,13 @@ namespace Bastion.Engine.Tests
             Assert.Null(Lore.Story[1].Reward!.Food);
             Assert.Null(Lore.Story[1].Reward!.Parts);
             Assert.Null(Lore.Story[1].Reward!.Vehicle);
-            Assert.Equal("la Dra. Nwosu se une al Bastión (el botín vale un 25 % más)", Lore.Story[1].Prize);
+            Assert.Equal("la Dra. Nwosu se une al Bastion (el botín vale un 25 % más)", Lore.Story[1].Prize);
             Assert.Equal("Una doctora lleva una semana encerrada en **el hospital de Tarbes**, con el edificio lleno de zombis. Se llama **Amara Nwosu** y trabajaba en el Instituto Koper. ==Llegad hasta ella y sacadla con vida.==", Lore.Story[1].Briefing);
             Assert.Equal("— N. A.", Lore.Story[1].Signature);
             Assert.Null(Lore.Story[1].Living);
             Assert.Null(Lore.Story[1].Item);
             Assert.Equal("Dra. Amara Nwosu", Lore.Story[1].Vip);
-            Assert.Equal("La Dra. Nwosu se queda en el Bastión. Sabe qué aprovechar de cada saqueo: el botín valdrá un 25 % más.", Lore.Story[1].After);
+            Assert.Equal("La Dra. Nwosu se queda en el Bastion. Sabe qué aprovechar de cada saqueo: el botín valdrá un 25 % más.", Lore.Story[1].After);
             Assert.Equal("La sirena", Lore.Story[2].Title);
             Assert.Equal("sabotage", Lore.Story[2].Kind);
             Assert.Equal("wilds", Lore.Story[2].Biome);
@@ -4266,7 +4271,7 @@ namespace Bastion.Engine.Tests
             Assert.Null(Lore.Story[4].Reward!.Food);
             Assert.Null(Lore.Story[4].Reward!.Parts);
             Assert.Null(Lore.Story[4].Reward!.Vehicle);
-            Assert.Equal("una niña inmune a salvo en el Bastión", Lore.Story[4].Prize);
+            Assert.Equal("una niña inmune a salvo en el Bastion", Lore.Story[4].Prize);
             Assert.Equal("Simão entró en el campamento de los Cuervos a por **la niña inmune**, pero lo han descubierto. Sabe dónde la esconden. ==Llegad hasta él y sacadlo con vida.==", Lore.Story[4].Briefing);
             Assert.Equal("— N. A.", Lore.Story[4].Signature);
             Assert.True(Lore.Story[4].Living);
@@ -4291,7 +4296,7 @@ namespace Bastion.Engine.Tests
             Assert.Null(Lore.Story[5].Living);
             Assert.Equal("los cuadernos", Lore.Story[5].Item);
             Assert.Null(Lore.Story[5].Vip);
-            Assert.Equal("Los cuadernos ya están en el Bastión. Teo los ha leído enteros y lleva dos días sin hablar.", Lore.Story[5].After);
+            Assert.Equal("Los cuadernos ya están en el Bastion. Teo los ha leído enteros y lleva dos días sin hablar.", Lore.Story[5].After);
             Assert.Equal("La Voz", Lore.Story[6].Title);
             Assert.Equal("rescue", Lore.Story[6].Kind);
             Assert.Equal("city", Lore.Story[6].Biome);
@@ -4304,13 +4309,13 @@ namespace Bastion.Engine.Tests
             Assert.Null(Lore.Story[6].Reward!.Food);
             Assert.Null(Lore.Story[6].Reward!.Parts);
             Assert.Null(Lore.Story[6].Reward!.Vehicle);
-            Assert.Equal("cómo parar la Marea (la misión final, con el Bastión en su último nivel)", Lore.Story[6].Prize);
+            Assert.Equal("cómo parar la Marea (la misión final, con el Bastion en su último nivel)", Lore.Story[6].Prize);
             Assert.Equal("**Celia Marsh, la Voz** de la Congregación, emite cada noche desde una vieja emisora de los Llanos. Es la única que sabe cómo parar la Marea. ==Asaltad la emisora, llegad hasta ella y sacadla con vida.==", Lore.Story[6].Briefing);
             Assert.Equal("— N. A.", Lore.Story[6].Signature);
             Assert.True(Lore.Story[6].Living);
             Assert.Null(Lore.Story[6].Item);
             Assert.Equal("Celia Marsh", Lore.Story[6].Vip);
-            Assert.Equal("La Voz está en el Bastión. Ha pasado una hora callada. Luego ha dicho cómo se para la Marea.", Lore.Story[6].After);
+            Assert.Equal("La Voz está en el Bastion. Ha pasado una hora callada. Luego ha dicho cómo se para la Marea.", Lore.Story[6].After);
             Assert.Equal(7, Lore.Story.Count);
             Assert.Equal(5, Lore.SimonChapter);
             Assert.Equal(2, Lore.NwosuChapter);
@@ -5633,7 +5638,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Caras conocidas", Quests.QuestDefs["faces"].Title);
             Assert.Equal("— N. A.", Quests.QuestDefs["faces"].Signature);
             Assert.Equal("{soldier} ha reconocido un nombre en la radio de los Cuervos.", Quests.QuestDefs["faces"].Hook);
-            Assert.Equal("{relative} se une al Bastión", Quests.QuestDefs["faces"].Prize);
+            Assert.Equal("{relative} se une al Bastion", Quests.QuestDefs["faces"].Prize);
             Assert.Null(Quests.QuestDefs["faces"].Region);
             Assert.False(Quests.QuestDefs["faces"].Rumor);
             Assert.Equal(4, Quests.QuestDefs["faces"].Steps.Count);
@@ -5701,7 +5706,7 @@ namespace Bastion.Engine.Tests
             Assert.True(((QuestMission)Quests.QuestDefs["faces"].Steps[3]).Living);
             Assert.Null(((QuestMission)Quests.QuestDefs["faces"].Steps[3]).Reward);
             Assert.Equal(new string[] { "success", "refused", "failure" }, Quests.QuestDefs["faces"].Outcomes.Keys);
-            Assert.Equal("{relative} llega al Bastión en los huesos. Al día siguiente pide un fusil.", Quests.QuestDefs["faces"].Outcomes["success"].Text);
+            Assert.Equal("{relative} llega al Bastion en los huesos. Al día siguiente pide un fusil.", Quests.QuestDefs["faces"].Outcomes["success"].Text);
             Assert.Equal("good", Quests.QuestDefs["faces"].Outcomes["success"].Tone);
             Assert.Null(Quests.QuestDefs["faces"].Outcomes["success"].Credits);
             Assert.Null(Quests.QuestDefs["faces"].Outcomes["success"].Doom);
@@ -5788,7 +5793,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Vera Lindqvist", ((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Title);
             Assert.Equal("Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.", ((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Text);
             Assert.Equal(2, ((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Options.Count);
-            Assert.Equal("Llevarla al Bastión", ((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Options[0].Label);
+            Assert.Equal("Llevarla al Bastion", ((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Options[0].Label);
             Assert.Equal("Se une con tres barras llenas y el rasgo «Pesadillas»", ((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Options[0].Effect);
             Assert.Equal("captured", ((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Options[0].Then);
             Assert.Null(((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Options[0].Clue);
@@ -5797,7 +5802,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("killed", ((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Options[1].Then);
             Assert.Null(((QuestDecision)Quests.QuestDefs["ibarra"].Steps[2]).Options[1].Clue);
             Assert.Equal(new string[] { "captured", "killed", "failure" }, Quests.QuestDefs["ibarra"].Outcomes.Keys);
-            Assert.Equal("Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Quests.QuestDefs["ibarra"].Outcomes["captured"].Text);
+            Assert.Equal("Lindqvist duerme en el Bastion, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Quests.QuestDefs["ibarra"].Outcomes["captured"].Text);
             Assert.Equal("good", Quests.QuestDefs["ibarra"].Outcomes["captured"].Tone);
             Assert.Null(Quests.QuestDefs["ibarra"].Outcomes["captured"].Credits);
             Assert.Null(Quests.QuestDefs["ibarra"].Outcomes["captured"].Doom);
@@ -5812,7 +5817,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Vera Lindqvist", Quests.QuestDefs["ibarra"].Outcomes["captured"].Recruit!.Name);
             Assert.Equal(3, Quests.QuestDefs["ibarra"].Outcomes["captured"].Recruit!.Rank);
             Assert.Equal("scarred", Quests.QuestDefs["ibarra"].Outcomes["captured"].Recruit!.Trait);
-            Assert.Equal("Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).", Quests.QuestDefs["ibarra"].Outcomes["killed"].Text);
+            Assert.Equal("Lindqvist está muerta. Su alijo pasa al Bastion (+150 suministros).", Quests.QuestDefs["ibarra"].Outcomes["killed"].Text);
             Assert.Equal("good", Quests.QuestDefs["ibarra"].Outcomes["killed"].Tone);
             Assert.Equal(150, Quests.QuestDefs["ibarra"].Outcomes["killed"].Credits);
             Assert.Null(Quests.QuestDefs["ibarra"].Outcomes["killed"].Doom);
@@ -6035,7 +6040,7 @@ namespace Bastion.Engine.Tests
             Assert.True(((QuestMission)Quests.QuestDefs["numbers"].Steps[1]).Living);
             Assert.Null(((QuestMission)Quests.QuestDefs["numbers"].Steps[1]).Reward);
             Assert.Equal(new string[] { "success", "failure" }, Quests.QuestDefs["numbers"].Outcomes.Keys);
-            Assert.Equal("Otto Brandt monta su radio en el Bastión. Con él, la radio llega a una zona más.", Quests.QuestDefs["numbers"].Outcomes["success"].Text);
+            Assert.Equal("Otto Brandt monta su radio en el Bastion. Con él, la radio llega a una zona más.", Quests.QuestDefs["numbers"].Outcomes["success"].Text);
             Assert.Equal("good", Quests.QuestDefs["numbers"].Outcomes["success"].Tone);
             Assert.Null(Quests.QuestDefs["numbers"].Outcomes["success"].Credits);
             Assert.Null(Quests.QuestDefs["numbers"].Outcomes["success"].Doom);
@@ -6202,7 +6207,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(2, Quests.QuestDefs["mole"].Steps.Count);
             Assert.Equal("event", Quests.QuestDefs["mole"].Steps[0].Type);
             Assert.Equal("El topo", ((QuestDecision)Quests.QuestDefs["mole"].Steps[0]).Title);
-            Assert.Equal("Alguien del Bastión pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", ((QuestDecision)Quests.QuestDefs["mole"].Steps[0]).Text);
+            Assert.Equal("Alguien del Bastion pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", ((QuestDecision)Quests.QuestDefs["mole"].Steps[0]).Text);
             Assert.Equal(2, ((QuestDecision)Quests.QuestDefs["mole"].Steps[0]).Options.Count);
             Assert.Equal("Vigilar a {a}", ((QuestDecision)Quests.QuestDefs["mole"].Steps[0]).Options[0].Label);
             Assert.Equal("Una semana de vigilancia", ((QuestDecision)Quests.QuestDefs["mole"].Steps[0]).Options[0].Effect);
@@ -6437,7 +6442,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(new string[] { "Pavel Lanz, el electricista", "Rosa Alves, la cocinera", "Bruno Sauer, el de la radio" }, Quests.Suspects);
             Assert.Equal(new string[] { "humo en una chimenea de un pueblo vacío", "una radio que repite un nombre", "una farmacia que nadie ha saqueado", "una horda que baja hacia el río", "un convoy que no llegó", "luces en una mina cerrada", "campanas que suenan a deshora", "un perro que ladra en una granja abandonada" }, Quests.RumorLines);
             Assert.Equal("{soldier} ha reconocido un nombre en la radio de los Cuervos.", Quests.Fill("{soldier} ha reconocido un nombre en la radio de los Cuervos.", new System.Collections.Generic.Dictionary<string, string> {  }));
-            Assert.Equal("{relative} se une al Bastión", Quests.Fill("{relative} se une al Bastión", new System.Collections.Generic.Dictionary<string, string> {  }));
+            Assert.Equal("{relative} se une al Bastion", Quests.Fill("{relative} se une al Bastion", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Caras conocidas", Quests.Fill("Caras conocidas", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Los Cuervos leen por radio su lista de prisioneros. Los cambian por comida y munición. {soldier} ha oído el nombre de {relation}, {relative}. Encontrar el campamento costará días y soldados.", Quests.Fill("Los Cuervos leen por radio su lista de prisioneros. Los cambian por comida y munición. {soldier} ha oído el nombre de {relation}, {relative}. Encontrar el campamento costará días y soldados.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Buscar el campamento", Quests.Fill("Buscar el campamento", new System.Collections.Generic.Dictionary<string, string> {  }));
@@ -6452,7 +6457,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Sacar a {relative}", Quests.Fill("Sacar a {relative}", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Los prisioneros están en **un almacén cerrado con cadenas**. {relative} está dentro. ==Hay que sacar a {relative} con vida.==", Quests.Fill("Los prisioneros están en **un almacén cerrado con cadenas**. {relative} está dentro. ==Hay que sacar a {relative} con vida.==", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("{relative}", Quests.Fill("{relative}", new System.Collections.Generic.Dictionary<string, string> {  }));
-            Assert.Equal("{relative} llega al Bastión en los huesos. Al día siguiente pide un fusil.", Quests.Fill("{relative} llega al Bastión en los huesos. Al día siguiente pide un fusil.", new System.Collections.Generic.Dictionary<string, string> {  }));
+            Assert.Equal("{relative} llega al Bastion en los huesos. Al día siguiente pide un fusil.", Quests.Fill("{relative} llega al Bastion en los huesos. Al día siguiente pide un fusil.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("{soldier} no dice nada. Desde entonces dispara antes de preguntar.", Quests.Fill("{soldier} no dice nada. Desde entonces dispara antes de preguntar.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("El campamento estaba vacío cuando llegamos. {soldier} no habla de ello. Ahora dispara antes de preguntar.", Quests.Fill("El campamento estaba vacío cuando llegamos. {soldier} no habla de ello. Ahora dispara antes de preguntar.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Morse ha oído el nombre de Vera Lindqvist en una frecuencia de los Cuervos.", Quests.Fill("Morse ha oído el nombre de Vera Lindqvist en una frecuencia de los Cuervos.", new System.Collections.Generic.Dictionary<string, string> {  }));
@@ -6462,12 +6467,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Vera Lindqvist", Quests.Fill("Vera Lindqvist", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Lindqvist manda ahora **una banda de Cuervos**. ==Abatid a toda la banda.== A ella, si se puede, la quiero viva.", Quests.Fill("Lindqvist manda ahora **una banda de Cuervos**. ==Abatid a toda la banda.== A ella, si se puede, la quiero viva.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.", Quests.Fill("Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.", new System.Collections.Generic.Dictionary<string, string> {  }));
-            Assert.Equal("Llevarla al Bastión", Quests.Fill("Llevarla al Bastión", new System.Collections.Generic.Dictionary<string, string> {  }));
+            Assert.Equal("Llevarla al Bastion", Quests.Fill("Llevarla al Bastion", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Se une con tres barras llenas y el rasgo «Pesadillas»", Quests.Fill("Se une con tres barras llenas y el rasgo «Pesadillas»", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Acabar con esto", Quests.Fill("Acabar con esto", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("+150 suministros de su alijo", Quests.Fill("+150 suministros de su alijo", new System.Collections.Generic.Dictionary<string, string> {  }));
-            Assert.Equal("Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Quests.Fill("Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", new System.Collections.Generic.Dictionary<string, string> {  }));
-            Assert.Equal("Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).", Quests.Fill("Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).", new System.Collections.Generic.Dictionary<string, string> {  }));
+            Assert.Equal("Lindqvist duerme en el Bastion, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Quests.Fill("Lindqvist duerme en el Bastion, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", new System.Collections.Generic.Dictionary<string, string> {  }));
+            Assert.Equal("Lindqvist está muerta. Su alijo pasa al Bastion (+150 suministros).", Quests.Fill("Lindqvist está muerta. Su alijo pasa al Bastion (+150 suministros).", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Lindqvist ha escapado. Volverá a aparecer.", Quests.Fill("Lindqvist ha escapado. Volverá a aparecer.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Alguien pregunta por radio por la Dra. Nwosu.", Quests.Fill("Alguien pregunta por radio por la Dra. Nwosu.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("decidir qué hacer con Tomasz Rybak", Quests.Fill("decidir qué hacer con Tomasz Rybak", new System.Collections.Generic.Dictionary<string, string> {  }));
@@ -6506,7 +6511,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Una estación de números emite con el indicativo de Otto Brandt. Fue mi maestro. Lo creía muerto. En el tejado del ayuntamiento de Sappada hay **un repetidor roto** que recoge su señal. ==Reparadlo== y sabremos desde dónde emite. Si falla, **el ruido** atraerá a lo que ande cerca.", Quests.Fill("Una estación de números emite con el indicativo de Otto Brandt. Fue mi maestro. Lo creía muerto. En el tejado del ayuntamiento de Sappada hay **un repetidor roto** que recoge su señal. ==Reparadlo== y sabremos desde dónde emite. Si falla, **el ruido** atraerá a lo que ande cerca.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Otto Brandt", Quests.Fill("Otto Brandt", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Otto está vivo. Emite desde una cabaña de Sappada con una radio de válvulas. **Los Cuervos también lo han oído.** ==Llegad antes y sacadlo con vida.==", Quests.Fill("Otto está vivo. Emite desde una cabaña de Sappada con una radio de válvulas. **Los Cuervos también lo han oído.** ==Llegad antes y sacadlo con vida.==", new System.Collections.Generic.Dictionary<string, string> {  }));
-            Assert.Equal("Otto Brandt monta su radio en el Bastión. Con él, la radio llega a una zona más.", Quests.Fill("Otto Brandt monta su radio en el Bastión. Con él, la radio llega a una zona más.", new System.Collections.Generic.Dictionary<string, string> {  }));
+            Assert.Equal("Otto Brandt monta su radio en el Bastion. Con él, la radio llega a una zona más.", Quests.Fill("Otto Brandt monta su radio en el Bastion. Con él, la radio llega a una zona más.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("No llegamos a tiempo. Morse firma el informe y no añade nada.", Quests.Fill("No llegamos a tiempo. Morse firma el informe y no añade nada.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Los Camioneros han perdido un convoy en los Llanos de Ceniza.", Quests.Fill("Los Camioneros han perdido un convoy en los Llanos de Ceniza.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("+15 suministros en cada convoy", Quests.Fill("+15 suministros en cada convoy", new System.Collections.Generic.Dictionary<string, string> {  }));
@@ -6529,7 +6534,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Alguien ha saboteado el generador dos veces.", Quests.Fill("Alguien ha saboteado el generador dos veces.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("encontrar al topo", Quests.Fill("encontrar al topo", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("El topo", Quests.Fill("El topo", new System.Collections.Generic.Dictionary<string, string> {  }));
-            Assert.Equal("Alguien del Bastión pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", Quests.Fill("Alguien del Bastión pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", new System.Collections.Generic.Dictionary<string, string> {  }));
+            Assert.Equal("Alguien del Bastion pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", Quests.Fill("Alguien del Bastion pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Vigilar a {a}", Quests.Fill("Vigilar a {a}", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Una semana de vigilancia", Quests.Fill("Una semana de vigilancia", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Vigilar a {b}", Quests.Fill("Vigilar a {b}", new System.Collections.Generic.Dictionary<string, string> {  }));
@@ -6566,7 +6571,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("{niño} y {a_1}", Quests.Fill("{niño} y {a_1}", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("sin nada", Quests.Fill("sin nada", new System.Collections.Generic.Dictionary<string, string> {  }));
             Assert.Equal("Ana Ruiz ha reconocido un nombre en la radio de los Cuervos.", Quests.Fill("{soldier} ha reconocido un nombre en la radio de los Cuervos.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
-            Assert.Equal("Mariam se une al Bastión", Quests.Fill("{relative} se une al Bastión", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
+            Assert.Equal("Mariam se une al Bastion", Quests.Fill("{relative} se une al Bastion", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Caras conocidas", Quests.Fill("Caras conocidas", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Los Cuervos leen por radio su lista de prisioneros. Los cambian por comida y munición. Ana Ruiz ha oído el nombre de su hermana, Mariam. Encontrar el campamento costará días y soldados.", Quests.Fill("Los Cuervos leen por radio su lista de prisioneros. Los cambian por comida y munición. {soldier} ha oído el nombre de {relation}, {relative}. Encontrar el campamento costará días y soldados.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Buscar el campamento", Quests.Fill("Buscar el campamento", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
@@ -6581,7 +6586,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Sacar a Mariam", Quests.Fill("Sacar a {relative}", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Los prisioneros están en **un almacén cerrado con cadenas**. Mariam está dentro. ==Hay que sacar a Mariam con vida.==", Quests.Fill("Los prisioneros están en **un almacén cerrado con cadenas**. {relative} está dentro. ==Hay que sacar a {relative} con vida.==", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Mariam", Quests.Fill("{relative}", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
-            Assert.Equal("Mariam llega al Bastión en los huesos. Al día siguiente pide un fusil.", Quests.Fill("{relative} llega al Bastión en los huesos. Al día siguiente pide un fusil.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
+            Assert.Equal("Mariam llega al Bastion en los huesos. Al día siguiente pide un fusil.", Quests.Fill("{relative} llega al Bastion en los huesos. Al día siguiente pide un fusil.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Ana Ruiz no dice nada. Desde entonces dispara antes de preguntar.", Quests.Fill("{soldier} no dice nada. Desde entonces dispara antes de preguntar.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("El campamento estaba vacío cuando llegamos. Ana Ruiz no habla de ello. Ahora dispara antes de preguntar.", Quests.Fill("El campamento estaba vacío cuando llegamos. {soldier} no habla de ello. Ahora dispara antes de preguntar.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Morse ha oído el nombre de Vera Lindqvist en una frecuencia de los Cuervos.", Quests.Fill("Morse ha oído el nombre de Vera Lindqvist en una frecuencia de los Cuervos.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
@@ -6591,12 +6596,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Vera Lindqvist", Quests.Fill("Vera Lindqvist", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Lindqvist manda ahora **una banda de Cuervos**. ==Abatid a toda la banda.== A ella, si se puede, la quiero viva.", Quests.Fill("Lindqvist manda ahora **una banda de Cuervos**. ==Abatid a toda la banda.== A ella, si se puede, la quiero viva.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.", Quests.Fill("Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
-            Assert.Equal("Llevarla al Bastión", Quests.Fill("Llevarla al Bastión", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
+            Assert.Equal("Llevarla al Bastion", Quests.Fill("Llevarla al Bastion", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Se une con tres barras llenas y el rasgo «Pesadillas»", Quests.Fill("Se une con tres barras llenas y el rasgo «Pesadillas»", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Acabar con esto", Quests.Fill("Acabar con esto", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("+150 suministros de su alijo", Quests.Fill("+150 suministros de su alijo", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
-            Assert.Equal("Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Quests.Fill("Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
-            Assert.Equal("Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).", Quests.Fill("Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
+            Assert.Equal("Lindqvist duerme en el Bastion, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Quests.Fill("Lindqvist duerme en el Bastion, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
+            Assert.Equal("Lindqvist está muerta. Su alijo pasa al Bastion (+150 suministros).", Quests.Fill("Lindqvist está muerta. Su alijo pasa al Bastion (+150 suministros).", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Lindqvist ha escapado. Volverá a aparecer.", Quests.Fill("Lindqvist ha escapado. Volverá a aparecer.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Alguien pregunta por radio por la Dra. Nwosu.", Quests.Fill("Alguien pregunta por radio por la Dra. Nwosu.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("decidir qué hacer con Tomasz Rybak", Quests.Fill("decidir qué hacer con Tomasz Rybak", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
@@ -6635,7 +6640,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Una estación de números emite con el indicativo de Otto Brandt. Fue mi maestro. Lo creía muerto. En el tejado del ayuntamiento de Sappada hay **un repetidor roto** que recoge su señal. ==Reparadlo== y sabremos desde dónde emite. Si falla, **el ruido** atraerá a lo que ande cerca.", Quests.Fill("Una estación de números emite con el indicativo de Otto Brandt. Fue mi maestro. Lo creía muerto. En el tejado del ayuntamiento de Sappada hay **un repetidor roto** que recoge su señal. ==Reparadlo== y sabremos desde dónde emite. Si falla, **el ruido** atraerá a lo que ande cerca.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Otto Brandt", Quests.Fill("Otto Brandt", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Otto está vivo. Emite desde una cabaña de Sappada con una radio de válvulas. **Los Cuervos también lo han oído.** ==Llegad antes y sacadlo con vida.==", Quests.Fill("Otto está vivo. Emite desde una cabaña de Sappada con una radio de válvulas. **Los Cuervos también lo han oído.** ==Llegad antes y sacadlo con vida.==", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
-            Assert.Equal("Otto Brandt monta su radio en el Bastión. Con él, la radio llega a una zona más.", Quests.Fill("Otto Brandt monta su radio en el Bastión. Con él, la radio llega a una zona más.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
+            Assert.Equal("Otto Brandt monta su radio en el Bastion. Con él, la radio llega a una zona más.", Quests.Fill("Otto Brandt monta su radio en el Bastion. Con él, la radio llega a una zona más.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("No llegamos a tiempo. Morse firma el informe y no añade nada.", Quests.Fill("No llegamos a tiempo. Morse firma el informe y no añade nada.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Los Camioneros han perdido un convoy en los Llanos de Ceniza.", Quests.Fill("Los Camioneros han perdido un convoy en los Llanos de Ceniza.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("+15 suministros en cada convoy", Quests.Fill("+15 suministros en cada convoy", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
@@ -6658,7 +6663,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Alguien ha saboteado el generador dos veces.", Quests.Fill("Alguien ha saboteado el generador dos veces.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("encontrar al topo", Quests.Fill("encontrar al topo", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("El topo", Quests.Fill("El topo", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
-            Assert.Equal("Alguien del Bastión pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", Quests.Fill("Alguien del Bastión pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
+            Assert.Equal("Alguien del Bastion pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", Quests.Fill("Alguien del Bastion pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Vigilar a {a}", Quests.Fill("Vigilar a {a}", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Una semana de vigilancia", Quests.Fill("Una semana de vigilancia", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("Vigilar a {b}", Quests.Fill("Vigilar a {b}", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
@@ -6695,7 +6700,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("{niño} y {a_1}", Quests.Fill("{niño} y {a_1}", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("sin nada", Quests.Fill("sin nada", new System.Collections.Generic.Dictionary<string, string> { ["soldier"] = "Ana Ruiz", ["relation"] = "su hermana", ["relative"] = "Mariam" }));
             Assert.Equal("{soldier} ha reconocido un nombre en la radio de los Cuervos.", Quests.Fill("{soldier} ha reconocido un nombre en la radio de los Cuervos.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
-            Assert.Equal("{relative} se une al Bastión", Quests.Fill("{relative} se une al Bastión", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
+            Assert.Equal("{relative} se une al Bastion", Quests.Fill("{relative} se une al Bastion", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Caras conocidas", Quests.Fill("Caras conocidas", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Los Cuervos leen por radio su lista de prisioneros. Los cambian por comida y munición. {soldier} ha oído el nombre de {relation}, {relative}. Encontrar el campamento costará días y soldados.", Quests.Fill("Los Cuervos leen por radio su lista de prisioneros. Los cambian por comida y munición. {soldier} ha oído el nombre de {relation}, {relative}. Encontrar el campamento costará días y soldados.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Buscar el campamento", Quests.Fill("Buscar el campamento", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
@@ -6710,7 +6715,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Sacar a {relative}", Quests.Fill("Sacar a {relative}", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Los prisioneros están en **un almacén cerrado con cadenas**. {relative} está dentro. ==Hay que sacar a {relative} con vida.==", Quests.Fill("Los prisioneros están en **un almacén cerrado con cadenas**. {relative} está dentro. ==Hay que sacar a {relative} con vida.==", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("{relative}", Quests.Fill("{relative}", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
-            Assert.Equal("{relative} llega al Bastión en los huesos. Al día siguiente pide un fusil.", Quests.Fill("{relative} llega al Bastión en los huesos. Al día siguiente pide un fusil.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
+            Assert.Equal("{relative} llega al Bastion en los huesos. Al día siguiente pide un fusil.", Quests.Fill("{relative} llega al Bastion en los huesos. Al día siguiente pide un fusil.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("{soldier} no dice nada. Desde entonces dispara antes de preguntar.", Quests.Fill("{soldier} no dice nada. Desde entonces dispara antes de preguntar.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("El campamento estaba vacío cuando llegamos. {soldier} no habla de ello. Ahora dispara antes de preguntar.", Quests.Fill("El campamento estaba vacío cuando llegamos. {soldier} no habla de ello. Ahora dispara antes de preguntar.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Morse ha oído el nombre de Vera Lindqvist en una frecuencia de los Cuervos.", Quests.Fill("Morse ha oído el nombre de Vera Lindqvist en una frecuencia de los Cuervos.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
@@ -6720,12 +6725,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Vera Lindqvist", Quests.Fill("Vera Lindqvist", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Lindqvist manda ahora **una banda de Cuervos**. ==Abatid a toda la banda.== A ella, si se puede, la quiero viva.", Quests.Fill("Lindqvist manda ahora **una banda de Cuervos**. ==Abatid a toda la banda.== A ella, si se puede, la quiero viva.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.", Quests.Fill("Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
-            Assert.Equal("Llevarla al Bastión", Quests.Fill("Llevarla al Bastión", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
+            Assert.Equal("Llevarla al Bastion", Quests.Fill("Llevarla al Bastion", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Se une con tres barras llenas y el rasgo «Pesadillas»", Quests.Fill("Se une con tres barras llenas y el rasgo «Pesadillas»", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Acabar con esto", Quests.Fill("Acabar con esto", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("+150 suministros de su alijo", Quests.Fill("+150 suministros de su alijo", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
-            Assert.Equal("Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Quests.Fill("Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
-            Assert.Equal("Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).", Quests.Fill("Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
+            Assert.Equal("Lindqvist duerme en el Bastion, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", Quests.Fill("Lindqvist duerme en el Bastion, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
+            Assert.Equal("Lindqvist está muerta. Su alijo pasa al Bastion (+150 suministros).", Quests.Fill("Lindqvist está muerta. Su alijo pasa al Bastion (+150 suministros).", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Lindqvist ha escapado. Volverá a aparecer.", Quests.Fill("Lindqvist ha escapado. Volverá a aparecer.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Alguien pregunta por radio por la Dra. Nwosu.", Quests.Fill("Alguien pregunta por radio por la Dra. Nwosu.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("decidir qué hacer con Tomasz Rybak", Quests.Fill("decidir qué hacer con Tomasz Rybak", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
@@ -6764,7 +6769,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Una estación de números emite con el indicativo de Otto Brandt. Fue mi maestro. Lo creía muerto. En el tejado del ayuntamiento de Sappada hay **un repetidor roto** que recoge su señal. ==Reparadlo== y sabremos desde dónde emite. Si falla, **el ruido** atraerá a lo que ande cerca.", Quests.Fill("Una estación de números emite con el indicativo de Otto Brandt. Fue mi maestro. Lo creía muerto. En el tejado del ayuntamiento de Sappada hay **un repetidor roto** que recoge su señal. ==Reparadlo== y sabremos desde dónde emite. Si falla, **el ruido** atraerá a lo que ande cerca.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Otto Brandt", Quests.Fill("Otto Brandt", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Otto está vivo. Emite desde una cabaña de Sappada con una radio de válvulas. **Los Cuervos también lo han oído.** ==Llegad antes y sacadlo con vida.==", Quests.Fill("Otto está vivo. Emite desde una cabaña de Sappada con una radio de válvulas. **Los Cuervos también lo han oído.** ==Llegad antes y sacadlo con vida.==", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
-            Assert.Equal("Otto Brandt monta su radio en el Bastión. Con él, la radio llega a una zona más.", Quests.Fill("Otto Brandt monta su radio en el Bastión. Con él, la radio llega a una zona más.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
+            Assert.Equal("Otto Brandt monta su radio en el Bastion. Con él, la radio llega a una zona más.", Quests.Fill("Otto Brandt monta su radio en el Bastion. Con él, la radio llega a una zona más.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("No llegamos a tiempo. Morse firma el informe y no añade nada.", Quests.Fill("No llegamos a tiempo. Morse firma el informe y no añade nada.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Los Camioneros han perdido un convoy en los Llanos de Ceniza.", Quests.Fill("Los Camioneros han perdido un convoy en los Llanos de Ceniza.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("+15 suministros en cada convoy", Quests.Fill("+15 suministros en cada convoy", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
@@ -6787,7 +6792,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Alguien ha saboteado el generador dos veces.", Quests.Fill("Alguien ha saboteado el generador dos veces.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("encontrar al topo", Quests.Fill("encontrar al topo", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("El topo", Quests.Fill("El topo", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
-            Assert.Equal("Alguien del Bastión pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: Pavel Lanz, el electricista y Rosa Alves, la cocinera. Podemos vigilar a una durante una semana.", Quests.Fill("Alguien del Bastión pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
+            Assert.Equal("Alguien del Bastion pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: Pavel Lanz, el electricista y Rosa Alves, la cocinera. Podemos vigilar a una durante una semana.", Quests.Fill("Alguien del Bastion pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Vigilar a Pavel Lanz, el electricista", Quests.Fill("Vigilar a {a}", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Una semana de vigilancia", Quests.Fill("Una semana de vigilancia", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("Vigilar a Rosa Alves, la cocinera", Quests.Fill("Vigilar a {b}", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));

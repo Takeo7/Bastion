@@ -484,7 +484,7 @@ namespace Bastion.Engine.Tests
             File.WriteAllText(rig.SavePath, save.ToString());
             rig.Room = rig.Make();
             Assert.True(File.Exists(Path.Combine(rig.Dir, "save.ilegible.json")));
-            Assert.Contains(rig.Log, (l) => l.Contains("es de una versión más nueva de Bastión"));
+            Assert.Contains(rig.Log, (l) => l.Contains("es de una versión más nueva de Bastion"));
         }
 
         [Fact]

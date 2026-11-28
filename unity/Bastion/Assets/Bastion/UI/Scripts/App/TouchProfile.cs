@@ -135,6 +135,6 @@ namespace Bastion.UI.App
         }
 
         /// <summary>The notice's words (Lore, .dev-snapshots/lore/TEXTOS-TACTILES.md).</summary>
-        public const string Text = "Abre el teléfono para jugar: Bastión necesita la pantalla grande.";
+        public const string Text = "Abre el teléfono para jugar: Bastion necesita la pantalla grande.";
     }
 }

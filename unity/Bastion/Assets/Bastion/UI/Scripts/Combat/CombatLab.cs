@@ -954,6 +954,54 @@ namespace Bastion.UI.Combat
                                 Debug.Log($"[lab] el mando, a {to}");
                                 break;
                             }
+                            // «tramos=s2/p4/0/1» (note 12, 28/11): s2 walks two tiles that way (dx/dy), pod p4 wakes as it goes by,
+                            // and it walks two more: a walk in pieces, as the host's events would come, to time what the screen
+                            // does between them.
+                            if (what.StartsWith("tramos="))
+                            {
+                                var t = what.Substring(7).Split('/');
+                                var walker = control.State.Units.FirstOrDefault(x => x.Id == t[0]);
+                                if (walker == null) break;
+                                int dx = int.Parse(t[2]), dy = int.Parse(t[3]), x0 = walker.Pos.X, y0 = walker.Pos.Y, z0 = walker.Pos.Z;
+                                Pos Step(int k) => new Pos { X = x0 + dx * k, Y = y0 + dy * k, Z = z0 };
+                                var pieces = new List<GameEvent>
+                                {
+                                    new MovedEvent { Unit = walker.Id, Path = new List<Pos> { Step(1), Step(2) }, Moves = 4 * Paths.CostOrtho },
+                                    new PodActivatedEvent { Pod = t[1], Cause = PodCauses.Sighted, Unit = walker.Id },
+                                    new MovedEvent { Unit = walker.Id, Path = new List<Pos> { Step(3), Step(4) } },
+                                };
+                                foreach (var e in pieces)
+                                {
+                                    Events.ApplyEvent(host, e);
+                                    Events.ApplyEvent(control.State, e);
+                                }
+                                if (player != null) player.Push(pieces, null);
+                                control.Refresh();
+                                break;
+                            }
+                            // «corta=s2/a5» (note 12, 28/11): s2's walk cut short by a5, as the host's event would come (2 of its
+                            // movement given back).
+                            if (what.StartsWith("corta="))
+                            {
+                                var cut = what.Substring(6).Split('/');
+                                var cutter = control.State.Units.FirstOrDefault(x => x.Id == (cut.Length > 1 ? cut[1] : null));
+                                var blocked = new List<GameEvent> { new WalkBlockedEvent { Unit = cut[0], By = cutter?.Id ?? "", At = cutter?.Pos ?? new Pos(), Moves = 2 } };
+                                if (player != null) player.Push(blocked, null);
+                                break;
+                            }
+                            // «otro=s4/38/22/0» (Arte, 28/11): the partner moves that one of theirs there, as their order would come.
+                            if (what.StartsWith("otro="))
+                            {
+                                var to = what.Substring(5).Split('/');
+                                // («otro=pasa»: they hand the command over.)
+                                if (to[0] == "pasa")
+                                {
+                                    Answer(new PassCommand(), 1 - control.MySlot);
+                                    break;
+                                }
+                                Answer(new MoveCommand { Unit = to[0], To = new Pos { X = int.Parse(to[1]), Y = int.Parse(to[2]), Z = int.Parse(to[3]) } }, 1 - control.MySlot);
+                                break;
+                            }
                             if (what == "sonda" || what.StartsWith("sonda="))
                             {
                                 // «sonda», «sonda=36»: what a click on each tile round the picked one takes (BodyUnder), at each distance of the camera (7/11).

@@ -73,12 +73,16 @@ namespace Bastion.UI.Hud
                 end.EnableInClassList("end-turn--" + m, mode == m);
             // Armed for its second press: the accent round it, as any key armed.
             end.EnableInClassList("ability--active", mode == "confirm");
-            end.SetEnabled(mode != "disabled" && mode != "waiting" && mode != "enemy");
+            // («A punto» without the command, note 10: it can't be taken back from there, the key off.)
+            end.SetEnabled(mode != "disabled" && mode != "waiting" && mode != "enemy" && !(mode == "ready" && !string.IsNullOrEmpty(v?.Holder)));
             // The stage over (Producto, 18/11): gone, not left alone under the card.
             Ui.Show(end, mode != "over");
             var ready = mode == "ready" && check != null;
             endIcon.style.backgroundImage = ready ? new StyleBackground(check) : new StyleBackground(StyleKeyword.None);
             Ui.Show(endMark, !ready);
+            // Its drawing takes the key's tint as it is painted (LineIcon): painted again as the key goes on or off, or it
+            // stayed dim once the command came back (note 10's lab, 28/11).
+            endMark.MarkDirtyRepaint();
             var detail = v?.Detail;
             tips.Attach(end, mode switch
             {

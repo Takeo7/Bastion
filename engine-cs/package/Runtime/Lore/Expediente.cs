@@ -34,7 +34,7 @@ namespace Bastion.Engine
                 {
                     "Hace dos inviernos llegó la Pandemia. Desde entonces, quien muere se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.",
                     "Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en una autocaravana, con el todoterreno de Teo detrás. El autobús se quedó en la cochera de Atalaya, y el nombre de La Lata ha pasado al todoterreno.",
-                    "Hemos parado en un claro del pinar, sobre Metsovo. Lo que se levante aquí será el Bastión. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.",
+                    "Hemos parado en un claro del pinar, sobre Metsovo. Lo que se levante aquí será el Bastion. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.",
                 },
                 "Lo que entra por la puerta se apunta aquí. — N. A."),
             new ExpedientePage(

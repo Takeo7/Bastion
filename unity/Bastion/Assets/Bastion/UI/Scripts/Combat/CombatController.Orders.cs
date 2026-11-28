@@ -712,8 +712,7 @@ namespace Bastion.UI.Combat
         {
             if (!CanAct()) return;
             var ready = State.Ready[MySlot];
-            // Without the command too (Arturo, 7/11: «no deja pasar turno»; the rules take it): «A punto», and the turn is
-            // over when the partner's is.
+            // (Only with the command, since note 10: EndKey turns the key away without it.)
             // Ending the turn with soldiers that can still act asks first (Backspace is easy to hit by mistake).
             var idle = IdleSoldiers();
             if (!ready && idle > 0 && !EndArmed)
@@ -740,6 +739,9 @@ namespace Bastion.UI.Combat
 
         /// <summary>The end-of-turn question last asked, to take it away once answered.</summary>
         string endQuestion;
+
+        /// <summary>«Tiene el mando Ana…», said to the key pressed without the command: gone as the command comes (RefreshHud).</summary>
+        string noCommandSaid;
 
         /// <summary>My soldiers that still have actions this turn.</summary>
         /// <summary>One's soldiers with anything left: an action or movement (Arturo, 5/11 #14: the turn ends by itself only when none has).</summary>
@@ -998,6 +1000,14 @@ namespace Bastion.UI.Combat
         /// </summary>
         void EndKey()
         {
+            // Without the command, nothing (note 10, Arturo, 28/11): the key is off, and its own key (Retroceso) says who holds it.
+            if (CanAct() && !HasCommand())
+            {
+                Debug.Log("[fin] sin el mando: nada");
+                noCommandSaid = Bastion.UI.Hud.HudText.EndTurn.Command(PlayerName(State.Command));
+                Toast(noCommandSaid);
+                return;
+            }
             var playing = InPlayMine();
             Debug.Log($"[fin] {(playing != null && !EndArmed ? $"el turno de {playing.Name}" : "el turno")}");
             if (playing != null && !EndArmed)

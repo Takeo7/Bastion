@@ -11,9 +11,9 @@ using Debug = UnityEngine.Debug;
 namespace Bastion.Client.Net.EditorTools
 {
     /// <summary>
-    /// The app's icon with its version (Arturo, 1/11): the 0.10.1's bus over the sierra with the yellow badge top right
-    /// that says Application.version, drawn by unity/tools/icono/icono.swift (AppKit: from a Mac, as the builds are) at
-    /// every size, the badge bigger at the small ones. Made at each build and kept out of git:
+    /// The app's icon with its version (Arturo, 1/11; since the 0.14.15, note 1 of 28/11): the version without its «0.»,
+    /// big, red and in relief on a black tile with a thin metal edge, drawn by unity/tools/icono/icono.swift (Arte; AppKit:
+    /// from a Mac, as the builds are) at every size, in two rows at 32 px and less. Made at each build and kept out of git:
     /// - the Mac's goes into the app once Unity has built it, as Resources/PlayerIcon.icns (iconutil, every size of
     ///   macOS's set drawn at its own pixels), before it is signed;
     /// - the Windows one, inside the .exe, only Unity puts there: through PlayerSettings, imported in Generado/ (in
@@ -22,11 +22,11 @@ namespace Bastion.Client.Net.EditorTools
     /// </summary>
     public static class AppIcon
     {
-        /// <summary>The script and its base (packages/desktop/build/icon.png), from the project's folder.</summary>
+        /// <summary>The script and its base (packages/desktop/build/icon.png, not drawn since the 0.14.15), from the project's folder.</summary>
         private const string Tool = "../tools/icono/icono.swift";
         private const string Base = "../tools/icono/base.png";
 
-        /// <summary>The badge's typeface: UI's Oswald (OFL).</summary>
+        /// <summary>The number's typeface if the script lacks its own (Oswald-Bold.ttf beside it): UI's Oswald (OFL).</summary>
         private const string Font = "Assets/Bastion/UI/Fonts/Oswald-SemiBold.ttf";
 
         /// <summary>Where the Windows sizes are imported for PlayerSettings while the build lasts.</summary>
@@ -150,7 +150,14 @@ namespace Bastion.Client.Net.EditorTools
         /// <summary>The icon at each of `sizes` px into `folder` (icono-&lt;n&gt;.png), for `system` (mac, windows, ios).</summary>
         private static bool Draw(string folder, string system, System.Collections.Generic.IEnumerable<int> sizes)
         {
-            return AppBuild.Ran("swift", $"\"{Path.GetFullPath(Tool)}\" \"{Path.GetFullPath(Base)}\" \"{Path.GetFullPath(Font)}\" {Application.version} \"{folder}\" {system} {string.Join(" ", sizes)}");
+            return AppBuild.Ran("swift", $"\"{Path.GetFullPath(Tool)}\" \"{Path.GetFullPath(Base)}\" \"{Path.GetFullPath(Font)}\" {Number()} \"{folder}\" {system} {string.Join(" ", sizes)}");
+        }
+
+        /// <summary>What the icon says (Arturo, 28/11, note 1): the version without its «0.», «14.15» for the 0.14.15.</summary>
+        private static string Number()
+        {
+            var version = Application.version;
+            return version.StartsWith("0.", StringComparison.Ordinal) ? version.Substring(2) : version;
         }
 
         private static string Hash(string path)

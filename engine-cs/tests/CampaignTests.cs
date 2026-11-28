@@ -140,7 +140,7 @@ namespace Bastion.Engine.Tests
 
         // ---------------------------------------------------------------------- time
 
-        [Fact(DisplayName = "time › goes by with the missions, and a day at a time waiting at the Bastión, both agreeing (Ana and Arturo, 22/10)")]
+        [Fact(DisplayName = "time › goes by with the missions, and a day at a time waiting at the Bastion, both agreeing (Ana and Arturo, 22/10)")]
         public void GoesByWithTheMissionsAndADayAtATime()
         {
             var c = Campaign.CreateCampaign(Both, new Rng(1));
@@ -646,18 +646,18 @@ namespace Bastion.Engine.Tests
             c.MissionsFlown = Progression.LevelMissions[1];
             // Always together: a proposal, paid when the partner says yes.
             Run(c, new LevelUpCommand(), 0, new[] { 0, 1 });
-            Assert.Equal("subir el Bastión a la autocaravana con toldo", c.Proposal?.Text);
+            Assert.Equal("subir el Bastion a la autocaravana con toldo", c.Proposal?.Text);
             Run(c, new VoteCommand { Accept = true }, 1, new[] { 0, 1 });
             Assert.Equal(2, Progression.BastionLevel(c));
             Assert.Equal(5000 - Progression.LevelCost[1], c.Credits);
-            Assert.Contains(c.Log, (l) => l.Text == "El Bastión ya es una autocaravana con toldo.");
+            Assert.Contains(c.Log, (l) => l.Text == "El Bastion ya es una autocaravana con toldo.");
             // Short of suministros, it waits.
             c.MissionsFlown = 99;
             c.Credits = Progression.LevelCost[2] - 1;
             Assert.Matches("suministros", Campaign.LevelUpBlocker(c));
             c.Level = Progression.MaxLevel;
             Assert.Null(Campaign.NextLevel(c));
-            Assert.Equal("El Bastión ya está en su nivel más alto.", Campaign.LevelUpBlocker(c));
+            Assert.Equal("El Bastion ya está en su nivel más alto.", Campaign.LevelUpBlocker(c));
         }
 
         [Fact(DisplayName = "progression › a campaign from before keeps its level, and its operations stop expiring")]

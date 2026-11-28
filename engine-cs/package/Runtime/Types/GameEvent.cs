@@ -56,6 +56,21 @@ namespace Bastion.Engine
         public bool? Run { get; set; }
     }
 
+    /// <summary>
+    /// A walk cut short (note 12, 28/11): `By` came into the way since it was planned (a pod scampering to cover, a
+    /// civilian walking), at `At`, the tile it didn't step on; after the walk so far and any step back off a window's frame
+    /// or a flight of stairs. `Moves`: the movement given back, what the first segment took for the way not walked; null,
+    /// none (nothing taken yet, or a walk that took all of it with an action: one of the dead's).
+    /// </summary>
+    public sealed class WalkBlockedEvent : GameEvent
+    {
+        public override string T => "walkBlocked";
+        public string Unit { get; set; } = "";
+        public string By { get; set; } = "";
+        public Pos At { get; set; } = new Pos();
+        public int? Moves { get; set; }
+    }
+
     /// <summary>Real time (docs/TIEMPO-REAL.md): the clock, on every tick of the host's.</summary>
     public sealed class RtClockEvent : GameEvent
     {

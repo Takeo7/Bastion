@@ -17,6 +17,11 @@ namespace Bastion.Client.Map
         public string target;
         public Pos hover;
         public int? level;
+        /// <summary>
+        /// The player's own slot (UI's MySlot), for whose it is to play (Following): null, the selected soldier's owner's,
+        /// which is wrong with another's soldier selected or with none.
+        /// </summary>
+        public int? slot;
         public bool roofs;
         public string closeAttacker, closeTarget;
         /// <summary>
@@ -95,6 +100,15 @@ namespace Bastion.Client.Map
         Vector2 lookFlat;
         /// <summary>lookFlat as the things were last shown or hidden by it (Things).</summary>
         Vector2 thingsLook;
+        /// <summary>
+        /// The one who last acted while it wasn't the player's to play (the partner's with the command, the enemy's turn):
+        /// its building goes on showing its storey between its actions, and goes back to the selected soldier's only once
+        /// the command is the player's again (Arturo, 28/11, cuadro 189: «Seguirle, pero sin parpadeo»; with one of ours on
+        /// each storey, the building went to the partner's storey and back at each action of theirs). Null, nobody.
+        /// </summary>
+        public string Following { get; private set; }
+        /// <summary>The storey in view when Following was last set: one picked by hand since lets go of it.</summary>
+        int? followLevel;
 
         void OnEnable() => Current = this;
 
@@ -110,6 +124,7 @@ namespace Bastion.Client.Map
         {
             Current = this;
             plan = buildings;
+            Following = null;
             n = plan?.Buildings.Count ?? 0;
             int size = Mathf.Max(1, n);
             now = new float[size * 3];
@@ -212,6 +227,23 @@ namespace Bastion.Client.Map
             }
             var focus = Focus;
             var selectedUnit = focus.selected != null ? s.Units.FirstOrDefault(u => u.Id == focus.selected) : null;
+            // Whose it is to play: the player's own (the squad's turn, and the command theirs or nobody's), or another's.
+            // (By the state on screen, changed event by event: the one the orders go by is ahead of it, and would let go of the
+            // one followed before their last actions are seen.)
+            int? me = focus.slot ?? selectedUnit?.Owner;
+            bool mine = s.ActiveTeam == "xcom" && (s.Command == null || me == null || s.Command == me);
+            if (focus.acting != null)
+            {
+                Following = mine ? null : focus.acting;
+                followLevel = focus.level;
+            }
+            else if (Following != null && (mine || focus.level != followLevel || !s.Units.Any(u => u.Id == Following && u.Alive))) Following = null;
+            // (Between the actions of the one followed, as while it acts: no target, and the selected soldier's own gone by.)
+            if (focus.acting == null && Following != null)
+            {
+                focus.acting = Following;
+                focus.actingTarget = null;
+            }
             // The storey the player looks at: the active one, else the selected soldier's.
             int view = focus.level ?? selectedUnit?.Pos.Z ?? 0;
             // Chosen by hand (not the selected soldier's own): it wins over where the soldier stands.

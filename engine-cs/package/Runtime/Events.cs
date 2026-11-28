@@ -252,6 +252,15 @@ namespace Bastion.Engine
                     if (spentAll || ev.Ap >= 2) Deed(s, u.Id, DeedIds.Run);
                     break;
                 }
+                case WalkBlockedEvent ev:
+                {
+                    // Note 12 (28/11): the way not walked, back to its movement (and off what it hauled with the wounded).
+                    var u = UnitOf(s, ev.Unit);
+                    if (ev.Moves == null) break;
+                    u.Moves = Paths.MovesLeft(s, u) + ev.Moves.Value;
+                    if (u.Hauled != null) u.Hauled = Math.Max(0, u.Hauled.Value - ev.Moves.Value);
+                    break;
+                }
                 case AbilityUsedEvent ev:
                 {
                     var u = UnitOf(s, ev.Unit);

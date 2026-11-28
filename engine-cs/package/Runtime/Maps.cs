@@ -235,7 +235,7 @@ namespace Bastion.Engine
             new MapDef
             {
                 Id = "bastion",
-                Name = "El Bastión",
+                Name = "El Bastion",
                 Biome = Biomes.City,
                 Rows = new[]
                 {

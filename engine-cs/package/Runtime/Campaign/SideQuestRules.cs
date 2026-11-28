@@ -172,7 +172,7 @@ namespace Bastion.Engine
                 }
                 if ((r.Rank ?? 0) != 0) Seasoned(s, r.Rank!.Value, rng);
                 if (!string.IsNullOrEmpty(r.Trait)) s.Traits.Add(r.Trait!);
-                Log(c, $"{s.Name} se une al Bastión ({VeterancyName(s)}).", LogTones.Good);
+                Log(c, $"{s.Name} se une al Bastion ({VeterancyName(s)}).", LogTones.Good);
             }
             if (c.Doom >= DoomMax) c.Outcome = Outcomes.Defeat;
         }

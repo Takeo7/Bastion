@@ -256,7 +256,7 @@ namespace Bastion.Engine
                     if (c.Event == null)
                     {
                         c.Event = CampaignEventIds.Simon;
-                        Log(c, "Alguien llama a la puerta del Bastión.");
+                        Log(c, "Alguien llama a la puerta del Bastion.");
                     }
                 }
                 else if (!c.Offers.Any((o) => o.Story == next))
